@@ -110,13 +110,18 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory: TEA
 	}));
 }
 
+// TODO: fix this MockConfigurationProvider and line it up with package.json
 class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 	/**
 	 * Massage a debug configuration just before a debug session is being launched,
 	 * e.g. add all missing attributes to the debug configuration.
 	 */
-	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration> {
+	resolveDebugConfiguration(
+		_folder: WorkspaceFolder | undefined,
+		config: DebugConfiguration,
+		_token?: CancellationToken
+	): ProviderResult<DebugConfiguration> {
 
 		// if launch.json is missing or empty
 		if (!config.type && !config.request && !config.name) {

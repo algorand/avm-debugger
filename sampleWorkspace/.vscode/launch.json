@@ -8,14 +8,8 @@
 			"type": "mock",
 			"request": "launch",
 			"name": "Debug readme.md",
-			"program": "${workspaceFolder}/readme.md",
-			"stopOnEntry": true,
-			"trace": false
-		},
-		{
-			"type": "mock",
-			"request": "attach",
-			"name": "Attach readme.md",
+			"debuggers.simulationTraceFile": "a-file-name-for-sim-trace-dump",
+			"debuggers.appSourceDescriptionFile": "a-file-name-for-app-source-desc",
 			"program": "${workspaceFolder}/readme.md",
 			"stopOnEntry": true,
 			"trace": false
