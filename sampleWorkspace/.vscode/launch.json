@@ -8,8 +8,9 @@
 			"type": "mock",
 			"request": "launch",
 			"name": "Debug readme.md",
-			"debuggers.simulationTraceFile": "a-file-name-for-sim-trace-dump",
-			"debuggers.appSourceDescriptionFile": "a-file-name-for-app-source-desc",
+			"debuggerPath": "stuff-to-deal",
+			"simulationTraceFile": "/root/to/sim/trace/file",
+			"appSourceDescriptionFile": "a-file-name-for-app-sources",
 			"program": "${workspaceFolder}/readme.md",
 			"stopOnEntry": true,
 			"trace": false

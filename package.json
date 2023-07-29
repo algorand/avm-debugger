@@ -65,6 +65,7 @@
   "browser": "./dist/web-extension.js",
   "activationEvents": [
     "workspaceContains:**/*.teal",
+    "onDebug",
     "onDebugResolve:mock",
     "onDebugDynamicConfigurations:mock",
     "onCommand:extension.mock-debug.getProgramName"
@@ -140,6 +141,10 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
+              "debuggerPath": {
+                "type": "string",
+                "description": "Path to Algorand txn-group debugger that take in both simulate trace file and txn-group app source description file."
+              },
               "simulationTraceFile": {
                 "type": "string",
                 "description": "Transaction group simulation response with execution trace.",
@@ -187,6 +192,8 @@
             "type": "mock",
             "request": "launch",
             "appSourceDescriptionFile": "launch.json",
+            "simulationTraceFile": "launch.json",
+            "debuggerPath": "yo-a-path-for-deal",
             "name": "Ask for file name",
             "program": "${workspaceFolder}/${command:AskForProgramName}",
             "stopOnEntry": true

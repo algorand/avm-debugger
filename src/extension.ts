@@ -40,6 +40,8 @@ class TEALDebugAdapterExecutableFactory
 		// param "executable" contains the executable optionally specified in the package.json (if any)
 
 		// use the executable specified in the package.json if it exists or determine it based on some other information (e.g. the session)
+
+		// TODO: IMPLEMENT HERE
 		if (!executable) {
 			const command = "absolute path to my DA executable";
 			const args = [
