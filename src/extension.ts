@@ -4,7 +4,7 @@ import * as Net from 'net';
 import * as vscode from 'vscode';
 import { ProviderResult } from 'vscode';
 import { MockDebugSession } from './mockDebug';
-import { activateMockDebug, workspaceFileAccessor } from './activateMockDebug';
+import { activateTealDebug, workspaceFileAccessor } from './activateMockDebug';
 
 const runMode: 'external' | 'server' = 'server';
 
@@ -12,12 +12,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	switch (runMode) {
 		case 'server':
-			activateMockDebug(
+			activateTealDebug(
 				context, new TEALDebugAdapterServerDescriptorFactory());
 			break;
 
 		case 'external': default:
-			activateMockDebug(context, new TEALDebugAdapterExecutableFactory());
+			activateTealDebug(context, new TEALDebugAdapterExecutableFactory());
 			break;
 	}
 }

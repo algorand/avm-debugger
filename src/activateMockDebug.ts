@@ -5,7 +5,7 @@ import { FileAccessor } from './mockRuntime';
 import { TEALDebugAdapterDescriptorFactory } from './extension';
 import { TealDebugConfigProvider } from './configuration';
 
-export function activateMockDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
+export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.mock-debug.runEditorContents', (resource: vscode.Uri) => {
