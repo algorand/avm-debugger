@@ -3,11 +3,6 @@
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
 
-// TODO: fix this MockConfigurationProvider and line it up with package.json
-// TODO: so I figured out that, when we are testing the plugin, modify the launch.json,
-//       the input to resolveDebugConfiguration should give you full changed
-//       config: DebugConfiguration.
-// TODO: also remember to npm run build before each test tho.
 // TODO: check https://code.visualstudio.com/api/extension-guides/debugger-extension#using-a-debugconfigurationprovider
 export class TealDebugConfigProvider
 	implements vscode.DebugConfigurationProvider {
@@ -22,6 +17,11 @@ export class TealDebugConfigProvider
 		_token?: CancellationToken
 	): ProviderResult<DebugConfiguration> {
 
+		// XXX: HACK: we are forcing overriding the config here
+		const configs = vscode.workspace.getConfiguration('launch')
+			.get('configurations') as vscode.DebugConfiguration[];
+		config = configs[0];
+
 		// if launch.json is missing or empty
 		if (!config.type && !config.request && !config.name) {
 			const editor = vscode.window.activeTextEditor;
@@ -34,9 +34,23 @@ export class TealDebugConfigProvider
 			}
 		}
 
-		if (!config.program) {
-			return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => {
-				return undefined;	// abort launch
+		// NOTE: log the overloaded config to window
+		vscode.window.showInformationMessage(JSON.stringify(config));
+
+		// Check necessary part, we do need these 2 files for debug
+		if (!config.simulationTraceFile) {
+			return vscode.window.showInformationMessage(
+				'missing critical part: simulationTraceFile in launch.json'
+			).then(_ => {
+				return undefined;
+			});
+		}
+
+		if (!config.appSourceDescriptionFile) {
+			return vscode.window.showInformationMessage(
+				'missing critical part: appSourceDescriptionFile in launch.json'
+			).then(_ => {
+				return undefined;
 			});
 		}
 
