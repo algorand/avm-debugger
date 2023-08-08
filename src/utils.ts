@@ -5,6 +5,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as algosdk from 'algosdk';
 import * as _ from 'lodash';
+import vscodeVariables = require('vscode-variables');
 
 /**
  * loadTEALDAConfiguration reads from launch.json for configuration,
@@ -49,7 +50,8 @@ export function loadTEALDAConfiguration({
 }
 
 export function absPathAgainstWorkspace(pathStr: string): vscode.Uri {
-    // TODO: wtf is this ${workspacefolder}?
+    pathStr = vscodeVariables(pathStr);
+
     if (!path.isAbsolute(pathStr)) {
         console.assert(vscode.workspace.workspaceFolders);
         const workspaceFolders = <vscode.WorkspaceFolder[]>vscode.workspace.workspaceFolders;

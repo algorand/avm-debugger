@@ -60,7 +60,8 @@
     "rimraf": "^3.0.2",
     "typescript": "^4.6.3",
     "url": "^0.11.0",
-    "vsce": "^2.7.0"
+    "vsce": "^2.7.0",
+    "vscode-variables": "^0.1.3"
   },
   "main": "./dist/extension.js",
   "browser": "./dist/web-extension.js",
