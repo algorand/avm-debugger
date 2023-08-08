@@ -1,17 +1,22 @@
 'use strict';
 
 import * as vscode from 'vscode';
+import * as console from 'console';
 import { FileAccessor } from './mockRuntime';
 import { TEALDebugAdapterDescriptorFactory } from './extension';
 import { TealDebugConfigProvider } from './configuration';
+import { loadTEALDAConfiguration } from './utils';
 
 export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
 
-	// TODO: read launch.json here!
-	// const configs = vscode.workspace.getConfiguration('launch')
-	// .get('configurations') as vscode.DebugConfiguration[];
-
-	// let config = configs[0];
+	// Load config for debug from launch.json here
+	// Error abort if failed to load
+	let config: vscode.DebugConfiguration | undefined = loadTEALDAConfiguration();
+	if (typeof config === "undefined") {
+		// TODO: check if this is the best practice of aborting?
+		console.assert(0);
+		return;
+	}
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.teal-debug.runEditorContents', (resource: vscode.Uri) => {
@@ -20,12 +25,12 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
-				vscode.debug.startDebugging(undefined, {
-					type: 'teal',
-					name: 'Run File',
-					request: 'launch',
-					program: targetResource.fsPath
-				},
+				// NOTE: SORRY FORCE TYPECAST
+				let localConfig: vscode.DebugConfiguration = <vscode.DebugConfiguration>config;
+				localConfig.name = 'Run File';
+				localConfig.program = targetResource.fsPath;
+
+				vscode.debug.startDebugging(undefined, localConfig,
 					{ noDebug: true }
 				);
 			}
@@ -36,19 +41,12 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
-				vscode.debug.startDebugging(undefined, {
-					type: 'teal',
-					name: 'Debug File',
-					request: 'launch',
-					program: targetResource.fsPath,
-					stopOnEntry: true
-				});
-			}
-		}),
-		vscode.commands.registerCommand('extension.teal-debug.toggleFormatting', (variable) => {
-			const ds = vscode.debug.activeDebugSession;
-			if (ds) {
-				ds.customRequest('toggleFormatting');
+				// NOTE: SORRY FORCE TYPECAST
+				let localConfig: vscode.DebugConfiguration = <vscode.DebugConfiguration>config;
+				localConfig.name = 'Debug File';
+				localConfig.program = targetResource.fsPath;
+
+				vscode.debug.startDebugging(undefined, localConfig);
 			}
 		})
 	);

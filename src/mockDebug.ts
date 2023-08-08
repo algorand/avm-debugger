@@ -14,7 +14,7 @@ import {
 	Logger, logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
-	InvalidatedEvent, Thread, StackFrame, Scope, Source, Handles, Breakpoint
+	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
@@ -604,18 +604,6 @@ export class MockDebugSession extends LoggingDebugSession {
 			breakpoints: breakpoints
 		};
 		this.sendResponse(response);
-	}
-
-	protected customRequest(command: string, response: DebugProtocol.Response, args: any) {
-		if (command === 'toggleFormatting') {
-			this._valuesInHex = !this._valuesInHex;
-			if (this._useInvalidatedEvent) {
-				this.sendEvent(new InvalidatedEvent(['variables']));
-			}
-			this.sendResponse(response);
-		} else {
-			super.customRequest(command, response, args);
-		}
 	}
 
 	//---- helpers

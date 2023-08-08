@@ -1,6 +1,5 @@
 'use strict';
 
-import { assert } from 'console';
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
 
@@ -17,14 +16,6 @@ export class TealDebugConfigProvider
 		config: DebugConfiguration,
 		_token?: CancellationToken
 	): ProviderResult<DebugConfiguration> {
-
-		// TODO: Move the force override and check launch.json to activate
-		// XXX: HACK: we are forcing overriding the config here
-		const configs = vscode.workspace.getConfiguration('launch')
-			.get('configurations') as vscode.DebugConfiguration[];
-
-		assert(configs?.length && configs?.length > 0);
-		config = configs[0];
 
 		// if launch.json is missing or empty
 		if (!config.type && !config.request && !config.name) {
