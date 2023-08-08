@@ -68,7 +68,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _cancellationTokens = new Map<number, boolean>();
 
 	private _valuesInHex = false;
-	private _useInvalidatedEvent = false;
 
 	private _addressesInHex = true;
 
@@ -142,10 +141,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	 * to interrogate the features the debug adapter provides.
 	 */
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
-
-		if (args.supportsInvalidatedEvent) {
-			this._useInvalidatedEvent = true;
-		}
 
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};

@@ -5,7 +5,7 @@ import * as console from 'console';
 import { FileAccessor } from './mockRuntime';
 import { TEALDebugAdapterDescriptorFactory } from './extension';
 import { TealDebugConfigProvider } from './configuration';
-import { loadTEALDAConfiguration } from './utils';
+import { loadTEALDAConfiguration, TEALDebuggingAssetsDescriptor } from './utils';
 
 export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
 
@@ -17,6 +17,9 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 		console.assert(0);
 		return;
 	}
+
+	const castedConfig: vscode.DebugConfiguration = <vscode.DebugConfiguration>config;
+	const debugAssetDescriptor: TEALDebuggingAssetsDescriptor = new TEALDebuggingAssetsDescriptor(castedConfig);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.teal-debug.runEditorContents', (resource: vscode.Uri) => {
