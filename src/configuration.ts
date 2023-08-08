@@ -3,7 +3,6 @@
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
 
-// TODO: check https://code.visualstudio.com/api/extension-guides/debugger-extension#using-a-debugconfigurationprovider
 export class TealDebugConfigProvider
 	implements vscode.DebugConfigurationProvider {
 
@@ -16,18 +15,6 @@ export class TealDebugConfigProvider
 		config: DebugConfiguration,
 		_token?: CancellationToken
 	): ProviderResult<DebugConfiguration> {
-
-		// if launch.json is missing or empty
-		if (!config.type && !config.request && !config.name) {
-			const editor = vscode.window.activeTextEditor;
-			if (editor && editor.document.languageId === 'markdown') {
-				config.type = 'teal';
-				config.name = 'Launch';
-				config.request = 'launch';
-				config.program = '${file}';
-				config.stopOnEntry = true;
-			}
-		}
 
 		// NOTE: log the overloaded config to window
 		vscode.window.showInformationMessage(JSON.stringify(config));
