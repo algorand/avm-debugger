@@ -59,7 +59,7 @@
     "typescript": "^4.6.3",
     "url": "^0.11.0",
     "vsce": "^2.7.0",
-    "algosdk": "^2.4.0"
+    "algosdk": "algorand/js-algorand-sdk#simulate-basic-pc"
   },
   "main": "./dist/extension.js",
   "browser": "./dist/web-extension.js",
