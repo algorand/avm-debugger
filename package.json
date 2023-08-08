@@ -67,8 +67,7 @@
     "workspaceContains:**/*.teal",
     "onDebug",
     "onDebugResolve:teal",
-    "onDebugDynamicConfigurations:teal",
-    "onCommand:extension.teal-debug.getProgramName"
+    "onDebugDynamicConfigurations:teal"
   ],
   "workspaceTrust": {
     "request": "never"
@@ -77,7 +76,9 @@
     "languages": [
       {
         "id": "teal",
-        "extensions": [".teal"],
+        "extensions": [
+          ".teal"
+        ],
         "configuration": "./teal-language-configuration.json"
       }
     ],
@@ -222,10 +223,7 @@
               "stopOnEntry": true
             }
           }
-        ],
-        "variables": {
-          "AskForProgramName": "extension.teal-debug.getProgramName"
-        }
+        ]
       }
     ]
   }
