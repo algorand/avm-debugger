@@ -7,6 +7,7 @@ import { TealDebugConfigProvider } from './configuration';
 
 export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
 
+	// TODO: read launch.json here!
 	// const configs = vscode.workspace.getConfiguration('launch')
 	// .get('configurations') as vscode.DebugConfiguration[];
 
