@@ -24,7 +24,7 @@ You can now 'step through' the `readme.md` file, set and hit breakpoints, and ru
 
 ## Build and Run
 
-* Clone the project [https://github.com/Microsoft/vscode-mock-debug.git](https://github.com/Microsoft/vscode-mock-debug.git)
+* Clone the project [https://github.com/ahangsu/vscode-teal-debug.git](https://github.com/ahangsu/vscode-teal-debug.git)
 * Open the project folder in VS Code.
 * Press `F5` to build and launch Mock Debug in another VS Code window.
 * In the explorer view of the new window open the 'program' file `readme.md`

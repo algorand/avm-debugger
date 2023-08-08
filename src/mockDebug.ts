@@ -32,9 +32,9 @@ export enum RuntimeEvents {
 }
 
 /**
- * This interface describes the mock-debug specific launch attributes
+ * This interface describes the teal-debug specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The schema for these attributes lives in the package.json of the teal-debug extension.
  * The interface should always match this schema.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {

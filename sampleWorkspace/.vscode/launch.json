@@ -5,13 +5,13 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"type": "mock",
+			"type": "teal",
 			"request": "launch",
 			"name": "Debug readme.md",
 			"debuggerPath": "stuff-to-deal",
 			"simulationTraceFile": "/root/to/sim/trace/file",
 			"appSourceDescriptionFile": "a-file-name-for-app-sources",
-			"program": "${workspaceFolder}/readme.md",
+			"program": "${workspaceFolder}/stack-scratch.teal",
 			"stopOnEntry": true,
 			"trace": false
 		}

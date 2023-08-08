@@ -7,15 +7,20 @@ import { TealDebugConfigProvider } from './configuration';
 
 export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
 
+	// const configs = vscode.workspace.getConfiguration('launch')
+	// .get('configurations') as vscode.DebugConfiguration[];
+
+	// let config = configs[0];
+
 	context.subscriptions.push(
-		vscode.commands.registerCommand('extension.mock-debug.runEditorContents', (resource: vscode.Uri) => {
+		vscode.commands.registerCommand('extension.teal-debug.runEditorContents', (resource: vscode.Uri) => {
 			let targetResource = resource;
 			if (!targetResource && vscode.window.activeTextEditor) {
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
 				vscode.debug.startDebugging(undefined, {
-					type: 'mock',
+					type: 'teal',
 					name: 'Run File',
 					request: 'launch',
 					program: targetResource.fsPath
@@ -24,14 +29,14 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 				);
 			}
 		}),
-		vscode.commands.registerCommand('extension.mock-debug.debugEditorContents', (resource: vscode.Uri) => {
+		vscode.commands.registerCommand('extension.teal-debug.debugEditorContents', (resource: vscode.Uri) => {
 			let targetResource = resource;
 			if (!targetResource && vscode.window.activeTextEditor) {
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
 				vscode.debug.startDebugging(undefined, {
-					type: 'mock',
+					type: 'teal',
 					name: 'Debug File',
 					request: 'launch',
 					program: targetResource.fsPath,
@@ -39,7 +44,7 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 				});
 			}
 		}),
-		vscode.commands.registerCommand('extension.mock-debug.toggleFormatting', (variable) => {
+		vscode.commands.registerCommand('extension.teal-debug.toggleFormatting', (variable) => {
 			const ds = vscode.debug.activeDebugSession;
 			if (ds) {
 				ds.customRequest('toggleFormatting');
@@ -47,18 +52,18 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 		})
 	);
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.mock-debug.getProgramName', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.teal-debug.getProgramName', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter the name of a markdown file in the workspace folder",
 			value: "readme.md"
 		});
 	}));
 
-	// register a configuration provider for 'mock' debug type
+	// register a configuration provider for 'teal' debug type
 	const provider = new TealDebugConfigProvider();
-	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('mock', provider));
+	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('teal', provider));
 
-	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mock', factory));
+	context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('teal', factory));
 	// https://vscode-docs.readthedocs.io/en/stable/extensions/patterns-and-principles/#events
 	// see events, by the end of subscription, call `dispose()` to release resource.
 	context.subscriptions.push(factory);

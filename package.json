@@ -1,11 +1,11 @@
 {
-  "name": "mock-debug",
-  "displayName": "Mock Debug",
+  "name": "teal-debug",
+  "displayName": "TEAL Debug",
   "version": "0.52.0",
-  "publisher": "ms-vscode",
-  "description": "Starter extension for developing debug adapters for VS Code.",
+  "publisher": "algorand-vscode",
+  "description": "Debug extension for developing TEAL smart contracts in VS Code.",
   "author": {
-    "name": "Microsoft Corporation"
+    "name": "Algorand Inc"
   },
   "license": "MIT",
   "keywords": [
@@ -66,76 +66,87 @@
   "activationEvents": [
     "workspaceContains:**/*.teal",
     "onDebug",
-    "onDebugResolve:mock",
-    "onDebugDynamicConfigurations:mock",
-    "onCommand:extension.mock-debug.getProgramName"
+    "onDebugResolve:teal",
+    "onDebugDynamicConfigurations:teal",
+    "onCommand:extension.teal-debug.getProgramName"
   ],
   "workspaceTrust": {
     "request": "never"
   },
   "contributes": {
+    "languages": [
+      {
+        "id": "teal",
+        "extensions": [".teal"],
+        "configuration": "./teal-language-configuration.json"
+      }
+    ],
     "menus": {
       "editor/title/run": [
         {
-          "command": "extension.mock-debug.runEditorContents",
-          "when": "resourceLangId == markdown",
+          "command": "extension.teal-debug.runEditorContents",
+          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'",
           "group": "navigation@1"
         },
         {
-          "command": "extension.mock-debug.debugEditorContents",
-          "when": "resourceLangId == markdown",
+          "command": "extension.teal-debug.debugEditorContents",
+          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'",
           "group": "navigation@2"
         }
       ],
       "commandPalette": [
         {
-          "command": "extension.mock-debug.debugEditorContents",
-          "when": "resourceLangId == markdown"
+          "command": "extension.teal-debug.debugEditorContents",
+          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'"
         },
         {
-          "command": "extension.mock-debug.runEditorContents",
-          "when": "resourceLangId == markdown"
+          "command": "extension.teal-debug.runEditorContents",
+          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'"
         }
       ],
       "debug/variables/context": [
         {
-          "command": "extension.mock-debug.toggleFormatting",
-          "when": "debugType == 'mock' && debugProtocolVariableMenuContext == 'simple'"
+          "command": "extension.teal-debug.toggleFormatting",
+          "when": "debugType == 'teal' && debugProtocolVariableMenuContext == 'simple'"
         }
       ]
     },
     "commands": [
       {
-        "command": "extension.mock-debug.debugEditorContents",
+        "command": "extension.teal-debug.debugEditorContents",
         "title": "Debug File",
-        "category": "Mock Debug",
+        "category": "TEAL Debug",
         "enablement": "!inDebugMode",
         "icon": "$(debug-alt)"
       },
       {
-        "command": "extension.mock-debug.runEditorContents",
+        "command": "extension.teal-debug.runEditorContents",
         "title": "Run File",
-        "category": "Mock Debug",
+        "category": "TEAL Debug",
         "enablement": "!inDebugMode",
         "icon": "$(play)"
       },
       {
-        "command": "extension.mock-debug.toggleFormatting",
+        "command": "extension.teal-debug.toggleFormatting",
         "title": "Toggle between decimal and hex formatting"
       }
     ],
     "breakpoints": [
       {
         "language": "markdown"
+      },
+      {
+        "language": "teal"
       }
     ],
     "debuggers": [
       {
-        "type": "mock",
+        "type": "teal",
         "languages": [
-          "markdown"
+          "markdown",
+          "teal"
         ],
-        "label": "Mock Debug",
+        "label": "TEAL Debug",
         "program": "./out/debugAdapter.js",
         "runtime": "node",
         "configurationAttributes": {
@@ -189,7 +200,7 @@
         },
         "initialConfigurations": [
           {
-            "type": "mock",
+            "type": "teal",
             "request": "launch",
             "appSourceDescriptionFile": "launch.json",
             "simulationTraceFile": "launch.json",
@@ -201,10 +212,10 @@
         ],
         "configurationSnippets": [
           {
-            "label": "Mock Debug: Launch",
+            "label": "TEAL Debug: Launch",
             "description": "A new configuration for 'debugging' a user selected markdown file.",
             "body": {
-              "type": "mock",
+              "type": "teal",
               "request": "launch",
               "name": "Ask for file name",
               "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
@@ -213,7 +224,7 @@
           }
         ],
         "variables": {
-          "AskForProgramName": "extension.mock-debug.getProgramName"
+          "AskForProgramName": "extension.teal-debug.getProgramName"
         }
       }
     ]

@@ -91,7 +91,7 @@ export function timeout(ms: number) {
 
 /**
  * A Mock runtime with minimal debugger functionality.
- * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
+ * MockRuntime is a hypothetical (aka "teal") "execution engine with debugging support":
  * it takes a Markdown (*.md) file and "executes" it by "running" through the text lines
  * and searching for "command" patterns that trigger some debugger related functionality (e.g. exceptions).
  * When it finds a command it typically emits an event.
