@@ -5,7 +5,7 @@
   "publisher": "algorand-vscode",
   "description": "Debug extension for developing TEAL smart contracts in VS Code.",
   "author": {
-    "name": "Algorand Inc"
+    "name": "Scytalians"
   },
   "license": "MIT",
   "keywords": [
