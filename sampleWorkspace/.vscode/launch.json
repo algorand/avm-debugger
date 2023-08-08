@@ -10,7 +10,7 @@
 			"name": "Debug readme.md",
 			"debuggerPath": "stuff-to-deal",
 			"simulationTraceFile": "/root/to/sim/trace/file",
-			"appSourceDescriptionFile": "a-file-name-for-app-sources",
+			"appSourceDescriptionFile": "${workspaceFolder}/txn-group-source.json",
 			"program": "${workspaceFolder}/stack-scratch.teal",
 			"stopOnEntry": true,
 			"trace": false

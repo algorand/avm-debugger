@@ -22,7 +22,7 @@ export class TealDebugConfigProvider
 		// XXX: HACK: we are forcing overriding the config here
 		const configs = vscode.workspace.getConfiguration('launch')
 			.get('configurations') as vscode.DebugConfiguration[];
-		
+
 		assert(configs?.length && configs?.length > 0);
 		config = configs[0];
 
