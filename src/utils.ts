@@ -3,6 +3,7 @@
 import * as console from 'console';
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
 import * as algosdk from 'algosdk';
 import * as _ from 'lodash';
 
@@ -135,9 +136,11 @@ export class TEALDebuggingAssetsDescriptor {
 
 export class TEALDebuggingAssets {
     private _debugAssetDescriptor: TEALDebuggingAssetsDescriptor;
-    //     private _simulateResponse: algosdk.modelsv2.SimulateResponse;
+    private _simulateResponse: algosdk.modelsv2.SimulateResponse;
 
     constructor(config: vscode.DebugConfiguration) {
         this._debugAssetDescriptor = new TEALDebuggingAssetsDescriptor(config);
+        const jsonString = fs.readFileSync(this._debugAssetDescriptor.simulateResponseFullPath.fsPath, 'utf-8');
+        this._simulateResponse = algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(JSON.parse(jsonString) as Record<string, any>);
     }
 }
