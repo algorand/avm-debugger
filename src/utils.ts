@@ -140,7 +140,21 @@ export class TEALDebuggingAssets {
 
     constructor(config: vscode.DebugConfiguration) {
         this._debugAssetDescriptor = new TEALDebuggingAssetsDescriptor(config);
-        const jsonString = fs.readFileSync(this._debugAssetDescriptor.simulateResponseFullPath.fsPath, 'utf-8');
-        this._simulateResponse = algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(JSON.parse(jsonString) as Record<string, any>);
+        const jsonString = fs.readFileSync(
+            this._debugAssetDescriptor.simulateResponseFullPath.fsPath,
+            'utf-8'
+        );
+        this._simulateResponse
+            = algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
+                JSON.parse(jsonString) as Record<string, any>
+            );
+    }
+
+    public get debugAssetDescriptor(): TEALDebuggingAssetsDescriptor {
+        return this._debugAssetDescriptor;
+    }
+
+    public get simulateResponse(): algosdk.modelsv2.SimulateResponse {
+        return this._simulateResponse;
     }
 }
