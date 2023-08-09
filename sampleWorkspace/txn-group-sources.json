@@ -2,11 +2,11 @@
     "txn-group-sources": [
         {
             "file-location": "./stack-scratch.teal",
-            "sourcemap-location": "./stack-scratch-teal.tok.map",
+            "sourcemap-location": "./stack-scratch.teal.tok.map",
             "txn-group-path": [0, 0],
             "app-or-lsig": "approval",
             "on-completion": "NoOp",
-            "app-id": 1001
+            "app-id": 1005
         }
     ]
 }

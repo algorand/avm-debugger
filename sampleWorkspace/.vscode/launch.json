@@ -10,7 +10,7 @@
 			"name": "Debug readme.md",
 			"debuggerPath": "stuff-to-deal",
 			"simulationTraceFile": "${workspaceFolder}/simulate-response.json",
-			"appSourceDescriptionFile": "${workspaceFolder}/txn-group-source.json",
+			"appSourceDescriptionFile": "${workspaceFolder}/txn-group-sources.json",
 			"program": "${workspaceFolder}/stack-scratch.teal",
 			"stopOnEntry": true,
 			"trace": false

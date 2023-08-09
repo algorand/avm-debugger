@@ -134,20 +134,123 @@ export class TEALDebuggingAssetsDescriptor {
     }
 }
 
+export class TxnGroupSourceDescriptor {
+    private _fileLocation: vscode.Uri;
+    private _sourcemap: algosdk.SourceMap;
+    private _txnGroupPath: Array<number>;
+    private _appOrLsig: string;
+    private _onCompletion: string;
+    private _appID: number | undefined;
+
+    constructor({
+        fileLocation,
+        sourcemapLocation,
+        txnGroupPath,
+        appOrLsig,
+        onCompletion,
+        appID,
+    }: {
+        fileLocation: string,
+        sourcemapLocation: string,
+        txnGroupPath: number[],
+        appOrLsig: string,
+        onCompletion: string,
+        appID?: number,
+    }) {
+        this._fileLocation = absPathAgainstWorkspace(fileLocation);
+        const _sourcemapLocation = absPathAgainstWorkspace(sourcemapLocation);
+        this._sourcemap = JSON.parse(fs.readFileSync(_sourcemapLocation.fsPath, 'utf-8')) as algosdk.SourceMap;
+        this._txnGroupPath = txnGroupPath;
+        this._appOrLsig = appOrLsig;
+        this._onCompletion = onCompletion;
+        this._appID = appID;
+    }
+
+    public get fileLocation(): vscode.Uri {
+        return this._fileLocation;
+    }
+
+    public get sourcemapLocation(): algosdk.SourceMap {
+        return this._sourcemap;
+    }
+
+    public get txnGroupPath(): number[] {
+        return this._txnGroupPath;
+    }
+
+    public get appOrLsig(): string {
+        return this._appOrLsig;
+    }
+
+    public get onCompletion(): string {
+        return this._onCompletion;
+    }
+
+    public get appID(): number | undefined {
+        return this._appID;
+    }
+
+    static fromJSONObj(data: Record<string, any>): TxnGroupSourceDescriptor {
+        return new TxnGroupSourceDescriptor({
+            fileLocation: data['file-location'],
+            sourcemapLocation: data['sourcemap-location'],
+            txnGroupPath: data['txn-group-path'],
+            appOrLsig: data['app-or-lsig'],
+            onCompletion: data['on-comletion'],
+            appID: data['app-id'] ? data['app-id'] : undefined,
+        });
+    }
+}
+
+export class TxnGroupSourceDescriptorList {
+    private _txnGroupSources: Array<TxnGroupSourceDescriptor>;
+
+    constructor({ txnGroupSources }: {
+        txnGroupSources: Array<TxnGroupSourceDescriptor>;
+    }) {
+        this._txnGroupSources = txnGroupSources;
+    }
+
+    public get txnGroupSources(): Array<TxnGroupSourceDescriptor> {
+        return this._txnGroupSources;
+    }
+
+    static fromJSONObj(data: Record<string, any>): TxnGroupSourceDescriptorList {
+        return new TxnGroupSourceDescriptorList({
+            txnGroupSources: data['txn-group-sources'].map(TxnGroupSourceDescriptor.fromJSONObj),
+        });
+    }
+}
+
 export class TEALDebuggingAssets {
     private _debugAssetDescriptor: TEALDebuggingAssetsDescriptor;
     private _simulateResponse: algosdk.modelsv2.SimulateResponse;
+    private _txnGroupDescriptorList: TxnGroupSourceDescriptorList;
 
     constructor(config: vscode.DebugConfiguration) {
         this._debugAssetDescriptor = new TEALDebuggingAssetsDescriptor(config);
-        const jsonString = fs.readFileSync(
+
+        const jsonStringSimulate = fs.readFileSync(
             this._debugAssetDescriptor.simulateResponseFullPath.fsPath,
             'utf-8'
         );
         this._simulateResponse
             = algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
-                JSON.parse(jsonString) as Record<string, any>
+                JSON.parse(jsonStringSimulate) as Record<string, any>
             );
+
+        const jsonStringTxnG = fs.readFileSync(
+            this._debugAssetDescriptor.txnGroupSourceDescriptionFullPath.fsPath,
+            'utf-8'
+        );
+        this._txnGroupDescriptorList
+            = TxnGroupSourceDescriptorList.fromJSONObj(
+                JSON.parse(jsonStringTxnG) as Record<string, any>
+            );
+
+        vscode.window.showInformationMessage(
+            JSON.stringify(this._txnGroupDescriptorList)
+        );
     }
 
     public get debugAssetDescriptor(): TEALDebuggingAssetsDescriptor {
@@ -156,5 +259,9 @@ export class TEALDebuggingAssets {
 
     public get simulateResponse(): algosdk.modelsv2.SimulateResponse {
         return this._simulateResponse;
+    }
+
+    public get txnGroupDescriptorList(): TxnGroupSourceDescriptorList {
+        return this._txnGroupDescriptorList;
     }
 }
