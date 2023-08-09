@@ -5,7 +5,51 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as algosdk from 'algosdk';
 import * as _ from 'lodash';
-import vscodeVariables = require('vscode-variables');
+
+function vscodeVariables(string, recursive = false) {
+    console.assert(vscode.workspace.workspaceFolders);
+
+    let workspaces: vscode.WorkspaceFolder[] = <vscode.WorkspaceFolder[]>vscode.workspace.workspaceFolders;
+
+    let workspace = workspaces.length ? workspaces[0] : null;
+    let activeFile = vscode.window.activeTextEditor?.document;
+    let absoluteFilePath: string = <string>(activeFile?.uri.fsPath);
+    string = string.replace(/\${workspaceFolder}/g, workspace?.uri.fsPath);
+    string = string.replace(/\${workspaceFolderBasename}/g, workspace?.name);
+    string = string.replace(/\${file}/g, absoluteFilePath);
+    let activeWorkspace = workspace;
+    let relativeFilePath = absoluteFilePath;
+    for (let workspace of workspaces) {
+        if (absoluteFilePath.replace(workspace.uri.fsPath, '') !== absoluteFilePath) {
+            activeWorkspace = workspace;
+            relativeFilePath = absoluteFilePath.replace(workspace.uri.fsPath, '').substring(path.sep.length);
+            break;
+        }
+    }
+    let parsedPath = path.parse(absoluteFilePath);
+    string = string.replace(/\${fileWorkspaceFolder}/g, activeWorkspace?.uri.fsPath);
+    string = string.replace(/\${relativeFile}/g, relativeFilePath);
+    string = string.replace(/\${relativeFileDirname}/g, relativeFilePath.substring(0, relativeFilePath.lastIndexOf(path.sep)));
+    string = string.replace(/\${fileBasename}/g, parsedPath.base);
+    string = string.replace(/\${fileBasenameNoExtension}/g, parsedPath.name);
+    string = string.replace(/\${fileExtname}/g, parsedPath.ext);
+    string = string.replace(/\${fileDirname}/g, parsedPath.dir.substring(parsedPath.dir.lastIndexOf(path.sep) + 1));
+    string = string.replace(/\${cwd}/g, parsedPath.dir);
+    string = string.replace(/\${pathSeparator}/g, path.sep);
+    // string = string.replace(/\${lineNumber}/g, vscode.window.activeTextEditor.selection.start.line + 1);
+    // string = string.replace(/\${selectedText}/g, vscode.window.activeTextEditor.document.getText(new vscode.Range(vscode.window.activeTextEditor.selection.start, vscode.window.activeTextEditor.selection.end)));
+    string = string.replace(/\${env:(.*?)}/g, function (variable) {
+        return process.env[variable.match(/\${env:(.*?)}/)[1]] || '';
+    });
+    string = string.replace(/\${config:(.*?)}/g, function (variable) {
+        return vscode.workspace.getConfiguration().get(variable.match(/\${config:(.*?)}/)[1], '');
+    });
+
+    if (recursive && string.match(/\${(workspaceFolder|workspaceFolderBasename|fileWorkspaceFolder|relativeFile|fileBasename|fileBasenameNoExtension|fileExtname|fileDirname|cwd|pathSeparator|lineNumber|selectedText|env:(.*?)|config:(.*?))}/)) {
+        string = vscodeVariables(string, recursive);
+    }
+    return string;
+}
 
 /**
  * loadTEALDAConfiguration reads from launch.json for configuration,
