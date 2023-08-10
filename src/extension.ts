@@ -5,19 +5,32 @@ import * as vscode from 'vscode';
 import { ProviderResult } from 'vscode';
 import { MockDebugSession } from './mockDebug';
 import { activateTealDebug, workspaceFileAccessor } from './activateMockDebug';
+import { TEALDebuggingAssets, TEALDebuggingAssetsDescriptor, loadTEALDAConfiguration } from './utils';
 
 const runMode: 'external' | 'server' = 'server';
 
 export function activate(context: vscode.ExtensionContext) {
 
+	// Load config for debug from launch.json here
+	// Error abort if failed to load
+	let config: vscode.DebugConfiguration | undefined = loadTEALDAConfiguration();
+	if (typeof config === "undefined") {
+		// TODO: check if this is the best practice of aborting?
+		console.assert(0);
+		return;
+	}
+
+	const debugAssetDescriptor: TEALDebuggingAssetsDescriptor = new TEALDebuggingAssetsDescriptor(config);
+	const debugAssets: TEALDebuggingAssets = new TEALDebuggingAssets(config);
+
 	switch (runMode) {
 		case 'server':
 			activateTealDebug(
-				context, new TEALDebugAdapterServerDescriptorFactory());
+				context, new TEALDebugAdapterServerDescriptorFactory(debugAssets), config);
 			break;
 
 		case 'external': default:
-			activateTealDebug(context, new TEALDebugAdapterExecutableFactory());
+			activateTealDebug(context, new TEALDebugAdapterExecutableFactory(debugAssetDescriptor), config);
 			break;
 	}
 }
@@ -34,6 +47,12 @@ export interface TEALDebugAdapterDescriptorFactory
 
 class TEALDebugAdapterExecutableFactory
 	implements TEALDebugAdapterDescriptorFactory {
+
+	private _debugAssetDescriptor: TEALDebuggingAssetsDescriptor;
+
+	constructor(debugAssetDescriptor: TEALDebuggingAssetsDescriptor) {
+		this._debugAssetDescriptor = debugAssetDescriptor;
+	}
 
 	createDebugAdapterDescriptor(
 		_session: vscode.DebugSession,
@@ -71,6 +90,12 @@ class TEALDebugAdapterServerDescriptorFactory
 
 	private server?: Net.Server;
 
+	private _debugAssets: TEALDebuggingAssets;
+
+	constructor(debugAssets: TEALDebuggingAssets) {
+		this._debugAssets = debugAssets;
+	}
+
 	createDebugAdapterDescriptor(
 		_session: vscode.DebugSession,
 		_executable: vscode.DebugAdapterExecutable | undefined
@@ -78,7 +103,7 @@ class TEALDebugAdapterServerDescriptorFactory
 
 		if (!this.server) {
 			this.server = Net.createServer(socket => {
-				const session = new MockDebugSession(workspaceFileAccessor);
+				const session = new MockDebugSession(workspaceFileAccessor, this._debugAssets);
 				session.setRunAsServer(true);
 				session.start(socket as NodeJS.ReadableStream, socket);
 			}).listen(0);

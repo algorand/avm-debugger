@@ -1,26 +1,11 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import * as console from 'console';
 import { FileAccessor } from './mockRuntime';
 import { TEALDebugAdapterDescriptorFactory } from './extension';
 import { TealDebugConfigProvider } from './configuration';
-import { loadTEALDAConfiguration, TEALDebuggingAssets, TEALDebuggingAssetsDescriptor } from './utils';
 
-export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory) {
-
-	// Load config for debug from launch.json here
-	// Error abort if failed to load
-	let config: vscode.DebugConfiguration | undefined = loadTEALDAConfiguration();
-	if (typeof config === "undefined") {
-		// TODO: check if this is the best practice of aborting?
-		console.assert(0);
-		return;
-	}
-
-	const castedConfig: vscode.DebugConfiguration = <vscode.DebugConfiguration>config;
-	const debugAssetDescriptor: TEALDebuggingAssetsDescriptor = new TEALDebuggingAssetsDescriptor(castedConfig);
-	const debugAssets: TEALDebuggingAssets = new TEALDebuggingAssets(castedConfig);
+export function activateTealDebug(context: vscode.ExtensionContext, factory: TEALDebugAdapterDescriptorFactory, config: vscode.DebugConfiguration) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.teal-debug.runEditorContents', (resource: vscode.Uri) => {
@@ -30,7 +15,7 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 			}
 			if (targetResource) {
 				// NOTE: SORRY FORCE TYPECAST
-				let localConfig: vscode.DebugConfiguration = <vscode.DebugConfiguration>config;
+				let localConfig: vscode.DebugConfiguration = config;
 				localConfig.name = 'Run File';
 				localConfig.program = targetResource.fsPath;
 
@@ -46,7 +31,7 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 			}
 			if (targetResource) {
 				// NOTE: SORRY FORCE TYPECAST
-				let localConfig: vscode.DebugConfiguration = <vscode.DebugConfiguration>config;
+				let localConfig: vscode.DebugConfiguration = config;
 				localConfig.name = 'Debug File';
 				localConfig.program = targetResource.fsPath;
 

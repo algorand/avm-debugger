@@ -4,6 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './mockDebug';
+import { TEALDebuggingAssets } from './utils';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -65,7 +66,7 @@ export class RuntimeVariable {
 		return this._memory;
 	}
 
-	constructor(public readonly name: string, private _value: IRuntimeVariableType) {}
+	constructor(public readonly name: string, private _value: IRuntimeVariableType) { }
 
 	public setMemory(data: Uint8Array, offset = 0) {
 		const memory = this.memory;
@@ -132,7 +133,7 @@ export class MockRuntime extends EventEmitter {
 	private currentColumn: number | undefined;
 
 	// This is the next instruction that will be 'executed'
-	public instruction= 0;
+	public instruction = 0;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
@@ -149,9 +150,11 @@ export class MockRuntime extends EventEmitter {
 	private namedException: string | undefined;
 	private otherExceptions = false;
 
+	private _debugAssets: TEALDebuggingAssets;
 
-	constructor(private fileAccessor: FileAccessor) {
+	constructor(private fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
 		super();
+		this._debugAssets = debugAssets;
 	}
 
 	/**
@@ -223,7 +226,7 @@ export class MockRuntime extends EventEmitter {
 				return true;
 			}
 		} else {
-			if (this.currentLine < this.sourceLines.length-1) {
+			if (this.currentLine < this.sourceLines.length - 1) {
 				this.currentLine++;
 			} else {
 				// no more lines: run to end
@@ -277,7 +280,7 @@ export class MockRuntime extends EventEmitter {
 			return [];
 		}
 
-		const { name, index  }  = words[frameId];
+		const { name, index } = words[frameId];
 
 		// make every character of the frame a potential "step in" target
 		return name.split('').map((c, ix) => {
@@ -404,7 +407,7 @@ export class MockRuntime extends EventEmitter {
 		this.instructionBreakpoints.clear();
 	}
 
-	public async getGlobalVariables(cancellationToken?: () => boolean ): Promise<RuntimeVariable[]> {
+	public async getGlobalVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
 
 		let a: RuntimeVariable[] = [];
 
@@ -498,7 +501,7 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * return true on stop
 	 */
-	 private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
+	private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
 
 		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
 
@@ -669,7 +672,7 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
-	private sendEvent(event: string, ... args: any[]): void {
+	private sendEvent(event: string, ...args: any[]): void {
 		setTimeout(() => {
 			this.emit(event, ...args);
 		}, 0);

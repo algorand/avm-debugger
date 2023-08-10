@@ -21,6 +21,7 @@ import { basename } from 'path-browserify';
 import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './mockRuntime';
 import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
+import { TEALDebuggingAssets } from './utils';
 
 export enum RuntimeEvents {
 	stopOnEntry = 'stopOnEntry',
@@ -71,18 +72,22 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _addressesInHex = true;
 
+	private _debugAssets: TEALDebuggingAssets;
+
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
 	 */
-	public constructor(fileAccessor: FileAccessor) {
+	public constructor(fileAccessor: FileAccessor, debugAssets?: TEALDebuggingAssets) {
 		super("mock-debug.txt");
+
+		this._debugAssets = <TEALDebuggingAssets>debugAssets;
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(false);
 		this.setDebuggerColumnsStartAt1(false);
 
-		this._runtime = new MockRuntime(fileAccessor);
+		this._runtime = new MockRuntime(fileAccessor, this._debugAssets);
 
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
