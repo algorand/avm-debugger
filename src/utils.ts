@@ -159,7 +159,7 @@ export class TxnGroupSourceDescriptor {
     }) {
         this._fileLocation = absPathAgainstWorkspace(fileLocation);
         const _sourcemapLocation = absPathAgainstWorkspace(sourcemapLocation);
-        this._sourcemap = JSON.parse(fs.readFileSync(_sourcemapLocation.fsPath, 'utf-8')) as algosdk.SourceMap;
+        this._sourcemap = new algosdk.SourceMap(JSON.parse(fs.readFileSync(_sourcemapLocation.fsPath, 'utf-8')));
         this._txnGroupPath = txnGroupPath;
         this._appOrLsig = appOrLsig;
         this._onCompletion = onCompletion;
@@ -170,7 +170,7 @@ export class TxnGroupSourceDescriptor {
         return this._fileLocation;
     }
 
-    public get sourcemapLocation(): algosdk.SourceMap {
+    public get sourcemap(): algosdk.SourceMap {
         return this._sourcemap;
     }
 

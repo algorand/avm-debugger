@@ -5,6 +5,7 @@
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './mockDebug';
 import { TEALDebuggingAssets } from './utils';
+import * as algosdk from 'algosdk';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -138,6 +139,8 @@ export class MockRuntime extends EventEmitter {
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 
+	private sourcesPCsMap = new Map<string, number>();
+
 	// all instruction breakpoint addresses
 	private instructionBreakpoints = new Set<number>();
 
@@ -214,20 +217,32 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
+	private currentPCtoLine(): number | undefined {
+		const sourcemap = <algosdk.SourceMap> this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
+		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
+		const pc = <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace[pcIndex].pc;
+		// TODO: why TypeError: sourcemap.getLineForPc is not a function
+		return sourcemap.getLineForPc(pc);
+	}
+
 	private updateCurrentLine(reverse: boolean): boolean {
+		const pcIndex: number = <number>this.sourcesPCsMap.get(this._sourceFile);
+
 		if (reverse) {
-			if (this.currentLine > 0) {
-				this.currentLine--;
+			if (pcIndex > 0) {
+				this.sourcesPCsMap.set(this._sourceFile, pcIndex - 1);
+				this.currentLine = <number>this.currentPCtoLine();
 			} else {
 				// no more lines: stop at first line
-				this.currentLine = 0;
+				this.currentLine = <number>this.currentPCtoLine();
 				this.currentColumn = undefined;
 				this.sendEvent('stopOnEntry');
 				return true;
 			}
 		} else {
-			if (this.currentLine < this.sourceLines.length - 1) {
-				this.currentLine++;
+			if (pcIndex < <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace?.length - 1) {
+				this.sourcesPCsMap.set(this._sourceFile, pcIndex + 1);
+				this.currentLine = <number>this.currentPCtoLine();
 			} else {
 				// no more lines: run to end
 				this.currentColumn = undefined;
@@ -235,6 +250,7 @@ export class MockRuntime extends EventEmitter {
 				return true;
 			}
 		}
+
 		return false;
 	}
 
@@ -475,6 +491,7 @@ export class MockRuntime extends EventEmitter {
 	private async loadSource(file: string): Promise<void> {
 		if (this._sourceFile !== file) {
 			this._sourceFile = this.normalizePathAndCasing(file);
+			this.sourcesPCsMap.set(this._sourceFile, 0);
 			this.initializeContents(await this.fileAccessor.readFile(file));
 		}
 	}
@@ -503,14 +520,42 @@ export class MockRuntime extends EventEmitter {
 	 */
 	private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
 
-		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
+		// for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
 
-			// is there a source breakpoint?
+		// 	// is there a source breakpoint?
+		// 	const breakpoints = this.breakPoints.get(this._sourceFile);
+		// 	if (breakpoints) {
+		// 		const bps = breakpoints.filter(bp => bp.line === ln);
+		// 		if (bps.length > 0) {
+
+		// 			// send 'stopped' event
+		// 			this.sendEvent(RuntimeEvents.stopOnBreakpoint);
+
+		// 			// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
+		// 			// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
+		// 			if (!bps[0].verified) {
+		// 				bps[0].verified = true;
+		// 				this.sendEvent('breakpointValidated', bps[0]);
+		// 			}
+
+		// 			this.currentLine = ln;
+		// 			return true;
+		// 		}
+		// 	}
+
+		// 	const line = this.getLine(ln);
+		// 	if (line.length > 0) {
+		// 		this.currentLine = ln;
+		// 		break;
+		// 	}
+		// }
+
+		for (let pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile); reverse ? pcIndex >= 0 : pcIndex < <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace?.length; reverse ? pcIndex-- : pcIndex++) {
+			const possibleLine = this.currentPCtoLine();
 			const breakpoints = this.breakPoints.get(this._sourceFile);
-			if (breakpoints) {
-				const bps = breakpoints.filter(bp => bp.line === ln);
+			if (typeof possibleLine !== 'undefined' && breakpoints) {
+				const bps = breakpoints.filter(bp => bp.line === <number>possibleLine);
 				if (bps.length > 0) {
-
 					// send 'stopped' event
 					this.sendEvent(RuntimeEvents.stopOnBreakpoint);
 
@@ -521,17 +566,20 @@ export class MockRuntime extends EventEmitter {
 						this.sendEvent('breakpointValidated', bps[0]);
 					}
 
-					this.currentLine = ln;
+					this.currentLine = possibleLine;
 					return true;
 				}
 			}
 
-			const line = this.getLine(ln);
-			if (line.length > 0) {
-				this.currentLine = ln;
-				break;
+			if (possibleLine) {
+				const line = this.getLine(possibleLine);
+				if (line.length > 0) {
+					this.currentLine = possibleLine;
+					break;
+				}
 			}
 		}
+
 		if (stepEvent) {
 			this.sendEvent(stepEvent);
 			return true;
@@ -545,98 +593,14 @@ export class MockRuntime extends EventEmitter {
 	 */
 	private executeLine(ln: number, reverse: boolean): boolean {
 
+		// TODO: for TEAL version of debugging, we don't need instructional granauality.
+
 		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
 		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
 			reverse ? this.instruction-- : this.instruction++;
 			if (this.instructionBreakpoints.has(this.instruction)) {
 				this.sendEvent('stopOnInstructionBreakpoint');
 				return true;
-			}
-		}
-
-		const line = this.getLine(ln);
-
-		// find variable accesses
-		let reg0 = /\$([a-z][a-z0-9]*)(=(false|true|[0-9]+(\.[0-9]+)?|\".*\"|\{.*\}))?/ig;
-		let matches0: RegExpExecArray | null;
-		while (matches0 = reg0.exec(line)) {
-			if (matches0.length === 5) {
-
-				let access: string | undefined;
-
-				const name = matches0[1];
-				const value = matches0[3];
-
-				let v = new RuntimeVariable(name, value);
-
-				if (value && value.length > 0) {
-
-					if (value === 'true') {
-						v.value = true;
-					} else if (value === 'false') {
-						v.value = false;
-					} else if (value[0] === '"') {
-						v.value = value.slice(1, -1);
-					} else if (value[0] === '{') {
-						v.value = [
-							new RuntimeVariable('fBool', true),
-							new RuntimeVariable('fInteger', 123),
-							new RuntimeVariable('fString', 'hello'),
-							new RuntimeVariable('flazyInteger', 321)
-						];
-					} else {
-						v.value = parseFloat(value);
-					}
-
-					if (this.variables.has(name)) {
-						// the first write access to a variable is the "declaration" and not a "write access"
-						access = 'write';
-					}
-					this.variables.set(name, v);
-				} else {
-					if (this.variables.has(name)) {
-						// variable must exist in order to trigger a read access
-						access = 'read';
-					}
-				}
-
-				const accessType = this.breakAddresses.get(name);
-				if (access && accessType && accessType.indexOf(access) >= 0) {
-					this.sendEvent('stopOnDataBreakpoint', access);
-					return true;
-				}
-			}
-		}
-
-		// if 'log(...)' found in source -> send argument to debug console
-		const reg1 = /(log|prio|out|err)\(([^\)]*)\)/g;
-		let matches1: RegExpExecArray | null;
-		while (matches1 = reg1.exec(line)) {
-			if (matches1.length === 3) {
-				this.sendEvent('output', matches1[1], matches1[2], this._sourceFile, ln, matches1.index);
-			}
-		}
-
-		// if pattern 'exception(...)' found in source -> throw named exception
-		const matches2 = /exception\((.*)\)/.exec(line);
-		if (matches2 && matches2.length === 2) {
-			const exception = matches2[1].trim();
-			if (this.namedException === exception) {
-				this.sendEvent('stopOnException', exception);
-				return true;
-			} else {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
-		} else {
-			// if word 'exception' found in source -> throw exception
-			if (line.indexOf('exception') >= 0) {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
 			}
 		}
 
