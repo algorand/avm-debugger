@@ -43,8 +43,6 @@ export interface TEALDebugAdapterDescriptorFactory
 	dispose(): any
 }
 
-// TODO: both factory should have constructor passing in debug asset descriptor class
-
 class TEALDebugAdapterExecutableFactory
 	implements TEALDebugAdapterDescriptorFactory {
 

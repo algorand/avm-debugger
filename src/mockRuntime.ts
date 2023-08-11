@@ -221,7 +221,6 @@ export class MockRuntime extends EventEmitter {
 		const sourcemap = <algosdk.SourceMap> this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
 		const pc = <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace[pcIndex].pc;
-		// TODO: why TypeError: sourcemap.getLineForPc is not a function
 		return sourcemap.getLineForPc(pc);
 	}
 
@@ -519,36 +518,6 @@ export class MockRuntime extends EventEmitter {
 	 * return true on stop
 	 */
 	private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
-
-		// for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
-
-		// 	// is there a source breakpoint?
-		// 	const breakpoints = this.breakPoints.get(this._sourceFile);
-		// 	if (breakpoints) {
-		// 		const bps = breakpoints.filter(bp => bp.line === ln);
-		// 		if (bps.length > 0) {
-
-		// 			// send 'stopped' event
-		// 			this.sendEvent(RuntimeEvents.stopOnBreakpoint);
-
-		// 			// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
-		// 			// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
-		// 			if (!bps[0].verified) {
-		// 				bps[0].verified = true;
-		// 				this.sendEvent('breakpointValidated', bps[0]);
-		// 			}
-
-		// 			this.currentLine = ln;
-		// 			return true;
-		// 		}
-		// 	}
-
-		// 	const line = this.getLine(ln);
-		// 	if (line.length > 0) {
-		// 		this.currentLine = ln;
-		// 		break;
-		// 	}
-		// }
 
 		for (let pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile); reverse ? pcIndex >= 0 : pcIndex < <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace?.length; reverse ? pcIndex-- : pcIndex++) {
 			const possibleLine = this.currentPCtoLine();
