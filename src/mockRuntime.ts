@@ -218,7 +218,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	private currentPCtoLine(): number | undefined {
-		const sourcemap = <algosdk.SourceMap> this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
+		const sourcemap = <algosdk.SourceMap>this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
 		const pc = <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace[pcIndex].pc;
 		return sourcemap.getLineForPc(pc);
@@ -426,12 +426,44 @@ export class MockRuntime extends EventEmitter {
 
 		let a: RuntimeVariable[] = [];
 
-		for (let i = 0; i < 10; i++) {
-			a.push(new RuntimeVariable(`global_${i}`, i));
-			if (cancellationToken && cancellationToken()) {
-				break;
+		if (cancellationToken && cancellationToken()) { return a; }
+
+		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
+		const approvalProgramTrace = <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace;
+
+		for (let i = 0; i <= pcIndex; i++) {
+			const unit = approvalProgramTrace[i];
+			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions ? unit.stackAdditions : [];
+			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
+			for (let j = 0; j < popCount; j++) { a.shift(); }
+			for (let j = 0; j < stackAdditions.length; j++) {
+				let globalVar: IRuntimeVariableType;
+				let stackName: string;
+
+				if (stackAdditions[j].type === 1) {
+					stackName = `stack bytes`;
+
+					// STOLEN FROM ALGOSDK
+					const lineBreakOrd = '\n'.charCodeAt(0);
+					const blankSpaceOrd = ' '.charCodeAt(0);
+					const tildeOrd = '~'.charCodeAt(0);
+					const isPrintable = (x: number) => blankSpaceOrd <= x && x <= tildeOrd;
+					const isAsciiPrintable = (<Uint8Array>stackAdditions[j].bytes).every(
+						(x: number) => x === lineBreakOrd || isPrintable(x)
+					);
+
+					if (isAsciiPrintable) {
+						globalVar = String.fromCharCode(...<Uint8Array>stackAdditions[j].bytes);
+					} else {
+						globalVar = Buffer.from(<Uint8Array>stackAdditions[j].bytes).toString('base64');
+					}
+				} else {
+					stackName = `stack uint64`;
+					globalVar = stackAdditions[j].uint ? <number>stackAdditions[j].uint : 0;
+				}
+
+				a.unshift(new RuntimeVariable(stackName, globalVar));
 			}
-			await timeout(1000);
 		}
 
 		return a;

@@ -236,7 +236,7 @@ export class TEALDebuggingAssets {
         );
         this._simulateResponse
             = algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
-                JSON.parse(jsonStringSimulate) as Record<string, any>
+                JSON.parse(jsonStringSimulate)
             );
 
         const jsonStringTxnG = fs.readFileSync(

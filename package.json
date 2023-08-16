@@ -48,7 +48,7 @@
     "@typescript-eslint/parser": "^5.17.0",
     "@vscode/debugadapter": "^1.56.0",
     "@vscode/debugadapter-testsupport": "^1.56.0",
-    "algosdk": "github:algorand/js-algorand-sdk#simulate-basic-pc",
+    "algosdk": "github:algorand/js-algorand-sdk",
     "await-notify": "^1.0.1",
     "base64-js": "^1.5.1",
     "esbuild": "^0.14.29",

@@ -255,13 +255,13 @@ algo-msgpack-with-bigint@^2.1.1:
   resolved "https://registry.npmjs.org/algo-msgpack-with-bigint/-/algo-msgpack-with-bigint-2.1.1.tgz"
   integrity sha512-F1tGh056XczEaEAqu7s+hlZUDWwOBT70Eq0lfMpBP2YguSQVyxRbprLq5rELXKQOyOaixTWYhMeMQMzP0U5FoQ==
 
-"algosdk@github:algorand/js-algorand-sdk#simulate-basic-pc":
+"algosdk@github:algorand/js-algorand-sdk":
   version "2.4.0"
-  resolved "git+ssh://git@github.com/algorand/js-algorand-sdk.git#3298a73b550cfd3f025752b51d7232dd6056b828"
+  resolved "git+ssh://git@github.com/algorand/js-algorand-sdk.git#28489e19a0488549253ea9dd9291db76a8c8bbda"
   dependencies:
     algo-msgpack-with-bigint "^2.1.1"
     buffer "^6.0.3"
-    cross-fetch "^4.0.0-alpha.5"
+    cross-fetch "^4.0.0"
     hi-base32 "^0.5.1"
     js-sha256 "^0.9.0"
     js-sha3 "^0.8.0"
@@ -523,7 +523,7 @@ concat-map@0.0.1:
   resolved "https://registry.npmjs.org/concat-map/-/concat-map-0.0.1.tgz"
   integrity sha512-/Srv4dswyQNBfohGpz9o6Yb3Gz3SrUDqBH5rTuhGR7ahtlbYKnVxw2bCFMRljaA7EXHaXZ8wsHdodFvbkhKmqg==
 
-cross-fetch@^4.0.0-alpha.5:
+cross-fetch@^4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/cross-fetch/-/cross-fetch-4.0.0.tgz"
   integrity sha512-e4a5N8lVvuLgAWgnCrLr2PP0YyDOTHa9H/Rj54dirp61qXnNq46m82bRhNqIA5VccJtWBvPTFRV3TtvHUKPB1g==
