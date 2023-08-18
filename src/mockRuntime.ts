@@ -594,8 +594,6 @@ export class MockRuntime extends EventEmitter {
 	 */
 	private executeLine(ln: number, reverse: boolean): boolean {
 
-		// TODO: for TEAL version of debugging, we don't need instructional granauality.
-
 		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
 		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
 			reverse ? this.instruction-- : this.instruction++;
