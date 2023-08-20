@@ -67,7 +67,7 @@ export class RuntimeVariable {
 		return this._memory;
 	}
 
-	constructor(public readonly name: string, private _value: IRuntimeVariableType) { }
+	constructor(public name: string, private _value: IRuntimeVariableType) { }
 
 	public setMemory(data: Uint8Array, offset = 0) {
 		const memory = this.memory;
@@ -149,9 +149,6 @@ export class MockRuntime extends EventEmitter {
 	private breakpointId = 1;
 
 	private breakAddresses = new Map<string, string>();
-
-	private namedException: string | undefined;
-	private otherExceptions = false;
 
 	private _debugAssets: TEALDebuggingAssets;
 
@@ -408,11 +405,6 @@ export class MockRuntime extends EventEmitter {
 		this.breakAddresses.clear();
 	}
 
-	public setExceptionsFilters(namedException: string | undefined, otherExceptions: boolean): void {
-		this.namedException = namedException;
-		this.otherExceptions = otherExceptions;
-	}
-
 	public setInstructionBreakpoint(address: number): boolean {
 		this.instructionBreakpoints.add(address);
 		return true;
@@ -422,7 +414,60 @@ export class MockRuntime extends EventEmitter {
 		this.instructionBreakpoints.clear();
 	}
 
-	public async getGlobalVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
+	private avmValueToRTV(avmValue: algosdk.modelsv2.AvmValue): IRuntimeVariableType {
+		let runtimeVar: IRuntimeVariableType;
+
+		if (avmValue.type === 1) {
+
+			// STOLEN FROM ALGOSDK
+			const lineBreakOrd = '\n'.charCodeAt(0);
+			const blankSpaceOrd = ' '.charCodeAt(0);
+			const tildeOrd = '~'.charCodeAt(0);
+			const isPrintable = (x: number) => blankSpaceOrd <= x && x <= tildeOrd;
+			const isAsciiPrintable = (<Uint8Array>avmValue.bytes).every(
+				(x: number) => x === lineBreakOrd || isPrintable(x)
+			);
+
+			if (isAsciiPrintable) {
+				runtimeVar = String.fromCharCode(...<Uint8Array>avmValue.bytes);
+			} else {
+				runtimeVar = Buffer.from(<Uint8Array>avmValue.bytes).toString('base64');
+			}
+		} else {
+			runtimeVar = avmValue.uint ? <number>avmValue.uint : 0;
+		}
+
+		return runtimeVar;
+	}
+
+	public async getScratchVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
+
+		let a: RuntimeVariable[] = [];
+
+		let scratchMap: Map<number, IRuntimeVariableType> = new Map<number, IRuntimeVariableType>();
+
+		if (cancellationToken && cancellationToken()) { return a; }
+
+		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
+		const approvalProgramTrace = <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace;
+
+		for (let i = 0; i <= pcIndex; i++) {
+			const unit = approvalProgramTrace[i];
+			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
+
+			for (let j = 0; j < scratchWrites.length; j++) {
+				scratchMap[<number>scratchWrites[j].slot] = this.avmValueToRTV(scratchWrites[j].newValue);
+			}
+		}
+
+		for (let [key, value] of scratchMap) {
+			a.push(new RuntimeVariable(`scratch ` + key, value));
+		}
+
+		return a;
+	}
+
+	public async getStackVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
 
 		let a: RuntimeVariable[] = [];
 
@@ -437,44 +482,16 @@ export class MockRuntime extends EventEmitter {
 			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
 			for (let j = 0; j < popCount; j++) { a.shift(); }
 			for (let j = 0; j < stackAdditions.length; j++) {
-				let globalVar: IRuntimeVariableType;
-				let stackName: string;
-
-				if (stackAdditions[j].type === 1) {
-					stackName = `stack bytes`;
-
-					// STOLEN FROM ALGOSDK
-					const lineBreakOrd = '\n'.charCodeAt(0);
-					const blankSpaceOrd = ' '.charCodeAt(0);
-					const tildeOrd = '~'.charCodeAt(0);
-					const isPrintable = (x: number) => blankSpaceOrd <= x && x <= tildeOrd;
-					const isAsciiPrintable = (<Uint8Array>stackAdditions[j].bytes).every(
-						(x: number) => x === lineBreakOrd || isPrintable(x)
-					);
-
-					if (isAsciiPrintable) {
-						globalVar = String.fromCharCode(...<Uint8Array>stackAdditions[j].bytes);
-					} else {
-						globalVar = Buffer.from(<Uint8Array>stackAdditions[j].bytes).toString('base64');
-					}
-				} else {
-					stackName = `stack uint64`;
-					globalVar = stackAdditions[j].uint ? <number>stackAdditions[j].uint : 0;
-				}
-
-				a.unshift(new RuntimeVariable(stackName, globalVar));
+				let stackVar: IRuntimeVariableType = this.avmValueToRTV(stackAdditions[j]);
+				a.unshift(new RuntimeVariable("", stackVar));
 			}
 		}
 
+		for (let i = 0; i < a.length; i++) {
+			a[i].name = i.toString();
+		}
+
 		return a;
-	}
-
-	public getLocalVariables(): RuntimeVariable[] {
-		return Array.from(this.variables, ([name, value]) => value);
-	}
-
-	public getLocalVariable(name: string): RuntimeVariable | undefined {
-		return this.variables.get(name);
 	}
 
 	/**

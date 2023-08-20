@@ -62,7 +62,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	// a Mock runtime (or debugger)
 	private _runtime: MockRuntime;
 
-	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
+	private _variableHandles = new Handles<'scratches' | 'stacks' | RuntimeVariable>();
 
 	private _configurationDone = new Subject();
 
@@ -404,8 +404,9 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		response.body = {
 			scopes: [
-				new Scope("Locals", this._variableHandles.create('locals'), false),
-				new Scope("Globals", this._variableHandles.create('globals'), true)
+				// new Scope("Locals", this._variableHandles.create('locals'), false),
+				new Scope("Scratches", this._variableHandles.create('scratches'), false),
+				new Scope("Stacks", this._variableHandles.create('stacks'), false)
 			]
 		};
 		this.sendResponse(response);
@@ -440,15 +441,21 @@ export class MockDebugSession extends LoggingDebugSession {
 		let vs: RuntimeVariable[] = [];
 
 		const v = this._variableHandles.get(args.variablesReference);
-		if (v === 'locals') {
-			vs = this._runtime.getLocalVariables();
-		} else if (v === 'globals') {
+		if (v === 'scratches') {
 			if (request) {
 				this._cancellationTokens.set(request.seq, false);
-				vs = await this._runtime.getGlobalVariables(() => !!this._cancellationTokens.get(request.seq));
+				vs = await this._runtime.getScratchVariables(() => !!this._cancellationTokens.get(request.seq));
 				this._cancellationTokens.delete(request.seq);
 			} else {
-				vs = await this._runtime.getGlobalVariables();
+				vs = await this._runtime.getScratchVariables();
+			}
+		} else if (v === 'stacks') {
+			if (request) {
+				this._cancellationTokens.set(request.seq, false);
+				vs = await this._runtime.getStackVariables(() => !!this._cancellationTokens.get(request.seq));
+				this._cancellationTokens.delete(request.seq);
+			} else {
+				vs = await this._runtime.getStackVariables();
 			}
 		} else if (v && Array.isArray(v.value)) {
 			vs = v.value;
@@ -511,7 +518,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		if (args.variablesReference && args.name) {
 			const v = this._variableHandles.get(args.variablesReference);
-			if (v === 'globals') {
+			if (v === 'scratches') {
 				response.body.dataId = args.name;
 				response.body.description = args.name;
 				response.body.accessTypes = ["write"];
