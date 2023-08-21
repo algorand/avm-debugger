@@ -451,7 +451,7 @@ export class MockRuntime extends EventEmitter {
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
 		const approvalProgramTrace = <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace;
 
-		for (let i = 0; i <= pcIndex; i++) {
+		for (let i = 0; i < pcIndex; i++) {
 			const unit = approvalProgramTrace[i];
 			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
 
@@ -476,7 +476,7 @@ export class MockRuntime extends EventEmitter {
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
 		const approvalProgramTrace = <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace;
 
-		for (let i = 0; i <= pcIndex; i++) {
+		for (let i = 0; i < pcIndex; i++) {
 			const unit = approvalProgramTrace[i];
 			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions ? unit.stackAdditions : [];
 			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
