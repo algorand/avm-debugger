@@ -4,7 +4,7 @@
             "file-location": "./stack-scratch.teal",
             "sourcemap-location": "./stack-scratch.teal.tok.map",
             "txn-group-path": [0, 0],
-            "app-or-lsig": "approval",
+            "app-or-lsig": "app",
             "on-completion": "NoOp"
         }
     ]

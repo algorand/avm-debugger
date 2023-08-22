@@ -456,7 +456,7 @@ export class MockRuntime extends EventEmitter {
 			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
 
 			for (let j = 0; j < scratchWrites.length; j++) {
-				scratchMap[<number>scratchWrites[j].slot] = this.avmValueToRTV(scratchWrites[j].newValue);
+				scratchMap.set(<number>scratchWrites[j].slot, this.avmValueToRTV(scratchWrites[j].newValue));
 			}
 		}
 
