@@ -70,6 +70,10 @@ interface DebugSrcState {
 
 type DebugTxnState = DebugSrcState[];
 
+// TODO: tree walking
+
+// TODO: js-sdk upgrade, read hash
+
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "teal") "execution engine with debugging support":
@@ -93,9 +97,11 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
+	// TODO: maybe map from hash digest to sourcelines before extension debugging.
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
 
+	// TODO: maybe read from DebugTxnState (top of the stack)?
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
 	private get currentLine() {
@@ -106,12 +112,10 @@ export class MockRuntime extends EventEmitter {
 	}
 	private currentColumn: number | undefined;
 
-	// This is the next instruction that will be 'executed'
-	public instruction = 0;
-
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 
+	// TODO: replace with tree walker and DebugTxnState tho.
 	private sourcesPCsMap = new Map<string, number>();
 
 	// since we want to send breakpoint events, we will assign an id to every event
@@ -129,6 +133,7 @@ export class MockRuntime extends EventEmitter {
 	 * Start executing the given program.
 	 */
 	public async start(program: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
+		// TODO: dont start from program path, let tree walker find it.
 
 		await this.loadSource(this.normalizePathAndCasing(program));
 
@@ -167,13 +172,6 @@ export class MockRuntime extends EventEmitter {
 		if (!this.updateCurrentLine(reverse)) {
 			this.findNextStatement(reverse, RuntimeEvents.stopOnStep);
 		}
-	}
-
-	private currentPCtoLine(): number | undefined {
-		const sourcemap = <algosdk.SourceMap>this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
-		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
-		const pc = <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace[pcIndex].pc;
-		return sourcemap.getLineForPc(pc);
 	}
 
 	private updateCurrentLine(reverse: boolean): boolean {
@@ -250,8 +248,7 @@ export class MockRuntime extends EventEmitter {
 		const words = this.getWords(this.currentLine, line);
 		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
 
-		// if the line contains the word 'disassembly' we support to "disassemble" the line by adding an 'instruction' property to the stackframe
-		const instruction = line.indexOf('disassembly') >= 0 ? this.instruction : undefined;
+		const instruction = undefined;
 
 		const column = typeof this.currentColumn === 'number' ? this.currentColumn : undefined;
 
@@ -370,10 +367,7 @@ export class MockRuntime extends EventEmitter {
 		return a;
 	}
 
-	private getLine(line?: number): string {
-		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
-	}
-
+	// TODO: irrelevant, see if we can remove it later
 	private getWords(l: number, line: string): Word[] {
 		// break line into words
 		const WORD_REGEXP = /[a-z]+/ig;
@@ -383,14 +377,6 @@ export class MockRuntime extends EventEmitter {
 			words.push({ name: match[0], line: l, index: match.index });
 		}
 		return words;
-	}
-
-	private async loadSource(file: string): Promise<void> {
-		if (this._sourceFile !== file) {
-			this._sourceFile = this.normalizePathAndCasing(file);
-			this.sourcesPCsMap.set(this._sourceFile, 0);
-			this.sourceLines = new TextDecoder().decode(await this.fileAccessor.readFile(file)).split(/\r?\n/);
-		}
 	}
 
 	/**
@@ -436,6 +422,29 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	// Helper functions
+
+	// TODO: give trace and hash by debug state stack
+
+	// TODO: read from top of debug state stack and read the pc in the trace, give back line.
+	private currentPCtoLine(): number | undefined {
+		const sourcemap = <algosdk.SourceMap>this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
+		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
+		const pc = <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace[pcIndex].pc;
+		return sourcemap.getLineForPc(pc);
+	}
+
+	// TODO: also depend on give trace and hash by debug state stack
+	private getLine(line?: number): string {
+		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
+	}
+
+	private async loadSource(file: string): Promise<void> {
+		if (this._sourceFile !== file) {
+			this._sourceFile = this.normalizePathAndCasing(file);
+			this.sourcesPCsMap.set(this._sourceFile, 0);
+			this.sourceLines = new TextDecoder().decode(await this.fileAccessor.readFile(file)).split(/\r?\n/);
+		}
+	}
 
 	private avmValueToRTV(avmValue: algosdk.modelsv2.AvmValue): IRuntimeVariableType {
 		let runtimeVar: IRuntimeVariableType;
