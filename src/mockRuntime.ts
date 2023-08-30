@@ -38,6 +38,12 @@ interface IRuntimeStack {
 	frames: IRuntimeStackFrame[];
 }
 
+interface RuntimeDisassembledInstruction {
+	address: number;
+	instruction: string;
+	line?: number;
+}
+
 export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
 
 export class RuntimeVariable {
@@ -486,6 +492,31 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		return a;
+	}
+
+	/**
+	 * Return words of the given address range as "instructions"
+	 */
+	public disassemble(address: number, instructionCount: number): RuntimeDisassembledInstruction[] {
+
+		const instructions: RuntimeDisassembledInstruction[] = [];
+
+		for (let a = address; a < address + instructionCount; a++) {
+			if (a >= 0 && a < this.instructions.length) {
+				instructions.push({
+					address: a,
+					instruction: this.instructions[a].name,
+					line: this.instructions[a].line
+				});
+			} else {
+				instructions.push({
+					address: a,
+					instruction: 'nop'
+				});
+			}
+		}
+
+		return instructions;
 	}
 
 	// private methods
