@@ -560,22 +560,20 @@ export class MockRuntime extends EventEmitter {
 			await this.loadSource(path);
 			bps.forEach(bp => {
 				if (!bp.verified && bp.line < this.sourceLines.length) {
-					const srcLine = this.getLine(bp.line);
+					while (true) {
+						if (this.getLine(bp.line).length === 0) {
+							bp.line++;
+							continue;
+						}
+						if (/^\s*\S+:/ig.exec(this.getLine(bp.line))) {
+							bp.line++;
+							continue;
+						}
+						break;
+					}
 
-					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
-					if (srcLine.length === 0 || srcLine.indexOf('+') === 0) {
-						bp.line++;
-					}
-					// if a line starts with '-' we don't allow to set a breakpoint but move the breakpoint up
-					if (srcLine.indexOf('-') === 0) {
-						bp.line--;
-					}
-					// don't set 'verified' to true if the line contains the word 'lazy'
-					// in this case the breakpoint will be verified 'lazy' after hitting it once.
-					if (srcLine.indexOf('lazy') < 0) {
-						bp.verified = true;
-						this.sendEvent('breakpointValidated', bp);
-					}
+					bp.verified = true;
+					this.sendEvent('breakpointValidated', bp);
 				}
 			});
 		}
