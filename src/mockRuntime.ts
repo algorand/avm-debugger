@@ -62,6 +62,14 @@ export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+interface DebugSrcState {
+	txnPath: number[];
+	srcFSPath: string;
+	pcIndex: number;
+}
+
+type DebugTxnState = DebugSrcState[];
+
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "teal") "execution engine with debugging support":
@@ -87,9 +95,6 @@ export class MockRuntime extends EventEmitter {
 
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
-	private instructions: Word[] = [];
-	private starts: number[] = [];
-	private ends: number[] = [];
 
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
@@ -98,7 +103,6 @@ export class MockRuntime extends EventEmitter {
 	}
 	private set currentLine(x) {
 		this._currentLine = x;
-		this.instruction = this.starts[x];
 	}
 	private currentColumn: number | undefined;
 
@@ -109,9 +113,6 @@ export class MockRuntime extends EventEmitter {
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 
 	private sourcesPCsMap = new Map<string, number>();
-
-	// all instruction breakpoint addresses
-	private instructionBreakpoints = new Set<number>();
 
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
@@ -237,24 +238,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
-
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-
-		// return nothing if frameId is out of range
-		if (frameId < 0 || frameId >= words.length) {
-			return [];
-		}
-
-		const { name, index } = words[frameId];
-
-		// make every character of the frame a potential "step in" target
-		return name.split('').map((c, ix) => {
-			return {
-				id: index + ix,
-				label: `target: ${c}`
-			};
-		});
+		return [];
 	}
 
 	/**
@@ -291,14 +275,6 @@ export class MockRuntime extends EventEmitter {
 			frames: frames,
 			count: words.length
 		};
-	}
-
-	/*
-	 * Determine possible column breakpoint positions for the given line.
-	 * Here we return the start location of words with more than 8 characters.
-	 */
-	public getBreakpoints(path: string, line: number): number[] {
-		return this.getWords(line, this.getLine(line)).filter(w => w.name.length > 8).map(w => w.index);
 	}
 
 	/*
@@ -413,26 +389,7 @@ export class MockRuntime extends EventEmitter {
 		if (this._sourceFile !== file) {
 			this._sourceFile = this.normalizePathAndCasing(file);
 			this.sourcesPCsMap.set(this._sourceFile, 0);
-			this.initializeContents(await this.fileAccessor.readFile(file));
-		}
-	}
-
-	private initializeContents(memory: Uint8Array) {
-		this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
-
-		this.instructions = [];
-
-		this.starts = [];
-		this.instructions = [];
-		this.ends = [];
-
-		for (let l = 0; l < this.sourceLines.length; l++) {
-			this.starts.push(this.instructions.length);
-			const words = this.getWords(l, this.sourceLines[l]);
-			for (let word of words) {
-				this.instructions.push(word);
-			}
-			this.ends.push(this.instructions.length);
+			this.sourceLines = new TextDecoder().decode(await this.fileAccessor.readFile(file)).split(/\r?\n/);
 		}
 	}
 

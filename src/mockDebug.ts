@@ -158,13 +158,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make VS Code show a 'step back' button
 		response.body.supportsStepBack = true;
 
-		// make VS Code support data breakpoints
-		response.body.supportsDataBreakpoints = false;
-
-		// make VS Code support completion in REPL
-		// response.body.supportsCompletionsRequest = true;
-		// response.body.completionTriggerCharacters = [".", "["];
-
 		// make VS Code send cancel request
 		response.body.supportsCancelRequest = true;
 
@@ -173,6 +166,10 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// make VS Code provide "Step in Target" functionality
 		response.body.supportsStepInTargetsRequest = true;
+
+		// TEAL is not so thready.
+		response.body.supportsSingleThreadExecutionRequests = false;
+		response.body.supportsTerminateThreadsRequest = false;
 
 		// the adapter defines two exceptions filters, one with support for conditions.
 		response.body.supportsExceptionFilterOptions = true;
@@ -195,7 +192,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		];
 
 		// make VS Code send exceptionInfo request
-		response.body.supportsExceptionInfoRequest = true;
+		// response.body.supportsExceptionInfoRequest = true;
 
 		// make VS Code send setVariable request
 		// response.body.supportsSetVariable = true;
@@ -209,12 +206,12 @@ export class MockDebugSession extends LoggingDebugSession {
 		// response.body.supportsInstructionBreakpoints = true;
 
 		// make VS Code able to read and write variable memory
-		response.body.supportsReadMemoryRequest = true;
-		response.body.supportsWriteMemoryRequest = true;
+		// response.body.supportsReadMemoryRequest = true;
+		// response.body.supportsWriteMemoryRequest = true;
 
 		response.body.supportSuspendDebuggee = true;
 		response.body.supportTerminateDebuggee = true;
-		response.body.supportsFunctionBreakpoints = true;
+		// response.body.supportsFunctionBreakpoints = true;
 		response.body.supportsDelayedStackTraceLoading = true;
 
 		this.sendResponse(response);
@@ -296,34 +293,14 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected breakpointLocationsRequest(response: DebugProtocol.BreakpointLocationsResponse, args: DebugProtocol.BreakpointLocationsArguments, request?: DebugProtocol.Request): void {
 
 		if (args.source.path) {
-			const bps = this._runtime.getBreakpoints(args.source.path, this.convertClientLineToDebugger(args.line));
 			response.body = {
-				breakpoints: bps.map(col => {
-					return {
-						line: args.line,
-						column: this.convertDebuggerColumnToClient(col)
-					};
-				})
+				breakpoints: [{ line: args.line, }]
 			};
 		} else {
 			response.body = {
 				breakpoints: []
 			};
 		}
-		this.sendResponse(response);
-	}
-
-	protected exceptionInfoRequest(response: DebugProtocol.ExceptionInfoResponse, args: DebugProtocol.ExceptionInfoArguments) {
-		response.body = {
-			exceptionId: 'Exception ID',
-			description: 'This is a descriptive description of the exception.',
-			breakMode: 'always',
-			details: {
-				message: 'Message contained in the exception.',
-				typeName: 'Short type name of the exception object',
-				stackTrace: 'stack frame 1\nstack frame 2',
-			}
-		};
 		this.sendResponse(response);
 	}
 
