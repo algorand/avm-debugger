@@ -38,47 +38,18 @@ interface IRuntimeStack {
 	frames: IRuntimeStackFrame[];
 }
 
-interface RuntimeDisassembledInstruction {
-	address: number;
-	instruction: string;
-	line?: number;
-}
-
-export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
+export type IRuntimeVariableType = number | bigint | string;
 
 export class RuntimeVariable {
-	private _memory?: Uint8Array;
-
-	public reference?: number;
-
 	public get value() {
 		return this._value;
 	}
 
 	public set value(value: IRuntimeVariableType) {
 		this._value = value;
-		this._memory = undefined;
-	}
-
-	public get memory() {
-		if (this._memory === undefined && typeof this._value === 'string') {
-			this._memory = new TextEncoder().encode(this._value);
-		}
-		return this._memory;
 	}
 
 	constructor(public name: string, private _value: IRuntimeVariableType) { }
-
-	public setMemory(data: Uint8Array, offset = 0) {
-		const memory = this.memory;
-		if (!memory) {
-			return;
-		}
-
-		memory.set(data, offset);
-		this._memory = memory;
-		this._value = new TextDecoder().decode(memory);
-	}
 }
 
 interface Word {
@@ -114,8 +85,6 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
-	private variables = new Map<string, RuntimeVariable>();
-
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
 	private instructions: Word[] = [];
@@ -147,8 +116,6 @@ export class MockRuntime extends EventEmitter {
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
 	private breakpointId = 1;
-
-	private breakAddresses = new Map<string, string>();
 
 	private _debugAssets: TEALDebuggingAssets;
 
@@ -386,25 +353,6 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
-	public setDataBreakpoint(address: string, accessType: 'read' | 'write' | 'readWrite'): boolean {
-
-		const x = accessType === 'readWrite' ? 'read write' : accessType;
-
-		const t = this.breakAddresses.get(address);
-		if (t) {
-			if (t !== x) {
-				this.breakAddresses.set(address, 'read write');
-			}
-		} else {
-			this.breakAddresses.set(address, x);
-		}
-		return true;
-	}
-
-	public clearAllDataBreakpoints(): void {
-		this.breakAddresses.clear();
-	}
-
 	public setInstructionBreakpoint(address: number): boolean {
 		this.instructionBreakpoints.add(address);
 		return true;
@@ -434,7 +382,13 @@ export class MockRuntime extends EventEmitter {
 				runtimeVar = Buffer.from(<Uint8Array>avmValue.bytes).toString('base64');
 			}
 		} else {
-			runtimeVar = avmValue.uint ? <number>avmValue.uint : 0;
+			if (!avmValue.uint) {
+				runtimeVar = 0;
+			} else if (typeof avmValue.uint === 'number') {
+				runtimeVar = <number>avmValue.uint;
+			} else {
+				runtimeVar = <bigint>avmValue.uint;
+			}
 		}
 
 		return runtimeVar;
@@ -461,7 +415,7 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		for (let [key, value] of scratchMap) {
-			a.push(new RuntimeVariable(`scratch ` + key, value));
+			a.push(new RuntimeVariable(`slot ` + key, value));
 		}
 
 		return a;
@@ -493,33 +447,6 @@ export class MockRuntime extends EventEmitter {
 
 		return a;
 	}
-
-	/**
-	 * Return words of the given address range as "instructions"
-	 */
-	public disassemble(address: number, instructionCount: number): RuntimeDisassembledInstruction[] {
-
-		const instructions: RuntimeDisassembledInstruction[] = [];
-
-		for (let a = address; a < address + instructionCount; a++) {
-			if (a >= 0 && a < this.instructions.length) {
-				instructions.push({
-					address: a,
-					instruction: this.instructions[a].name,
-					line: this.instructions[a].line
-				});
-			} else {
-				instructions.push({
-					address: a,
-					instruction: 'nop'
-				});
-			}
-		}
-
-		return instructions;
-	}
-
-	// private methods
 
 	private getLine(line?: number): string {
 		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
@@ -610,6 +537,8 @@ export class MockRuntime extends EventEmitter {
 	 * Returns true if execution sent out a stopped event and needs to stop.
 	 */
 	private executeLine(ln: number, reverse: boolean): boolean {
+
+		// TODO: execute line over multiple files tho...
 
 		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
 		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
