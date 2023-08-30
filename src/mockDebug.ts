@@ -159,11 +159,11 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsStepBack = true;
 
 		// make VS Code support data breakpoints
-		response.body.supportsDataBreakpoints = true;
+		response.body.supportsDataBreakpoints = false;
 
 		// make VS Code support completion in REPL
-		response.body.supportsCompletionsRequest = true;
-		response.body.completionTriggerCharacters = [".", "["];
+		// response.body.supportsCompletionsRequest = true;
+		// response.body.completionTriggerCharacters = [".", "["];
 
 		// make VS Code send cancel request
 		response.body.supportsCancelRequest = true;
@@ -198,15 +198,15 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsExceptionInfoRequest = true;
 
 		// make VS Code send setVariable request
-		response.body.supportsSetVariable = true;
+		// response.body.supportsSetVariable = true;
 
 		// make VS Code send setExpression request
-		response.body.supportsSetExpression = true;
+		// response.body.supportsSetExpression = true;
 
 		// make VS Code send disassemble request
-		response.body.supportsDisassembleRequest = true;
-		response.body.supportsSteppingGranularity = true;
-		response.body.supportsInstructionBreakpoints = true;
+		// response.body.supportsDisassembleRequest = true;
+		// response.body.supportsSteppingGranularity = true;
+		// response.body.supportsInstructionBreakpoints = true;
 
 		// make VS Code able to read and write variable memory
 		response.body.supportsReadMemoryRequest = true;
@@ -423,12 +423,12 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-		this._runtime.step(args.granularity === 'instruction', false);
+		this._runtime.step(false);
 		this.sendResponse(response);
 	}
 
 	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
-		this._runtime.step(args.granularity === 'instruction', true);
+		this._runtime.step(true);
 		this.sendResponse(response);
 	}
 
@@ -456,26 +456,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		if (args.requestId) {
 			this._cancellationTokens.set(args.requestId, true);
 		}
-	}
-
-	protected setInstructionBreakpointsRequest(response: DebugProtocol.SetInstructionBreakpointsResponse, args: DebugProtocol.SetInstructionBreakpointsArguments) {
-
-		// clear all instruction breakpoints
-		this._runtime.clearInstructionBreakpoints();
-
-		// set instruction breakpoints
-		const breakpoints = args.breakpoints.map(ibp => {
-			const address = parseInt(ibp.instructionReference);
-			const offset = ibp.offset || 0;
-			return <DebugProtocol.Breakpoint>{
-				verified: this._runtime.setInstructionBreakpoint(address + offset)
-			};
-		});
-
-		response.body = {
-			breakpoints: breakpoints
-		};
-		this.sendResponse(response);
 	}
 
 	//---- helpers

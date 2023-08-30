@@ -149,8 +149,7 @@ export class MockRuntime extends EventEmitter {
 	 * Continue execution to the end/beginning.
 	 */
 	public continue(reverse: boolean) {
-
-		while (!this.executeLine(this.currentLine, reverse)) {
+		while (true) {
 			if (this.updateCurrentLine(reverse)) {
 				break;
 			}
@@ -163,21 +162,9 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Step to the next/previous non empty line.
 	 */
-	public step(instruction: boolean, reverse: boolean) {
-
-		if (instruction) {
-			if (reverse) {
-				this.instruction--;
-			} else {
-				this.instruction++;
-			}
-			this.sendEvent(RuntimeEvents.stopOnStep);
-		} else {
-			if (!this.executeLine(this.currentLine, reverse)) {
-				if (!this.updateCurrentLine(reverse)) {
-					this.findNextStatement(reverse, RuntimeEvents.stopOnStep);
-				}
-			}
+	public step(reverse: boolean) {
+		if (!this.updateCurrentLine(reverse)) {
+			this.findNextStatement(reverse, RuntimeEvents.stopOnStep);
 		}
 	}
 
@@ -353,47 +340,6 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
-	public setInstructionBreakpoint(address: number): boolean {
-		this.instructionBreakpoints.add(address);
-		return true;
-	}
-
-	public clearInstructionBreakpoints(): void {
-		this.instructionBreakpoints.clear();
-	}
-
-	private avmValueToRTV(avmValue: algosdk.modelsv2.AvmValue): IRuntimeVariableType {
-		let runtimeVar: IRuntimeVariableType;
-
-		if (avmValue.type === 1) {
-
-			// STOLEN FROM ALGOSDK
-			const lineBreakOrd = '\n'.charCodeAt(0);
-			const blankSpaceOrd = ' '.charCodeAt(0);
-			const tildeOrd = '~'.charCodeAt(0);
-			const isPrintable = (x: number) => blankSpaceOrd <= x && x <= tildeOrd;
-			const isAsciiPrintable = (<Uint8Array>avmValue.bytes).every(
-				(x: number) => x === lineBreakOrd || isPrintable(x)
-			);
-
-			if (isAsciiPrintable) {
-				runtimeVar = String.fromCharCode(...<Uint8Array>avmValue.bytes);
-			} else {
-				runtimeVar = Buffer.from(<Uint8Array>avmValue.bytes).toString('base64');
-			}
-		} else {
-			if (!avmValue.uint) {
-				runtimeVar = 0;
-			} else if (typeof avmValue.uint === 'number') {
-				runtimeVar = <number>avmValue.uint;
-			} else {
-				runtimeVar = <bigint>avmValue.uint;
-			}
-		}
-
-		return runtimeVar;
-	}
-
 	public async getScratchVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
 
 		let a: RuntimeVariable[] = [];
@@ -532,25 +478,38 @@ export class MockRuntime extends EventEmitter {
 		return false;
 	}
 
-	/**
-	 * "execute a line" of the readme markdown.
-	 * Returns true if execution sent out a stopped event and needs to stop.
-	 */
-	private executeLine(ln: number, reverse: boolean): boolean {
+	// Helper functions
 
-		// TODO: execute line over multiple files tho...
+	private avmValueToRTV(avmValue: algosdk.modelsv2.AvmValue): IRuntimeVariableType {
+		let runtimeVar: IRuntimeVariableType;
 
-		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
-		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
-			reverse ? this.instruction-- : this.instruction++;
-			if (this.instructionBreakpoints.has(this.instruction)) {
-				this.sendEvent('stopOnInstructionBreakpoint');
-				return true;
+		if (avmValue.type === 1) {
+
+			// STOLEN FROM ALGOSDK
+			const lineBreakOrd = '\n'.charCodeAt(0);
+			const blankSpaceOrd = ' '.charCodeAt(0);
+			const tildeOrd = '~'.charCodeAt(0);
+			const isPrintable = (x: number) => blankSpaceOrd <= x && x <= tildeOrd;
+			const isAsciiPrintable = (<Uint8Array>avmValue.bytes).every(
+				(x: number) => x === lineBreakOrd || isPrintable(x)
+			);
+
+			if (isAsciiPrintable) {
+				runtimeVar = String.fromCharCode(...<Uint8Array>avmValue.bytes);
+			} else {
+				runtimeVar = Buffer.from(<Uint8Array>avmValue.bytes).toString('base64');
+			}
+		} else {
+			if (!avmValue.uint) {
+				runtimeVar = 0;
+			} else if (typeof avmValue.uint === 'number') {
+				runtimeVar = <number>avmValue.uint;
+			} else {
+				runtimeVar = <bigint>avmValue.uint;
 			}
 		}
 
-		// nothing interesting found -> continue
-		return false;
+		return runtimeVar;
 	}
 
 	private async verifyBreakpoints(path: string): Promise<void> {
