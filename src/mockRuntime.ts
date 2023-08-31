@@ -187,8 +187,6 @@ class TxnGroupTreeWalker {
 		return true;
 	}
 
-	// TODO: give trace and hash by debug state stack
-
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
 		console.assert(this.execTape.length > 0);
 
