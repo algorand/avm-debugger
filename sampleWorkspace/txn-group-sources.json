@@ -3,9 +3,7 @@
         {
             "file-location": "./stack-scratch.teal",
             "sourcemap-location": "./stack-scratch.teal.tok.map",
-            "txn-group-path": [0, 0],
-            "app-or-lsig": "app",
-            "on-completion": "NoOp"
+            "hash": "3QzcaT21ZU72t0ZjW0Bq4l2/3zK4aw7NL05Q/43i7sg="
         }
     ]
 }

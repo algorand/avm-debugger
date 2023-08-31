@@ -4,7 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './mockDebug';
-import { TEALDebuggingAssets } from './utils';
+import { TEALDebuggingAssets, TxnGroupSourceDescriptor } from './utils';
 import * as algosdk from 'algosdk';
 
 export interface FileAccessor {
@@ -98,8 +98,11 @@ class TxnGroupTreeWalker {
 				<algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.clearStateProgramTrace;
 
 		let traceType = trace.approvalProgramTrace ? TraceType.approval : TraceType.clearState;
-		let traceHash = (traceType === TraceType.approval) ?
-			trace.approvalProgramHash : trace.clearStateProgramHash;
+		let traceHash: Uint8Array = (traceType === TraceType.approval) ?
+			<Uint8Array>trace.approvalProgramHash : <Uint8Array>trace.clearStateProgramHash;
+
+		let txnSourceDescriptor: TxnGroupSourceDescriptor | undefined =
+			this.debugAssets.txnGroupDescriptorList.findByHash(Buffer.from(<Uint8Array>traceHash).toString('base64'));
 
 		let currentPath: number[] = previousPath;
 		currentPath.push(currentIndex);
@@ -107,7 +110,8 @@ class TxnGroupTreeWalker {
 		let execSegment: any = {
 			txnPath: currentPath,
 			traceType: traceType,
-			// TODO: map from digest to source and sourcemap.
+			srcFSPath: txnSourceDescriptor?.fileLocation.path,
+			srcMap: txnSourceDescriptor?.sourcemap,
 		};
 
 		if (!trace.innerTrace) {
@@ -151,12 +155,15 @@ class TxnGroupTreeWalker {
 		for (let i = 0; i < this.debugAssets.simulateResponse.txnGroups[0].txnResults.length; i++) {
 			let trace = this.debugAssets.simulateResponse.txnGroups[0].txnResults[i].execTrace;
 			if (trace && trace.logicSigTrace) {
+				let traceHash = trace.logicSigHash;
+				let txnSourceDescriptor = this.debugAssets.txnGroupDescriptorList.findByHash(Buffer.from(<Uint8Array>traceHash).toString('base64'));
 				let lsigSegment = {
 					txnPath: [0, i],
 					traceType: TraceType.logicSig,
 					startPCIndex: 0,
 					endPCIndex: trace.logicSigTrace.length - 1,
-					// TODO: map from digest to source and sourcemap.
+					srcFSPath: txnSourceDescriptor?.fileLocation.path,
+					srcMap: txnSourceDescriptor?.sourcemap,
 				};
 				this.execTape.push(lsigSegment);
 			}
@@ -263,6 +270,8 @@ export class MockRuntime extends EventEmitter {
 	// TODO: replace with tree walker and DebugTxnState tho.
 	private sourcesPCsMap = new Map<string, number>();
 
+	private treeWaker: TxnGroupTreeWalker;
+
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
 	private breakpointId = 1;
@@ -272,6 +281,7 @@ export class MockRuntime extends EventEmitter {
 	constructor(private fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
 		super();
 		this._debugAssets = debugAssets;
+		this.treeWaker = new TxnGroupTreeWalker(this._debugAssets);
 	}
 
 	/**

@@ -137,36 +137,20 @@ export class TEALDebuggingAssetsDescriptor {
 export class TxnGroupSourceDescriptor {
     private _fileLocation: vscode.Uri;
     private _sourcemap: algosdk.SourceMap;
-    private _txnGroupPath: Array<number>;
-    private _appOrLsig: string;
-    private _onCompletion: string;
-    private _appID: number | undefined;
-    private _hash: string | undefined;
+    private _hash: string;
 
     constructor({
         fileLocation,
         sourcemapLocation,
-        txnGroupPath,
-        appOrLsig,
-        onCompletion,
-        appID,
         hash,
     }: {
         fileLocation: string,
         sourcemapLocation: string,
-        txnGroupPath: number[],
-        appOrLsig: string,
-        onCompletion: string,
-        appID?: number,
-        hash?: string,
+        hash: string,
     }) {
         this._fileLocation = absPathAgainstWorkspace(fileLocation);
         const _sourcemapLocation = absPathAgainstWorkspace(sourcemapLocation);
         this._sourcemap = new algosdk.SourceMap(JSON.parse(fs.readFileSync(_sourcemapLocation.fsPath, 'utf-8')));
-        this._txnGroupPath = txnGroupPath;
-        this._appOrLsig = appOrLsig;
-        this._onCompletion = onCompletion;
-        this._appID = appID;
         this._hash = hash;
     }
 
@@ -178,22 +162,6 @@ export class TxnGroupSourceDescriptor {
         return this._sourcemap;
     }
 
-    public get txnGroupPath(): number[] {
-        return this._txnGroupPath;
-    }
-
-    public get appOrLsig(): string {
-        return this._appOrLsig;
-    }
-
-    public get onCompletion(): string {
-        return this._onCompletion;
-    }
-
-    public get appID(): number | undefined {
-        return this._appID;
-    }
-
     public get hash(): string | undefined {
         return this._hash;
     }
@@ -202,11 +170,7 @@ export class TxnGroupSourceDescriptor {
         return new TxnGroupSourceDescriptor({
             fileLocation: data['file-location'],
             sourcemapLocation: data['sourcemap-location'],
-            txnGroupPath: data['txn-group-path'],
-            appOrLsig: data['app-or-lsig'],
-            onCompletion: data['on-comletion'],
-            appID: data['app-id'] ? data['app-id'] : undefined,
-            hash: data['hash'] ? data['hash'] : undefined,
+            hash: data['hash'],
         });
     }
 }
@@ -222,6 +186,15 @@ export class TxnGroupSourceDescriptorList {
 
     public get txnGroupSources(): Array<TxnGroupSourceDescriptor> {
         return this._txnGroupSources;
+    }
+
+    public findByHash(hash: string): TxnGroupSourceDescriptor | undefined {
+        for (let i = 0; i < this._txnGroupSources.length; i++) {
+            if (this._txnGroupSources[i].hash && this._txnGroupSources[i].hash === hash) {
+                return this._txnGroupSources[i];
+            }
+        }
+        return undefined;
     }
 
     static fromJSONObj(data: Record<string, any>): TxnGroupSourceDescriptorList {
