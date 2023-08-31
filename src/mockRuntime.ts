@@ -62,13 +62,156 @@ export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-interface DebugSrcState {
-	txnPath: number[];
-	srcFSPath: string;
-	pcIndex: number;
+enum TraceType {
+	logicSig,
+	approval,
+	clearState,
 }
 
-type DebugTxnState = DebugSrcState[];
+interface DebugExecSegment {
+	txnPath: number[];
+	startPCIndex: number;
+	endPCIndex: number;
+	traceType: TraceType;
+	srcFSPath?: string;
+	srcMap?: algosdk.SourceMap;
+}
+
+type DebugExecTape = DebugExecSegment[];
+
+class TxnGroupTreeWalker {
+	public debugAssets: TEALDebuggingAssets;
+	public execTape: DebugExecTape;
+
+	private preorderTraversal(
+		previousPath: number[],
+		currentIndex: number,
+		trace: algosdk.modelsv2.SimulationTransactionExecTrace) {
+
+		if (!trace.approvalProgramTrace && !trace.clearStateProgramTrace && !trace.innerTrace) {
+			return;
+		}
+
+		let execUnits: algosdk.modelsv2.SimulationOpcodeTraceUnit[] =
+			trace.approvalProgramTrace ?
+				trace.approvalProgramTrace :
+				<algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.clearStateProgramTrace;
+
+		let traceType = trace.approvalProgramTrace ? TraceType.approval : TraceType.clearState;
+
+		let currentPath: number[] = previousPath;
+		currentPath.push(currentIndex);
+
+		let execSegment: any = {
+			txnPath: currentPath,
+			traceType: traceType,
+			// TODO: map from digest to source and sourcemap.
+		};
+
+		if (!trace.innerTrace) {
+			execSegment.startPCIndex = 0;
+			execSegment.endPCIndex = execUnits.length - 1;
+			this.execTape.push(execSegment);
+			return;
+		}
+
+		let startPCIndex = 0;
+		let endPCInex = -1;
+		for (let i = 0; i < execUnits.length; i++) {
+			endPCInex++;
+			if (!execUnits[i].spawnedInners) {
+				continue;
+			}
+
+			// push to stack current start PC index, end pc index
+			execSegment.startPCIndex = startPCIndex;
+			execSegment.endPCIndex = endPCInex;
+			this.execTape.push(execSegment);
+
+			// preorder traverse the inner txn group.
+			let innerIndices: number[] = <number[]>execUnits[i].spawnedInners;
+			for (let j = 0; j < innerIndices.length; j++) {
+				this.preorderTraversal(currentPath, innerIndices[j], trace.innerTrace[innerIndices[j]]);
+			}
+
+			// if there are afterwards, update pc index and end pc index
+			if (i !== execUnits.length - 1) {
+				startPCIndex = i;
+				endPCInex = startPCIndex - 1;
+			}
+		}
+	}
+
+	public constructor(debugAssets: TEALDebuggingAssets) {
+		this.debugAssets = debugAssets;
+		this.execTape = [];
+
+		for (let i = 0; i < this.debugAssets.simulateResponse.txnGroups[0].txnResults.length; i++) {
+			let trace = this.debugAssets.simulateResponse.txnGroups[0].txnResults[i].execTrace;
+			if (trace && trace.logicSigTrace) {
+				let lsigSegment = {
+					txnPath: [0, i],
+					traceType: TraceType.logicSig,
+					startPCIndex: 0,
+					endPCIndex: trace.logicSigTrace.length - 1,
+					// TODO: map from digest to source and sourcemap.
+				};
+				this.execTape.push(lsigSegment);
+			}
+		}
+		// preorder traversal the traces, build the tape of exec state stack
+		for (let i = 0; i < this.debugAssets.simulateResponse.txnGroups[0].txnResults.length; i++) {
+			let trace = this.debugAssets.simulateResponse.txnGroups[0].txnResults[i].execTrace;
+			if (trace) {
+				this.preorderTraversal([0], i, trace);
+			}
+		}
+	}
+
+	public forward(): boolean {
+		// TODO: ...
+		return false;
+	}
+
+	public backward(): boolean {
+		// TODO: ...
+		return true;
+	}
+
+	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
+		console.assert(this.execTape.length > 0);
+
+		let path = this.execTape[this.execTape.length - 1].txnPath;
+
+		let txnGroup = this.debugAssets.simulateResponse.txnGroups[path[0]];
+		path.unshift();
+
+		let trace = <algosdk.modelsv2.SimulationTransactionExecTrace>txnGroup.txnResults[path[0]].execTrace;
+		path.unshift();
+
+		while (path.length > 0) {
+			trace = (<algosdk.modelsv2.SimulationTransactionExecTrace[]>trace.innerTrace)[path[0]];
+			path.unshift();
+		}
+
+		return trace;
+	}
+
+	public findCurrentExecSteps(): algosdk.modelsv2.SimulationOpcodeTraceUnit[] {
+		const trace = this.findTraceByPath();
+
+		switch (this.execTape[this.execTape.length - 1].traceType) {
+			case TraceType.approval:
+				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.approvalProgramTrace;
+			case TraceType.clearState:
+				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.clearStateProgramTrace;
+			case TraceType.logicSig:
+				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.logicSigTrace;
+			default:
+				return [];
+		}
+	}
+}
 
 // TODO: tree walking
 
