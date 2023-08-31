@@ -255,9 +255,9 @@ algo-msgpack-with-bigint@^2.1.1:
   resolved "https://registry.npmjs.org/algo-msgpack-with-bigint/-/algo-msgpack-with-bigint-2.1.1.tgz"
   integrity sha512-F1tGh056XczEaEAqu7s+hlZUDWwOBT70Eq0lfMpBP2YguSQVyxRbprLq5rELXKQOyOaixTWYhMeMQMzP0U5FoQ==
 
-"algosdk@github:algorand/js-algorand-sdk":
-  version "2.4.0"
-  resolved "git+ssh://git@github.com/algorand/js-algorand-sdk.git#28489e19a0488549253ea9dd9291db76a8c8bbda"
+"algosdk@github:algorand/js-algorand-sdk#simulate-state-change":
+  version "2.5.0"
+  resolved "git+ssh://git@github.com/algorand/js-algorand-sdk.git#8a1e7f506df49012057aede0ce0e847d13b7a0ea"
   dependencies:
     algo-msgpack-with-bigint "^2.1.1"
     buffer "^6.0.3"

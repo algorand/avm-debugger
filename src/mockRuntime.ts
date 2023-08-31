@@ -215,8 +215,6 @@ class TxnGroupTreeWalker {
 
 // TODO: tree walking
 
-// TODO: js-sdk upgrade, read hash
-
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "teal") "execution engine with debugging support":
