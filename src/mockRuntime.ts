@@ -243,16 +243,14 @@ class TxnGroupTreeWalker {
 		console.assert(this.execTape.length > 0);
 
 		let path = this.execTape[this.execTape.length - 1].txnPath;
+		let index = 0;
 
-		let txnGroup = this.debugAssets.simulateResponse.txnGroups[path[0]];
-		path.unshift();
+		let txnGroup = this.debugAssets.simulateResponse.txnGroups[path[index++]];
 
-		let trace = <algosdk.modelsv2.SimulationTransactionExecTrace>txnGroup.txnResults[path[0]].execTrace;
-		path.unshift();
+		let trace = <algosdk.modelsv2.SimulationTransactionExecTrace>txnGroup.txnResults[path[index++]].execTrace;
 
-		while (path.length > 0) {
-			trace = (<algosdk.modelsv2.SimulationTransactionExecTrace[]>trace.innerTrace)[path[0]];
-			path.unshift();
+		while (path.length > index) {
+			trace = (<algosdk.modelsv2.SimulationTransactionExecTrace[]>trace.innerTrace)[path[index++]];
 		}
 
 		return trace;
@@ -525,10 +523,10 @@ export class MockRuntime extends EventEmitter {
 		if (cancellationToken && cancellationToken()) { return a; }
 
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
-		const approvalProgramTrace = <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace;
+		const execUnits = this.treeWaker.findCurrentExecSteps();
 
 		for (let i = 0; i < pcIndex; i++) {
-			const unit = approvalProgramTrace[i];
+			const unit = execUnits[i];
 			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
 
 			for (let j = 0; j < scratchWrites.length; j++) {
@@ -550,10 +548,10 @@ export class MockRuntime extends EventEmitter {
 		if (cancellationToken && cancellationToken()) { return a; }
 
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
-		const approvalProgramTrace = <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace;
+		const execUnits = this.treeWaker.findCurrentExecSteps();
 
 		for (let i = 0; i < pcIndex; i++) {
-			const unit = approvalProgramTrace[i];
+			const unit = execUnits[i];
 			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions ? unit.stackAdditions : [];
 			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
 			for (let j = 0; j < popCount; j++) { a.shift(); }
