@@ -82,6 +82,8 @@ type DebugExecTape = DebugExecSegment[];
 class TxnGroupTreeWalker {
 	public debugAssets: TEALDebuggingAssets;
 	public execTape: DebugExecTape;
+	public segmentIndex: number = 0;
+	public pcIndex: number = 0;
 
 	private preorderTraversal(
 		previousPath: number[],
@@ -175,16 +177,45 @@ class TxnGroupTreeWalker {
 				this.preorderTraversal([0], i, trace);
 			}
 		}
+
+		console.assert(this.execTape.length > 0);
+		this.pcIndex = this.execTape[this.segmentIndex].startPCIndex;
 	}
 
 	public forward(): boolean {
-		// TODO: ...
-		return false;
+		if (this.execTape[this.segmentIndex].endPCIndex > this.pcIndex) {
+			this.pcIndex++;
+			return true;
+		} else {
+			console.assert(this.execTape[this.segmentIndex].endPCIndex === this.pcIndex);
+
+			if (this.execTape.length - 1 === this.segmentIndex) {
+				// end of it, cannot go forward
+				return false;
+			} else {
+				this.segmentIndex++;
+				this.pcIndex = this.execTape[this.segmentIndex].startPCIndex;
+				return true;
+			}
+		}
 	}
 
 	public backward(): boolean {
-		// TODO: ...
-		return true;
+		if (this.execTape[this.segmentIndex].startPCIndex < this.pcIndex) {
+			this.pcIndex--;
+			return true;
+		} else {
+			console.assert(this.execTape[this.segmentIndex].startPCIndex === this.pcIndex);
+
+			if (this.segmentIndex === 0) {
+				// end of it, cannot go backwards
+				return false;
+			} else {
+				this.segmentIndex--;
+				this.pcIndex = this.execTape[this.segmentIndex].endPCIndex;
+				return true;
+			}
+		}
 	}
 
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
@@ -221,8 +252,6 @@ class TxnGroupTreeWalker {
 		}
 	}
 }
-
-// TODO: tree walking
 
 /**
  * A Mock runtime with minimal debugger functionality.
