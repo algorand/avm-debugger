@@ -355,18 +355,18 @@ export class MockDebugSession extends LoggingDebugSession {
 		if (v === 'scratches') {
 			if (request) {
 				this._cancellationTokens.set(request.seq, false);
-				vs = await this._runtime.getScratchVariables(() => !!this._cancellationTokens.get(request.seq));
+				vs = this._runtime.getScratchVariables(() => !!this._cancellationTokens.get(request.seq));
 				this._cancellationTokens.delete(request.seq);
 			} else {
-				vs = await this._runtime.getScratchVariables();
+				vs = this._runtime.getScratchVariables();
 			}
 		} else if (v === 'stacks') {
 			if (request) {
 				this._cancellationTokens.set(request.seq, false);
-				vs = await this._runtime.getStackVariables(() => !!this._cancellationTokens.get(request.seq));
+				vs = this._runtime.getStackVariables(() => !!this._cancellationTokens.get(request.seq));
 				this._cancellationTokens.delete(request.seq);
 			} else {
-				vs = await this._runtime.getStackVariables();
+				vs = this._runtime.getStackVariables();
 			}
 		} else if (v && Array.isArray(v.value)) {
 			vs = v.value;

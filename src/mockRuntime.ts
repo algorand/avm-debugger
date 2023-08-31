@@ -158,7 +158,10 @@ class TxnGroupTreeWalker {
 			let trace = this.debugAssets.simulateResponse.txnGroups[0].txnResults[i].execTrace;
 			if (trace && trace.logicSigTrace) {
 				let traceHash = trace.logicSigHash;
-				let txnSourceDescriptor = this.debugAssets.txnGroupDescriptorList.findByHash(Buffer.from(<Uint8Array>traceHash).toString('base64'));
+				let txnSourceDescriptor =
+					this.debugAssets.txnGroupDescriptorList.findByHash(
+						Buffer.from(<Uint8Array>traceHash).toString('base64')
+					);
 				let lsigSegment = {
 					txnPath: [0, i],
 					traceType: TraceType.logicSig,
@@ -216,6 +219,24 @@ class TxnGroupTreeWalker {
 				return true;
 			}
 		}
+	}
+
+	public currentSourcePath(): string | undefined {
+		return this.execTape[this.segmentIndex].srcFSPath;
+	}
+
+	public currentPCtoLine(): number | undefined {
+		if (!this.execTape[this.segmentIndex].srcMap) {
+			return undefined;
+		}
+
+		let stepArray = this.findCurrentExecSteps();
+		return this.execTape[this.segmentIndex].srcMap?.getLineForPc(<number> stepArray[this.pcIndex].pc);
+	}
+
+	public getLine(number?: number): string {
+		// TODO: ...
+		return "";
 	}
 
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
@@ -495,7 +516,7 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
-	public async getScratchVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
+	public getScratchVariables(cancellationToken?: () => boolean): RuntimeVariable[] {
 
 		let a: RuntimeVariable[] = [];
 
@@ -522,7 +543,7 @@ export class MockRuntime extends EventEmitter {
 		return a;
 	}
 
-	public async getStackVariables(cancellationToken?: () => boolean): Promise<RuntimeVariable[]> {
+	public getStackVariables(cancellationToken?: () => boolean): RuntimeVariable[] {
 
 		let a: RuntimeVariable[] = [];
 
@@ -605,7 +626,7 @@ export class MockRuntime extends EventEmitter {
 
 	// Helper functions
 
-	// TODO: read from top of debug state stack and read the pc in the trace, give back line.
+	// TODO: replace with tree walker method
 	private currentPCtoLine(): number | undefined {
 		const sourcemap = <algosdk.SourceMap>this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
 		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
