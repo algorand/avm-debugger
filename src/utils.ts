@@ -141,6 +141,7 @@ export class TxnGroupSourceDescriptor {
     private _appOrLsig: string;
     private _onCompletion: string;
     private _appID: number | undefined;
+    private _hash: string | undefined;
 
     constructor({
         fileLocation,
@@ -149,6 +150,7 @@ export class TxnGroupSourceDescriptor {
         appOrLsig,
         onCompletion,
         appID,
+        hash,
     }: {
         fileLocation: string,
         sourcemapLocation: string,
@@ -156,6 +158,7 @@ export class TxnGroupSourceDescriptor {
         appOrLsig: string,
         onCompletion: string,
         appID?: number,
+        hash?: string,
     }) {
         this._fileLocation = absPathAgainstWorkspace(fileLocation);
         const _sourcemapLocation = absPathAgainstWorkspace(sourcemapLocation);
@@ -164,6 +167,7 @@ export class TxnGroupSourceDescriptor {
         this._appOrLsig = appOrLsig;
         this._onCompletion = onCompletion;
         this._appID = appID;
+        this._hash = hash;
     }
 
     public get fileLocation(): vscode.Uri {
@@ -190,6 +194,10 @@ export class TxnGroupSourceDescriptor {
         return this._appID;
     }
 
+    public get hash(): string | undefined {
+        return this._hash;
+    }
+
     static fromJSONObj(data: Record<string, any>): TxnGroupSourceDescriptor {
         return new TxnGroupSourceDescriptor({
             fileLocation: data['file-location'],
@@ -198,6 +206,7 @@ export class TxnGroupSourceDescriptor {
             appOrLsig: data['app-or-lsig'],
             onCompletion: data['on-comletion'],
             appID: data['app-id'] ? data['app-id'] : undefined,
+            hash: data['hash'] ? data['hash'] : undefined,
         });
     }
 }

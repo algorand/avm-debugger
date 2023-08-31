@@ -98,6 +98,8 @@ class TxnGroupTreeWalker {
 				<algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.clearStateProgramTrace;
 
 		let traceType = trace.approvalProgramTrace ? TraceType.approval : TraceType.clearState;
+		let traceHash = (traceType === TraceType.approval) ?
+			trace.approvalProgramHash : trace.clearStateProgramHash;
 
 		let currentPath: number[] = previousPath;
 		currentPath.push(currentIndex);
