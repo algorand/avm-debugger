@@ -178,6 +178,8 @@ class TxnGroupTreeWalker {
 		return true;
 	}
 
+	// TODO: give trace and hash by debug state stack
+
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
 		console.assert(this.execTape.length > 0);
 
@@ -563,8 +565,6 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	// Helper functions
-
-	// TODO: give trace and hash by debug state stack
 
 	// TODO: read from top of debug state stack and read the pc in the trace, give back line.
 	private currentPCtoLine(): number | undefined {
