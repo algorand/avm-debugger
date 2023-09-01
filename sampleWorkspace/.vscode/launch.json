@@ -9,9 +9,9 @@
 			"request": "launch",
 			"name": "Debug readme.md",
 			"debuggerPath": "stuff-to-deal",
-			"simulationTraceFile": "${workspaceFolder}/simulate-response.json",
-			"appSourceDescriptionFile": "${workspaceFolder}/txn-group-sources.json",
-			"program": "${workspaceFolder}/stack-scratch.teal",
+			"simulationTraceFile": "${workspaceFolder}/recursive-resp.json",
+			"appSourceDescriptionFile": "${workspaceFolder}/recursive-group-resources.json",
+			"program": "${workspaceFolder}/recursive-inner-approval.teal",
 			"stopOnEntry": true,
 			"trace": false
 		}

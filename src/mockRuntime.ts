@@ -75,6 +75,7 @@ interface DebugExecSegment {
 	traceType: TraceType;
 	srcFSPath?: string;
 	srcMap?: algosdk.SourceMap;
+	hash?: string;
 }
 
 type DebugExecTape = DebugExecSegment[];
@@ -82,6 +83,7 @@ type DebugExecTape = DebugExecSegment[];
 class TxnGroupTreeWalker {
 	public debugAssets: TEALDebuggingAssets;
 	public execTape: DebugExecTape;
+	public digestToSrc: Map<string, string[]> = new Map<string, string[]>();
 	public segmentIndex: number = 0;
 	public pcIndex: number = 0;
 
@@ -103,38 +105,56 @@ class TxnGroupTreeWalker {
 		let traceHash: Uint8Array = (traceType === TraceType.approval) ?
 			<Uint8Array>trace.approvalProgramHash : <Uint8Array>trace.clearStateProgramHash;
 
-		let txnSourceDescriptor: TxnGroupSourceDescriptor | undefined =
-			this.debugAssets.txnGroupDescriptorList.findByHash(Buffer.from(<Uint8Array>traceHash).toString('base64'));
+		let traceHashStr = Buffer.from(<Uint8Array>traceHash).toString('base64');
 
-		let currentPath: number[] = previousPath;
+		let txnSourceDescriptor: TxnGroupSourceDescriptor | undefined =
+			this.debugAssets.txnGroupDescriptorList.findByHash(traceHashStr);
+
+		let currentPath: number[] = Array.from(previousPath);
 		currentPath.push(currentIndex);
 
-		let execSegment: any = {
-			txnPath: currentPath,
-			traceType: traceType,
-			srcFSPath: txnSourceDescriptor?.fileLocation.path,
-			srcMap: txnSourceDescriptor?.sourcemap,
-		};
-
 		if (!trace.innerTrace) {
-			execSegment.startPCIndex = 0;
-			execSegment.endPCIndex = execUnits.length - 1;
-			this.execTape.push(execSegment);
+			this.execTape.push({
+				txnPath: currentPath,
+				traceType: traceType,
+				srcFSPath: txnSourceDescriptor?.fileLocation.path,
+				srcMap: txnSourceDescriptor?.sourcemap,
+				hash: traceHashStr,
+				startPCIndex: 0,
+				endPCIndex: execUnits.length - 1,
+			});
 			return;
 		}
 
 		let startPCIndex = 0;
-		let endPCInex = -1;
+
 		for (let i = 0; i < execUnits.length; i++) {
-			endPCInex++;
+			if (i === execUnits.length - 1) {
+				this.execTape.push({
+					txnPath: currentPath,
+					traceType: traceType,
+					srcFSPath: txnSourceDescriptor?.fileLocation.path,
+					srcMap: txnSourceDescriptor?.sourcemap,
+					hash: traceHashStr,
+					startPCIndex: startPCIndex,
+					endPCIndex: i,
+				});
+			}
+
 			if (!execUnits[i].spawnedInners) {
 				continue;
 			}
 
 			// push to stack current start PC index, end pc index
-			execSegment.startPCIndex = startPCIndex;
-			execSegment.endPCIndex = endPCInex;
-			this.execTape.push(execSegment);
+			this.execTape.push({
+				txnPath: currentPath,
+				traceType: traceType,
+				srcFSPath: txnSourceDescriptor?.fileLocation.path,
+				srcMap: txnSourceDescriptor?.sourcemap,
+				hash: traceHashStr,
+				startPCIndex: startPCIndex,
+				endPCIndex: i,
+			});
 
 			// preorder traverse the inner txn group.
 			let innerIndices: number[] = <number[]>execUnits[i].spawnedInners;
@@ -144,8 +164,7 @@ class TxnGroupTreeWalker {
 
 			// if there are afterwards, update pc index and end pc index
 			if (i !== execUnits.length - 1) {
-				startPCIndex = i;
-				endPCInex = startPCIndex - 1;
+				startPCIndex = i + 1;
 			}
 		}
 	}
@@ -158,10 +177,9 @@ class TxnGroupTreeWalker {
 			let trace = this.debugAssets.simulateResponse.txnGroups[0].txnResults[i].execTrace;
 			if (trace && trace.logicSigTrace) {
 				let traceHash = trace.logicSigHash;
+				let traceHashStr = Buffer.from(<Uint8Array>traceHash).toString('base64');
 				let txnSourceDescriptor =
-					this.debugAssets.txnGroupDescriptorList.findByHash(
-						Buffer.from(<Uint8Array>traceHash).toString('base64')
-					);
+					this.debugAssets.txnGroupDescriptorList.findByHash(traceHashStr);
 				let lsigSegment = {
 					txnPath: [0, i],
 					traceType: TraceType.logicSig,
@@ -169,6 +187,7 @@ class TxnGroupTreeWalker {
 					endPCIndex: trace.logicSigTrace.length - 1,
 					srcFSPath: txnSourceDescriptor?.fileLocation.path,
 					srcMap: txnSourceDescriptor?.sourcemap,
+					hash: traceHashStr,
 				};
 				this.execTape.push(lsigSegment);
 			}
@@ -231,7 +250,7 @@ class TxnGroupTreeWalker {
 		}
 
 		let stepArray = this.findCurrentExecSteps();
-		return this.execTape[this.segmentIndex].srcMap?.getLineForPc(<number> stepArray[this.pcIndex].pc);
+		return this.execTape[this.segmentIndex].srcMap?.getLineForPc(<number>stepArray[this.pcIndex].pc);
 	}
 
 	public getLine(number?: number): string {
@@ -290,10 +309,8 @@ class TxnGroupTreeWalker {
 export class MockRuntime extends EventEmitter {
 
 	// the initial (and one and only) file we are 'debugging'
+	// TODO: remove this thing.
 	private _sourceFile: string = '';
-	public get sourceFile() {
-		return this._sourceFile;
-	}
 
 	// TODO: maybe map from hash digest to sourcelines before extension debugging.
 	// the contents (= lines) of the one and only file
@@ -313,9 +330,6 @@ export class MockRuntime extends EventEmitter {
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 
-	// TODO: replace with tree walker and DebugTxnState tho.
-	private sourcesPCsMap = new Map<string, number>();
-
 	private treeWaker: TxnGroupTreeWalker;
 
 	// since we want to send breakpoint events, we will assign an id to every event
@@ -334,11 +348,13 @@ export class MockRuntime extends EventEmitter {
 	 * Start executing the given program.
 	 */
 	public async start(program: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
-		// TODO: dont start from program path, let tree walker find it.
+		// TODO: load all sources for tree walker.
 
 		await this.loadSource(this.normalizePathAndCasing(program));
 
 		if (debug) {
+
+			// TODO: await verify breakpoints for all.
 			await this.verifyBreakpoints(this._sourceFile);
 
 			if (stopOnEntry) {
@@ -376,26 +392,17 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	private updateCurrentLine(reverse: boolean): boolean {
-		const pcIndex: number = <number>this.sourcesPCsMap.get(this._sourceFile);
-
 		if (reverse) {
-			if (pcIndex > 0) {
-				this.sourcesPCsMap.set(this._sourceFile, pcIndex - 1);
-				this.currentLine = <number>this.currentPCtoLine();
-			} else {
-				// no more lines: stop at first line
-				this.currentLine = <number>this.currentPCtoLine();
-				this.currentColumn = undefined;
+			let backwardsSucceed = this.treeWaker.backward();
+			this.currentLine = <number>this.treeWaker.currentPCtoLine();
+			if (!backwardsSucceed) {
 				this.sendEvent('stopOnEntry');
 				return true;
 			}
 		} else {
-			if (pcIndex < <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace?.length - 1) {
-				this.sourcesPCsMap.set(this._sourceFile, pcIndex + 1);
-				this.currentLine = <number>this.currentPCtoLine();
-			} else {
-				// no more lines: run to end
-				this.currentColumn = undefined;
+			let forwardSucceed = this.treeWaker.forward();
+			this.currentLine = <number>this.treeWaker.currentPCtoLine();
+			if (!forwardSucceed) {
 				this.sendEvent(RuntimeEvents.end);
 				return true;
 			}
@@ -522,10 +529,9 @@ export class MockRuntime extends EventEmitter {
 
 		if (cancellationToken && cancellationToken()) { return a; }
 
-		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
 		const execUnits = this.treeWaker.findCurrentExecSteps();
 
-		for (let i = 0; i < pcIndex; i++) {
+		for (let i = 0; i < this.treeWaker.pcIndex; i++) {
 			const unit = execUnits[i];
 			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
 
@@ -538,6 +544,8 @@ export class MockRuntime extends EventEmitter {
 			a.push(new RuntimeVariable(`slot ` + key, value));
 		}
 
+		a.sort((rt0: RuntimeVariable, rt1: RuntimeVariable) => rt0.name > rt1.name ? 1 : -1);
+
 		return a;
 	}
 
@@ -547,10 +555,9 @@ export class MockRuntime extends EventEmitter {
 
 		if (cancellationToken && cancellationToken()) { return a; }
 
-		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
 		const execUnits = this.treeWaker.findCurrentExecSteps();
 
-		for (let i = 0; i < pcIndex; i++) {
+		for (let i = 0; i < this.treeWaker.pcIndex; i++) {
 			const unit = execUnits[i];
 			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions ? unit.stackAdditions : [];
 			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
@@ -584,10 +591,14 @@ export class MockRuntime extends EventEmitter {
 	 * return true on stop
 	 */
 	private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
+		while (true) {
+			const srcPath = this.treeWaker.currentSourcePath();
+			if (!srcPath) {
+				continue;
+			}
+			const possibleLine = this.treeWaker.currentPCtoLine();
+			const breakpoints = this.breakPoints.get(srcPath);
 
-		for (let pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile); reverse ? pcIndex >= 0 : pcIndex < <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace?.length; reverse ? pcIndex-- : pcIndex++) {
-			const possibleLine = this.currentPCtoLine();
-			const breakpoints = this.breakPoints.get(this._sourceFile);
 			if (typeof possibleLine !== 'undefined' && breakpoints) {
 				const bps = breakpoints.filter(bp => bp.line === <number>possibleLine);
 				if (bps.length > 0) {
@@ -606,12 +617,23 @@ export class MockRuntime extends EventEmitter {
 				}
 			}
 
-			if (possibleLine) {
+			if (typeof possibleLine !== 'undefined') {
 				const line = this.getLine(possibleLine);
 				if (line.length > 0) {
 					this.currentLine = possibleLine;
 					break;
 				}
+			}
+
+			let stepResult: boolean;
+			if (reverse) {
+				stepResult = this.treeWaker.backward();
+			} else {
+				stepResult = this.treeWaker.forward();
+			}
+
+			if (!stepResult) {
+				break;
 			}
 		}
 
@@ -624,23 +646,16 @@ export class MockRuntime extends EventEmitter {
 
 	// Helper functions
 
-	// TODO: replace with tree walker method
-	private currentPCtoLine(): number | undefined {
-		const sourcemap = <algosdk.SourceMap>this._debugAssets.txnGroupDescriptorList.txnGroupSources[0].sourcemap;
-		const pcIndex = <number>this.sourcesPCsMap.get(this._sourceFile);
-		const pc = <number>this._debugAssets.simulateResponse.txnGroups[0].txnResults[0].execTrace?.approvalProgramTrace[pcIndex].pc;
-		return sourcemap.getLineForPc(pc);
-	}
-
 	// TODO: also depend on give trace and hash by debug state stack
 	private getLine(line?: number): string {
 		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
 	}
 
+	// TODO: should make this irrelevant to the _sourcefile.
 	private async loadSource(file: string): Promise<void> {
+		// TODO: remove _sourceFile
 		if (this._sourceFile !== file) {
 			this._sourceFile = this.normalizePathAndCasing(file);
-			this.sourcesPCsMap.set(this._sourceFile, 0);
 			this.sourceLines = new TextDecoder().decode(await this.fileAccessor.readFile(file)).split(/\r?\n/);
 		}
 	}

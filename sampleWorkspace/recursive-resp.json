@@ -1,6 +1,7 @@
 {
   "exec-trace-config": {
     "enable": true,
+    "scratch-change": true,
     "stack-change": true
   },
   "last-round": 4,
@@ -13,17 +14,17 @@
           "txn-result": {
             "pool-error": "",
             "txn": {
-              "sig": "Fs2sXiEt8mNrMllvtyCfw4Hmxh86LeNnru67pMTeTAMHu2Jg+apws0lKW85qWKguzYOHaXG5+K+nWEUFyyflAA==",
+              "sig": "A9+BtLaWFPgNWHnni3HDQdWln7KA4e+Hs8RFiMQrUQlJfEkX8dLmxcAkKciac3b/xg4WH5pYlvbAUtaWbEsIBQ==",
               "txn": {
                 "amt": 300000,
                 "fee": 1000,
                 "fv": 4,
                 "gen": "test-v1",
-                "gh": "a5HZzscueWwP9uOiD3bjqYu20UplUxe4psb3vr8bkHs=",
-                "grp": "MjzZma6EhfpgWvDS1Q7j3nIqS/8byKmc1/zUtk4H7IY=",
+                "gh": "inhYPfTFbag7vMdYf1QTCoQ0gWPBY04S4LfuDEhYIW0=",
+                "grp": "PN2Rkk5uSeACsGB4X+I3BLin/FByfJpBmRT2+bX1l6A=",
                 "lv": 1004,
                 "rcv": "OKSDOCOXVGMBXQ5TP5YA4VWTZWZJLJP3OMIILPHMHGHURUFE2Q3JP62QNU",
-                "snd": "BNHPBAYFFTMAYG2L63QOYSE5AH2PVD4ANVCWGB67EVY3STQDTDKM2D3GEM",
+                "snd": "HQL44CTIK7EKRJJ6BQEHJWSGOSJQQEU4AVDURE2GZBOB67LIOKSSLDMX3I",
                 "type": "pay"
               }
             }
@@ -124,10 +125,28 @@
               },
               {
                 "pc": 25,
+                "scratch-changes": [
+                  {
+                    "new-value": {
+                      "type": 2,
+                      "uint": 1
+                    },
+                    "slot": 1
+                  }
+                ],
                 "stack-pop-count": 1
               },
               {
                 "pc": 27,
+                "scratch-changes": [
+                  {
+                    "new-value": {
+                      "bytes": "CCADAAEGMRgiEkAAiDEbIxJAAAEAMghyADUBNQAyCHIBNQM1AjIKcwA1BTUENAFENANENAVEgQI2GgAXlBawNhoAFyINQAACI0OxJLIQIrIBNACyHjQCsh+zsSOyECKyATQEgaCNBgmyCIAFYXBwSUS3AD0WUAOyB7YkshA2GgAXIwkWshq0PbIYIrIBgQWyGbNC/7MjQw==",
+                      "type": 1
+                    },
+                    "slot": 0
+                  }
+                ],
                 "stack-pop-count": 1
               },
               {
@@ -155,10 +174,28 @@
               },
               {
                 "pc": 33,
+                "scratch-changes": [
+                  {
+                    "new-value": {
+                      "type": 2,
+                      "uint": 1
+                    },
+                    "slot": 3
+                  }
+                ],
                 "stack-pop-count": 1
               },
               {
                 "pc": 35,
+                "scratch-changes": [
+                  {
+                    "new-value": {
+                      "bytes": "CIEB",
+                      "type": 1
+                    },
+                    "slot": 2
+                  }
+                ],
                 "stack-pop-count": 1
               },
               {
@@ -186,10 +223,28 @@
               },
               {
                 "pc": 41,
+                "scratch-changes": [
+                  {
+                    "new-value": {
+                      "type": 2,
+                      "uint": 1
+                    },
+                    "slot": 5
+                  }
+                ],
                 "stack-pop-count": 1
               },
               {
                 "pc": 43,
+                "scratch-changes": [
+                  {
+                    "new-value": {
+                      "type": 2,
+                      "uint": 300000
+                    },
+                    "slot": 4
+                  }
+                ],
                 "stack-pop-count": 1
               },
               {
@@ -784,10 +839,28 @@
                   },
                   {
                     "pc": 25,
+                    "scratch-changes": [
+                      {
+                        "new-value": {
+                          "type": 2,
+                          "uint": 1
+                        },
+                        "slot": 1
+                      }
+                    ],
                     "stack-pop-count": 1
                   },
                   {
                     "pc": 27,
+                    "scratch-changes": [
+                      {
+                        "new-value": {
+                          "bytes": "CCADAAEGMRgiEkAAiDEbIxJAAAEAMghyADUBNQAyCHIBNQM1AjIKcwA1BTUENAFENANENAVEgQI2GgAXlBawNhoAFyINQAACI0OxJLIQIrIBNACyHjQCsh+zsSOyECKyATQEgaCNBgmyCIAFYXBwSUS3AD0WUAOyB7YkshA2GgAXIwkWshq0PbIYIrIBgQWyGbNC/7MjQw==",
+                          "type": 1
+                        },
+                        "slot": 0
+                      }
+                    ],
                     "stack-pop-count": 1
                   },
                   {
@@ -815,10 +888,28 @@
                   },
                   {
                     "pc": 33,
+                    "scratch-changes": [
+                      {
+                        "new-value": {
+                          "type": 2,
+                          "uint": 1
+                        },
+                        "slot": 3
+                      }
+                    ],
                     "stack-pop-count": 1
                   },
                   {
                     "pc": 35,
+                    "scratch-changes": [
+                      {
+                        "new-value": {
+                          "bytes": "CIEB",
+                          "type": 1
+                        },
+                        "slot": 2
+                      }
+                    ],
                     "stack-pop-count": 1
                   },
                   {
@@ -846,10 +937,28 @@
                   },
                   {
                     "pc": 41,
+                    "scratch-changes": [
+                      {
+                        "new-value": {
+                          "type": 2,
+                          "uint": 1
+                        },
+                        "slot": 5
+                      }
+                    ],
                     "stack-pop-count": 1
                   },
                   {
                     "pc": 43,
+                    "scratch-changes": [
+                      {
+                        "new-value": {
+                          "type": 2,
+                          "uint": 200000
+                        },
+                        "slot": 4
+                      }
+                    ],
                     "stack-pop-count": 1
                   },
                   {
@@ -1443,10 +1552,28 @@
                       },
                       {
                         "pc": 25,
+                        "scratch-changes": [
+                          {
+                            "new-value": {
+                              "type": 2,
+                              "uint": 1
+                            },
+                            "slot": 1
+                          }
+                        ],
                         "stack-pop-count": 1
                       },
                       {
                         "pc": 27,
+                        "scratch-changes": [
+                          {
+                            "new-value": {
+                              "bytes": "CCADAAEGMRgiEkAAiDEbIxJAAAEAMghyADUBNQAyCHIBNQM1AjIKcwA1BTUENAFENANENAVEgQI2GgAXlBawNhoAFyINQAACI0OxJLIQIrIBNACyHjQCsh+zsSOyECKyATQEgaCNBgmyCIAFYXBwSUS3AD0WUAOyB7YkshA2GgAXIwkWshq0PbIYIrIBgQWyGbNC/7MjQw==",
+                              "type": 1
+                            },
+                            "slot": 0
+                          }
+                        ],
                         "stack-pop-count": 1
                       },
                       {
@@ -1474,10 +1601,28 @@
                       },
                       {
                         "pc": 33,
+                        "scratch-changes": [
+                          {
+                            "new-value": {
+                              "type": 2,
+                              "uint": 1
+                            },
+                            "slot": 3
+                          }
+                        ],
                         "stack-pop-count": 1
                       },
                       {
                         "pc": 35,
+                        "scratch-changes": [
+                          {
+                            "new-value": {
+                              "bytes": "CIEB",
+                              "type": 1
+                            },
+                            "slot": 2
+                          }
+                        ],
                         "stack-pop-count": 1
                       },
                       {
@@ -1505,10 +1650,28 @@
                       },
                       {
                         "pc": 41,
+                        "scratch-changes": [
+                          {
+                            "new-value": {
+                              "type": 2,
+                              "uint": 1
+                            },
+                            "slot": 5
+                          }
+                        ],
                         "stack-pop-count": 1
                       },
                       {
                         "pc": 43,
+                        "scratch-changes": [
+                          {
+                            "new-value": {
+                              "type": 2,
+                              "uint": 100000
+                            },
+                            "slot": 4
+                          }
+                        ],
                         "stack-pop-count": 1
                       },
                       {
@@ -1687,7 +1850,7 @@
                   "txn": {
                     "amt": 200000,
                     "fv": 4,
-                    "grp": "XPFtD0F6xlRvbelgJxnmncmClbPcVDPU+qwW8hMAkag=",
+                    "grp": "U6NOAnA9cTpp0BWO+Kt0ZUub/r2BfIfgt1Ck0xWB+b8=",
                     "lv": 1004,
                     "rcv": "SW4BTZGCCNMSDYSANRLKFQOZNYRKH4B7J6DNSEUAYPSRGOYZRGKQEAW5EY",
                     "snd": "OKSDOCOXVGMBXQ5TP5YA4VWTZWZJLJP3OMIILPHMHGHURUFE2Q3JP62QNU",
@@ -1717,7 +1880,7 @@
                       "txn": {
                         "amt": 100000,
                         "fv": 4,
-                        "grp": "I7O9YsGWD25jDvnAeuE48tUr8mPgtIhxuQnJt25vW/M=",
+                        "grp": "47OJIF8+CwPZxy9ZjssutP7LBTmB1341WlI32LYPX6I=",
                         "lv": 1004,
                         "rcv": "XH7HGWREAK4KN4JOTHNURKMQHYSOYOPT4WR5Z46ZLECBCYUAF2T2JOFUOQ",
                         "snd": "SW4BTZGCCNMSDYSANRLKFQOZNYRKH4B7J6DNSEUAYPSRGOYZRGKQEAW5EY",
@@ -1738,7 +1901,7 @@
                         "apan": 5,
                         "apid": 1007,
                         "fv": 4,
-                        "grp": "I7O9YsGWD25jDvnAeuE48tUr8mPgtIhxuQnJt25vW/M=",
+                        "grp": "47OJIF8+CwPZxy9ZjssutP7LBTmB1341WlI32LYPX6I=",
                         "lv": 1004,
                         "snd": "SW4BTZGCCNMSDYSANRLKFQOZNYRKH4B7J6DNSEUAYPSRGOYZRGKQEAW5EY",
                         "type": "appl"
@@ -1758,7 +1921,7 @@
                     "apan": 5,
                     "apid": 1004,
                     "fv": 4,
-                    "grp": "XPFtD0F6xlRvbelgJxnmncmClbPcVDPU+qwW8hMAkag=",
+                    "grp": "U6NOAnA9cTpp0BWO+Kt0ZUub/r2BfIfgt1Ck0xWB+b8=",
                     "lv": 1004,
                     "snd": "OKSDOCOXVGMBXQ5TP5YA4VWTZWZJLJP3OMIILPHMHGHURUFE2Q3JP62QNU",
                     "type": "appl"
@@ -1771,7 +1934,7 @@
             ],
             "pool-error": "",
             "txn": {
-              "sig": "aKSp57MebyWDmQZt1AwJ1O5xNxF7N4kN/8iR/Mdcq1UVPTYTl50nVSxzAlmuGRlDpptaO0q/TfQF8rkMRc+lAg==",
+              "sig": "UxR2wgq7x1XCxPoO3cqXDw9X9xV3CNC3FWziAbN+m8QKNxG+XwLUyDrwQ5VGgporwLsqsTTVAQvsa0WAPKcrBg==",
               "txn": {
                 "apaa": [
                   "AAAAAAAAAAI="
@@ -1779,10 +1942,10 @@
                 "apid": 1001,
                 "fee": 8000,
                 "fv": 4,
-                "gh": "a5HZzscueWwP9uOiD3bjqYu20UplUxe4psb3vr8bkHs=",
-                "grp": "MjzZma6EhfpgWvDS1Q7j3nIqS/8byKmc1/zUtk4H7IY=",
+                "gh": "inhYPfTFbag7vMdYf1QTCoQ0gWPBY04S4LfuDEhYIW0=",
+                "grp": "PN2Rkk5uSeACsGB4X+I3BLin/FByfJpBmRT2+bX1l6A=",
                 "lv": 1004,
-                "snd": "BNHPBAYFFTMAYG2L63QOYSE5AH2PVD4ANVCWGB67EVY3STQDTDKM2D3GEM",
+                "snd": "HQL44CTIK7EKRJJ6BQEHJWSGOSJQQEU4AVDURE2GZBOB67LIOKSSLDMX3I",
                 "type": "appl"
               }
             }
