@@ -250,7 +250,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		await this._configurationDone.wait(1000);
 
 		// start the program in the runtime
-		await this._runtime.start(args.program, !!args.stopOnEntry, !args.noDebug);
+		await this._runtime.start(!!args.stopOnEntry, !args.noDebug);
 
 		this.sendResponse(response);
 	}
@@ -328,7 +328,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			}),
 			// 4 options for 'totalFrames':
 			//omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
-			totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
+			// totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
 			//totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
 			//totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
 		};

@@ -7,11 +7,17 @@
 		{
 			"type": "teal",
 			"request": "launch",
-			"name": "Debug readme.md",
+			"name": "Debug Transaction Group",
 			"debuggerPath": "stuff-to-deal",
+
 			"simulationTraceFile": "${workspaceFolder}/recursive-resp.json",
 			"appSourceDescriptionFile": "${workspaceFolder}/recursive-group-resources.json",
 			"program": "${workspaceFolder}/recursive-inner-approval.teal",
+
+			// "simulationTraceFile": "${workspaceFolder}/simulate-response.json",
+			// "appSourceDescriptionFile": "${workspaceFolder}/txn-group-sources.json",
+			// "program": "${workspaceFolder}/stack-scratch.teal",
+
 			"stopOnEntry": true,
 			"trace": false
 		}

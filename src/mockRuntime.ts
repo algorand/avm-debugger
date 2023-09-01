@@ -52,12 +52,6 @@ export class RuntimeVariable {
 	constructor(public name: string, private _value: IRuntimeVariableType) { }
 }
 
-interface Word {
-	name: string;
-	line: number;
-	index: number;
-}
-
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -75,7 +69,7 @@ interface DebugExecSegment {
 	traceType: TraceType;
 	srcFSPath?: string;
 	srcMap?: algosdk.SourceMap;
-	hash?: string;
+	hash: string;
 }
 
 type DebugExecTape = DebugExecSegment[];
@@ -84,6 +78,7 @@ class TxnGroupTreeWalker {
 	public debugAssets: TEALDebuggingAssets;
 	public execTape: DebugExecTape;
 	public digestToSrc: Map<string, string[]> = new Map<string, string[]>();
+	public fsPathTodigest: Map<string, string> = new Map<string, string>();
 	public segmentIndex: number = 0;
 	public pcIndex: number = 0;
 
@@ -205,7 +200,21 @@ class TxnGroupTreeWalker {
 	}
 
 	public async setupSources(fileAccessor: FileAccessor) {
+		for (let i = 0; i < this.execTape.length; i++) {
+			let possibleHash = this.execTape[i].hash;
+			if (this.digestToSrc.has(possibleHash)) {
+				continue;
+			}
 
+			let possiblePath = this.execTape[i].srcFSPath;
+			if (typeof possiblePath === 'undefined') {
+				continue;
+			}
+			let sourceLines = new TextDecoder().decode(await fileAccessor.readFile(possiblePath)).split(/\r?\n/);
+			this.digestToSrc.set(possibleHash, sourceLines);
+
+			this.fsPathTodigest.set(possiblePath, possibleHash);
+		}
 	}
 
 	public forward(): boolean {
@@ -257,12 +266,20 @@ class TxnGroupTreeWalker {
 		return this.execTape[this.segmentIndex].srcMap?.getLineForPc(<number>stepArray[this.pcIndex].pc);
 	}
 
-	public getLine(number?: number): string {
-		// TODO: ...
-		/*
-		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
-		*/
-		return "";
+	public getLine(number?: number): string | undefined {
+		if (!this.digestToSrc.has(this.execTape[this.segmentIndex].hash)) {
+			return undefined;
+		}
+		let lines = <string[]>this.digestToSrc.get(this.execTape[this.segmentIndex].hash);
+		return lines[number === undefined ? <number>this.currentPCtoLine() : number].trim();
+	}
+
+	public get sourceLines(): string[] | undefined {
+		if (!this.digestToSrc.has(this.execTape[this.segmentIndex].hash)) {
+			return undefined;
+		}
+
+		return <string[]>this.digestToSrc.get(this.execTape[this.segmentIndex].hash);
 	}
 
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
@@ -314,30 +331,12 @@ class TxnGroupTreeWalker {
  * class because you can rely on some existing debugger or runtime.
  */
 export class MockRuntime extends EventEmitter {
-
-	// the initial (and one and only) file we are 'debugging'
-	// TODO: remove this thing.
-	private _sourceFile: string = '';
-
-	// TODO: maybe map from hash digest to sourcelines before extension debugging.
-	// the contents (= lines) of the one and only file
-	private sourceLines: string[] = [];
-
-	// TODO: maybe read from DebugTxnState (top of the stack)?
-	// This is the next line that will be 'executed'
-	private _currentLine = 0;
-	private get currentLine() {
-		return this._currentLine;
-	}
-	private set currentLine(x) {
-		this._currentLine = x;
-	}
 	private currentColumn: number | undefined;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 
-	private treeWaker: TxnGroupTreeWalker;
+	private treeWalker: TxnGroupTreeWalker;
 
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
@@ -348,21 +347,20 @@ export class MockRuntime extends EventEmitter {
 	constructor(private fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
 		super();
 		this._debugAssets = debugAssets;
-		this.treeWaker = new TxnGroupTreeWalker(this._debugAssets);
+		this.treeWalker = new TxnGroupTreeWalker(this._debugAssets);
 	}
 
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
-		// TODO: load all sources for tree walker.
-
-		await this.loadSource(this.normalizePathAndCasing(program));
+	public async start(stopOnEntry: boolean, debug: boolean): Promise<void> {
+		await this.treeWalker.setupSources(this.fileAccessor);
 
 		if (debug) {
 
-			// TODO: await verify breakpoints for all.
-			await this.verifyBreakpoints(this._sourceFile);
+			for (let [fsPath, _] of this.treeWalker.fsPathTodigest) {
+				this.verifyBreakpoints(fsPath);
+			}
 
 			if (stopOnEntry) {
 				this.findNextStatement(false, 'stopOnEntry');
@@ -400,16 +398,12 @@ export class MockRuntime extends EventEmitter {
 
 	private updateCurrentLine(reverse: boolean): boolean {
 		if (reverse) {
-			let backwardsSucceed = this.treeWaker.backward();
-			this.currentLine = <number>this.treeWaker.currentPCtoLine();
-			if (!backwardsSucceed) {
+			if (!this.treeWalker.backward()) {
 				this.sendEvent('stopOnEntry');
 				return true;
 			}
 		} else {
-			let forwardSucceed = this.treeWaker.forward();
-			this.currentLine = <number>this.treeWaker.currentPCtoLine();
-			if (!forwardSucceed) {
+			if (!this.treeWalker.forward()) {
 				this.sendEvent(RuntimeEvents.end);
 				return true;
 			}
@@ -427,7 +421,7 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent(RuntimeEvents.stopOnStep);
 		} else {
 			if (typeof this.currentColumn === 'number') {
-				if (this.currentColumn <= this.sourceLines[this.currentLine].length) {
+				if (this.currentColumn <= (<string>this.treeWalker.getLine()).length) {
 					this.currentColumn += 1;
 				}
 			} else {
@@ -468,8 +462,8 @@ export class MockRuntime extends EventEmitter {
 			const stackFrame: IRuntimeStackFrame = {
 				index: i,
 				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
-				file: this._sourceFile,
-				line: this.currentLine,
+				file: <string>this.treeWalker.currentSourcePath(),
+				line: <number>this.treeWalker.currentPCtoLine(),
 			};
 
 			frames.push(stackFrame);
@@ -495,7 +489,7 @@ export class MockRuntime extends EventEmitter {
 		}
 		bps.push(bp);
 
-		await this.verifyBreakpoints(path);
+		this.verifyBreakpoints(path);
 
 		return bp;
 	}
@@ -528,9 +522,9 @@ export class MockRuntime extends EventEmitter {
 
 		if (cancellationToken && cancellationToken()) { return a; }
 
-		const execUnits = this.treeWaker.findCurrentExecSteps();
+		const execUnits = this.treeWalker.findCurrentExecSteps();
 
-		for (let i = 0; i < this.treeWaker.pcIndex; i++) {
+		for (let i = 0; i < this.treeWalker.pcIndex; i++) {
 			const unit = execUnits[i];
 			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
 
@@ -554,9 +548,9 @@ export class MockRuntime extends EventEmitter {
 
 		if (cancellationToken && cancellationToken()) { return a; }
 
-		const execUnits = this.treeWaker.findCurrentExecSteps();
+		const execUnits = this.treeWalker.findCurrentExecSteps();
 
-		for (let i = 0; i < this.treeWaker.pcIndex; i++) {
+		for (let i = 0; i < this.treeWalker.pcIndex; i++) {
 			const unit = execUnits[i];
 			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions ? unit.stackAdditions : [];
 			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
@@ -579,11 +573,11 @@ export class MockRuntime extends EventEmitter {
 	 */
 	private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
 		while (true) {
-			const srcPath = this.treeWaker.currentSourcePath();
+			const srcPath = this.treeWalker.currentSourcePath();
 			if (!srcPath) {
 				continue;
 			}
-			const possibleLine = this.treeWaker.currentPCtoLine();
+			const possibleLine = this.treeWalker.currentPCtoLine();
 			const breakpoints = this.breakPoints.get(srcPath);
 
 			if (typeof possibleLine !== 'undefined' && breakpoints) {
@@ -599,24 +593,22 @@ export class MockRuntime extends EventEmitter {
 						this.sendEvent('breakpointValidated', bps[0]);
 					}
 
-					this.currentLine = possibleLine;
 					return true;
 				}
 			}
 
 			if (typeof possibleLine !== 'undefined') {
-				const line = this.getLine(possibleLine);
+				const line = <string>this.treeWalker.getLine(possibleLine);
 				if (line.length > 0) {
-					this.currentLine = possibleLine;
 					break;
 				}
 			}
 
 			let stepResult: boolean;
 			if (reverse) {
-				stepResult = this.treeWaker.backward();
+				stepResult = this.treeWalker.backward();
 			} else {
-				stepResult = this.treeWaker.forward();
+				stepResult = this.treeWalker.forward();
 			}
 
 			if (!stepResult) {
@@ -632,20 +624,6 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	// Helper functions
-
-	// TODO: also depend on give trace and hash by debug state stack
-	private getLine(line?: number): string {
-		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
-	}
-
-	// TODO: should make this irrelevant to the _sourcefile.
-	private async loadSource(file: string): Promise<void> {
-		// TODO: remove _sourceFile
-		if (this._sourceFile !== file) {
-			this._sourceFile = this.normalizePathAndCasing(file);
-			this.sourceLines = new TextDecoder().decode(await this.fileAccessor.readFile(file)).split(/\r?\n/);
-		}
-	}
 
 	private avmValueToRTV(avmValue: algosdk.modelsv2.AvmValue): IRuntimeVariableType {
 		let runtimeVar: IRuntimeVariableType;
@@ -679,19 +657,23 @@ export class MockRuntime extends EventEmitter {
 		return runtimeVar;
 	}
 
-	private async verifyBreakpoints(path: string): Promise<void> {
+	private verifyBreakpoints(path: string) {
 
 		const bps = this.breakPoints.get(path);
+		const digest = this.treeWalker.fsPathTodigest.get(path);
+		if (!digest) {
+			return;
+		}
+		const lines = <string[]>this.treeWalker.digestToSrc.get(digest);
 		if (bps) {
-			await this.loadSource(path);
 			bps.forEach(bp => {
-				if (!bp.verified && bp.line < this.sourceLines.length) {
+				if (!bp.verified && bp.line < lines.length) {
 					while (true) {
-						if (this.getLine(bp.line).length === 0) {
+						if (lines[bp.line].length === 0) {
 							bp.line++;
 							continue;
 						}
-						if (/^\s*\S+:/ig.exec(this.getLine(bp.line))) {
+						if (/^\s*\S+:/ig.exec(lines[bp.line])) {
 							bp.line++;
 							continue;
 						}
