@@ -204,6 +204,10 @@ class TxnGroupTreeWalker {
 		this.pcIndex = this.execTape[this.segmentIndex].startPCIndex;
 	}
 
+	public async setupSources(fileAccessor: FileAccessor) {
+
+	}
+
 	public forward(): boolean {
 		if (this.execTape[this.segmentIndex].endPCIndex > this.pcIndex) {
 			this.pcIndex++;
@@ -255,6 +259,9 @@ class TxnGroupTreeWalker {
 
 	public getLine(number?: number): string {
 		// TODO: ...
+		/*
+		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
+		*/
 		return "";
 	}
 
@@ -451,14 +458,8 @@ export class MockRuntime extends EventEmitter {
 	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
 	 */
 	public stack(startFrame: number, endFrame: number): IRuntimeStack {
-
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
-
-		const instruction = undefined;
-
-		const column = typeof this.currentColumn === 'number' ? this.currentColumn : undefined;
+		// add a sentinel so that the stack is never empty...
+		const words = [{ name: 'BOTTOM', line: -1, index: -1 }];
 
 		const frames: IRuntimeStackFrame[] = [];
 		// every word of the current line becomes a stack frame.
@@ -469,8 +470,6 @@ export class MockRuntime extends EventEmitter {
 				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
 				file: this._sourceFile,
 				line: this.currentLine,
-				column: column, // words[i].index
-				instruction: instruction
 			};
 
 			frames.push(stackFrame);
@@ -573,18 +572,6 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		return a;
-	}
-
-	// TODO: irrelevant, see if we can remove it later
-	private getWords(l: number, line: string): Word[] {
-		// break line into words
-		const WORD_REGEXP = /[a-z]+/ig;
-		const words: Word[] = [];
-		let match: RegExpExecArray | null;
-		while (match = WORD_REGEXP.exec(line)) {
-			words.push({ name: match[0], line: l, index: match.index });
-		}
-		return words;
 	}
 
 	/**

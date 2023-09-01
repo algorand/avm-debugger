@@ -299,7 +299,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body = {
 			threads: [
 				new Thread(MockDebugSession.threadID, "thread 1"),
-				new Thread(MockDebugSession.threadID + 1, "thread 2"),
 			]
 		};
 		this.sendResponse(response);
