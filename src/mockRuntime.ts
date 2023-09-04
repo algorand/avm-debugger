@@ -494,22 +494,6 @@ export class MockRuntime extends EventEmitter {
 		return bp;
 	}
 
-	/*
-	 * Clear breakpoint in file with given line.
-	 */
-	public clearBreakPoint(path: string, line: number): IRuntimeBreakpoint | undefined {
-		const bps = this.breakPoints.get(this.normalizePathAndCasing(path));
-		if (bps) {
-			const index = bps.findIndex(bp => bp.line === line);
-			if (index >= 0) {
-				const bp = bps[index];
-				bps.splice(index, 1);
-				return bp;
-			}
-		}
-		return undefined;
-	}
-
 	public clearBreakpoints(path: string): void {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
