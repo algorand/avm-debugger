@@ -285,7 +285,7 @@ class TxnGroupTreeWalker {
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
 		console.assert(this.execTape.length > 0);
 
-		let path = this.execTape[this.execTape.length - 1].txnPath;
+		let path = this.execTape[this.segmentIndex].txnPath;
 		let index = 0;
 
 		let txnGroup = this.debugAssets.simulateResponse.txnGroups[path[index++]];
@@ -302,7 +302,7 @@ class TxnGroupTreeWalker {
 	public findCurrentExecSteps(): algosdk.modelsv2.SimulationOpcodeTraceUnit[] {
 		const trace = this.findTraceByPath();
 
-		switch (this.execTape[this.execTape.length - 1].traceType) {
+		switch (this.execTape[this.segmentIndex].traceType) {
 			case TraceType.approval:
 				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.approvalProgramTrace;
 			case TraceType.clearState:
