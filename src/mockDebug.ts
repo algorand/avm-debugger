@@ -64,8 +64,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _configurationDone = new Subject();
 
-	private _cancellationTokens = new Map<number, boolean>();
-
 	private _valuesInHex = false;
 
 	private _addressesInHex = true;
@@ -124,7 +122,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsStepBack = true;
 
 		// make VS Code send cancel request
-		response.body.supportsCancelRequest = true;
+		response.body.supportsCancelRequest = false;
 
 		// make VS Code send the breakpointLocations request
 		response.body.supportsBreakpointLocationsRequest = true;
@@ -317,21 +315,9 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		const v = this._variableHandles.get(args.variablesReference);
 		if (v === 'scratches') {
-			if (request) {
-				this._cancellationTokens.set(request.seq, false);
-				vs = this._runtime.getScratchVariables(() => !!this._cancellationTokens.get(request.seq));
-				this._cancellationTokens.delete(request.seq);
-			} else {
-				vs = this._runtime.getScratchVariables();
-			}
+			vs = this._runtime.getScratchVariables();
 		} else if (v === 'stacks') {
-			if (request) {
-				this._cancellationTokens.set(request.seq, false);
-				vs = this._runtime.getStackVariables(() => !!this._cancellationTokens.get(request.seq));
-				this._cancellationTokens.delete(request.seq);
-			} else {
-				vs = this._runtime.getStackVariables();
-			}
+			vs = this._runtime.getStackVariables();
 		} else if (v && Array.isArray(v.value)) {
 			vs = v.value;
 		}
@@ -380,12 +366,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
 		this._runtime.stepOut();
 		this.sendResponse(response);
-	}
-
-	protected cancelRequest(response: DebugProtocol.CancelResponse, args: DebugProtocol.CancelArguments) {
-		if (args.requestId) {
-			this._cancellationTokens.set(args.requestId, true);
-		}
 	}
 
 	//---- helpers

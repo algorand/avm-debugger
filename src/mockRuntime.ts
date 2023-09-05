@@ -498,13 +498,13 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
-	public getScratchVariables(cancellationToken?: () => boolean): RuntimeVariable[] {
+	public getScratchVariables(): RuntimeVariable[] {
 
 		let a: RuntimeVariable[] = [];
 
 		let scratchMap: Map<number, IRuntimeVariableType> = new Map<number, IRuntimeVariableType>();
 
-		if (cancellationToken && cancellationToken()) { return a; }
+		// if (cancellationToken && cancellationToken()) { return a; }
 
 		const execUnits = this.treeWalker.findCurrentExecSteps();
 
@@ -526,11 +526,11 @@ export class MockRuntime extends EventEmitter {
 		return a;
 	}
 
-	public getStackVariables(cancellationToken?: () => boolean): RuntimeVariable[] {
+	public getStackVariables(): RuntimeVariable[] {
 
 		let a: RuntimeVariable[] = [];
 
-		if (cancellationToken && cancellationToken()) { return a; }
+		// if (cancellationToken && cancellationToken()) { return a; }
 
 		const execUnits = this.treeWalker.findCurrentExecSteps();
 
