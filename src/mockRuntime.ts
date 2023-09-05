@@ -378,7 +378,7 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public continue(reverse: boolean) {
 		while (true) {
-			if (this.updateCurrentLine(reverse)) {
+			if (!this.updateCurrentLine(reverse)) {
 				break;
 			}
 			if (this.findNextStatement(reverse)) {
@@ -391,7 +391,7 @@ export class MockRuntime extends EventEmitter {
 	 * Step to the next/previous non empty line.
 	 */
 	public step(reverse: boolean) {
-		if (!this.updateCurrentLine(reverse)) {
+		if (this.updateCurrentLine(reverse)) {
 			this.findNextStatement(reverse, RuntimeEvents.stopOnStep);
 		}
 	}
@@ -400,16 +400,16 @@ export class MockRuntime extends EventEmitter {
 		if (reverse) {
 			if (!this.treeWalker.backward()) {
 				this.sendEvent('stopOnEntry');
-				return true;
+				return false;
 			}
 		} else {
 			if (!this.treeWalker.forward()) {
 				this.sendEvent(RuntimeEvents.end);
-				return true;
+				return false;
 			}
 		}
 
-		return false;
+		return true;
 	}
 
 	/**
@@ -559,6 +559,20 @@ export class MockRuntime extends EventEmitter {
 		while (true) {
 			const srcPath = this.treeWalker.currentSourcePath();
 			if (!srcPath) {
+
+				while (true) {
+					let stepResult: boolean;
+
+					if (reverse) {
+						stepResult = this.treeWalker.backward();
+					} else {
+						stepResult = this.treeWalker.forward();
+					}
+					if (!stepResult || this.treeWalker.currentSourcePath()) {
+						break;
+					}
+				}
+
 				continue;
 			}
 			const possibleLine = this.treeWalker.currentPCtoLine();
