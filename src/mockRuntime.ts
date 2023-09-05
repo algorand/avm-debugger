@@ -363,7 +363,7 @@ export class MockRuntime extends EventEmitter {
 			}
 
 			if (stopOnEntry) {
-				this.findNextStatement(false, 'stopOnEntry');
+				this.findNextStatement(false, RuntimeEvents.stopOnEntry);
 			} else {
 				// we just start to run until we hit a breakpoint, an exception, or the end of the program
 				this.continue(false);
@@ -399,7 +399,7 @@ export class MockRuntime extends EventEmitter {
 	private updateCurrentLine(reverse: boolean): boolean {
 		if (reverse) {
 			if (!this.treeWalker.backward()) {
-				this.sendEvent('stopOnEntry');
+				this.sendEvent(RuntimeEvents.stopOnEntry);
 				return false;
 			}
 		} else {
@@ -588,7 +588,7 @@ export class MockRuntime extends EventEmitter {
 					// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
 					if (!bps[0].verified) {
 						bps[0].verified = true;
-						this.sendEvent('breakpointValidated', bps[0]);
+						this.sendEvent(RuntimeEvents.breakpointValidated, bps[0]);
 					}
 
 					return true;
@@ -679,7 +679,7 @@ export class MockRuntime extends EventEmitter {
 					}
 
 					bp.verified = true;
-					this.sendEvent('breakpointValidated', bp);
+					this.sendEvent(RuntimeEvents.breakpointValidated, bp);
 				}
 			});
 		}

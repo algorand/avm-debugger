@@ -13,7 +13,7 @@
 import {
 	Logger, logger,
 	LoggingDebugSession,
-	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
+	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
@@ -26,7 +26,6 @@ export enum RuntimeEvents {
 	stopOnEntry = 'stopOnEntry',
 	stopOnStep = 'stopOnStep',
 	stopOnBreakpoint = 'stopOnBreakpoint',
-	stopOnException = 'stopOnException',
 	breakpointValidated = 'breakpointValidated',
 	end = 'end',
 }
@@ -89,7 +88,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime = new MockRuntime(fileAccessor, this._debugAssets);
 
 		// setup event handlers
-		this._runtime.on('stopOnEntry', () => {
+		this._runtime.on(RuntimeEvents.stopOnEntry, () => {
 			this.sendEvent(new StoppedEvent('entry', MockDebugSession.threadID));
 		});
 		this._runtime.on(RuntimeEvents.stopOnStep, () => {
@@ -98,42 +97,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on(RuntimeEvents.stopOnBreakpoint, () => {
 			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.threadID));
 		});
-		this._runtime.on('stopOnDataBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('data breakpoint', MockDebugSession.threadID));
-		});
-		this._runtime.on('stopOnInstructionBreakpoint', () => {
-			this.sendEvent(new StoppedEvent('instruction breakpoint', MockDebugSession.threadID));
-		});
-		this._runtime.on('stopOnException', (exception) => {
-			if (exception) {
-				this.sendEvent(new StoppedEvent(`exception(${exception})`, MockDebugSession.threadID));
-			} else {
-				this.sendEvent(new StoppedEvent('exception', MockDebugSession.threadID));
-			}
-		});
-		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
+		this._runtime.on(RuntimeEvents.breakpointValidated, (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
-		});
-		this._runtime.on('output', (type, text, filePath, line, column) => {
-
-			let category: string;
-			switch (type) {
-				case 'prio': category = 'important'; break;
-				case 'out': category = 'stdout'; break;
-				case 'err': category = 'stderr'; break;
-				default: category = 'console'; break;
-			}
-			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`, category);
-
-			if (text === 'start' || text === 'startCollapsed' || text === 'end') {
-				e.body.group = text;
-				e.body.output = `group-${text}\n`;
-			}
-
-			e.body.source = this.createSource(filePath);
-			e.body.line = this.convertDebuggerLineToClient(line);
-			e.body.column = this.convertDebuggerColumnToClient(column);
-			this.sendEvent(e);
 		});
 		this._runtime.on(RuntimeEvents.end, () => {
 			this.sendEvent(new TerminatedEvent());
