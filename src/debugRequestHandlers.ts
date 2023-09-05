@@ -270,15 +270,6 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		response.body = {
 			stackFrames: stk.frames.map((f, ix) => {
 				const sf: DebugProtocol.StackFrame = new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line));
-				if (typeof f.column === 'number') {
-					sf.column = this.convertDebuggerColumnToClient(f.column);
-				}
-				if (typeof f.instruction === 'number') {
-					const address = this.formatAddress(f.instruction);
-					sf.name = `${f.name} ${address}`;
-					sf.instructionPointerReference = address;
-				}
-
 				return sf;
 			}),
 			// 4 options for 'totalFrames':

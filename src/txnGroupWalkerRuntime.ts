@@ -438,16 +438,12 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
 	 */
 	public stack(startFrame: number, endFrame: number): IRuntimeStack {
-		// add a sentinel so that the stack is never empty...
-		const words = [{ name: 'BOTTOM', line: -1, index: -1 }];
-
-		const frames: IRuntimeStackFrame[] = [];
-		// every word of the current line becomes a stack frame.
-		for (let i = startFrame; i < Math.min(endFrame, words.length); i++) {
+		let frames: IRuntimeStackFrame[] = [];
+		for (let i = startFrame; i < Math.min(endFrame, 1); i++) {
 
 			const stackFrame: IRuntimeStackFrame = {
 				index: i,
-				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
+				name: this.treeWalker.execTape[this.treeWalker.segmentIndex].txnPath.toString(),
 				file: <string>this.treeWalker.currentSourcePath(),
 				line: <number>this.treeWalker.currentPCtoLine(),
 			};
@@ -457,7 +453,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 
 		return {
 			frames: frames,
-			count: words.length
+			count: 1
 		};
 	}
 
