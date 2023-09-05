@@ -1,7 +1,7 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import { FileAccessor } from './mockRuntime';
+import { FileAccessor } from './txnGroupWalkerRuntime';
 import { TEALDebugAdapterDescriptorFactory } from './extension';
 import { TealDebugConfigProvider } from './configuration';
 

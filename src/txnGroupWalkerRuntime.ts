@@ -3,7 +3,7 @@
  *--------------------------------------------------------*/
 
 import { EventEmitter } from 'events';
-import { RuntimeEvents } from './mockDebug';
+import { RuntimeEvents } from './debugRequestHandlers';
 import { TEALDebuggingAssets, TxnGroupSourceDescriptor } from './utils';
 import * as algosdk from 'algosdk';
 
@@ -315,22 +315,8 @@ class TxnGroupTreeWalker {
 	}
 }
 
-/**
- * A Mock runtime with minimal debugger functionality.
- * MockRuntime is a hypothetical (aka "teal") "execution engine with debugging support":
- * it takes a Markdown (*.md) file and "executes" it by "running" through the text lines
- * and searching for "command" patterns that trigger some debugger related functionality (e.g. exceptions).
- * When it finds a command it typically emits an event.
- * The runtime can not only run through the whole file but also executes one line at a time
- * and stops on lines for which a breakpoint has been registered. This functionality is the
- * core of the "debugging support".
- * Since the MockRuntime is completely independent from VS Code or the Debug Adapter Protocol,
- * it can be viewed as a simplified representation of a real "execution engine" (e.g. node.js)
- * or debugger (e.g. gdb).
- * When implementing your own debugger extension for VS Code, you probably don't need this
- * class because you can rely on some existing debugger or runtime.
- */
-export class MockRuntime extends EventEmitter {
+
+export class TxnGroupWalkerRuntime extends EventEmitter {
 	private currentColumn: number | undefined;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint

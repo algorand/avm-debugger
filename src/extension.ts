@@ -3,7 +3,7 @@
 import * as Net from 'net';
 import * as vscode from 'vscode';
 import { ProviderResult } from 'vscode';
-import { MockDebugSession } from './mockDebug';
+import { TxnGroupDebugSession } from './debugRequestHandlers';
 import { activateTealDebug, workspaceFileAccessor } from './activateMockDebug';
 import { TEALDebuggingAssets, TEALDebuggingAssetsDescriptor, loadTEALDAConfiguration } from './utils';
 
@@ -101,7 +101,7 @@ class TEALDebugAdapterServerDescriptorFactory
 
 		if (!this.server) {
 			this.server = Net.createServer(socket => {
-				const session = new MockDebugSession(workspaceFileAccessor, this._debugAssets);
+				const session = new TxnGroupDebugSession(workspaceFileAccessor, this._debugAssets);
 				session.setRunAsServer(true);
 				session.start(socket as NodeJS.ReadableStream, socket);
 			}).listen(0);

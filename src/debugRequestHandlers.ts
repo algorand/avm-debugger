@@ -1,14 +1,6 @@
 /*---------------------------------------------------------
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
-/*
- * mockDebug.ts implements the Debug Adapter that "adapts" or translates the Debug Adapter Protocol (DAP) used by the client (e.g. VS Code)
- * into requests and events of the real "execution engine" or "debugger" (here: class MockRuntime).
- * When implementing your own debugger extension for VS Code, most of the work will go into the Debug Adapter.
- * Since the Debug Adapter is independent from VS Code, it can be used in any client (IDE) supporting the Debug Adapter Protocol.
- *
- * The most important class of the Debug Adapter is the MockDebugSession which implements many DAP requests by talking to the MockRuntime.
- */
 
 import {
 	Logger, logger,
@@ -18,7 +10,7 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './mockRuntime';
+import { TxnGroupWalkerRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './txnGroupWalkerRuntime';
 import { Subject } from 'await-notify';
 import { TEALDebuggingAssets } from './utils';
 
@@ -52,13 +44,13 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
 
 
-export class MockDebugSession extends LoggingDebugSession {
+export class TxnGroupDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
 	private static threadID = 1;
 
-	// a Mock runtime (or debugger)
-	private _runtime: MockRuntime;
+	// txn group walker runtime for walking txn group.
+	private _runtime: TxnGroupWalkerRuntime;
 
 	private _variableHandles = new Handles<'scratches' | 'stacks' | RuntimeVariable>();
 
@@ -83,17 +75,17 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.setDebuggerLinesStartAt1(false);
 		this.setDebuggerColumnsStartAt1(false);
 
-		this._runtime = new MockRuntime(fileAccessor, this._debugAssets);
+		this._runtime = new TxnGroupWalkerRuntime(fileAccessor, this._debugAssets);
 
 		// setup event handlers
 		this._runtime.on(RuntimeEvents.stopOnEntry, () => {
-			this.sendEvent(new StoppedEvent('entry', MockDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('entry', TxnGroupDebugSession.threadID));
 		});
 		this._runtime.on(RuntimeEvents.stopOnStep, () => {
-			this.sendEvent(new StoppedEvent('step', MockDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('step', TxnGroupDebugSession.threadID));
 		});
 		this._runtime.on(RuntimeEvents.stopOnBreakpoint, () => {
-			this.sendEvent(new StoppedEvent('breakpoint', MockDebugSession.threadID));
+			this.sendEvent(new StoppedEvent('breakpoint', TxnGroupDebugSession.threadID));
 		});
 		this._runtime.on(RuntimeEvents.breakpointValidated, (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
@@ -261,7 +253,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// runtime supports no threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.threadID, "thread 1"),
+				new Thread(TxnGroupDebugSession.threadID, "thread 1"),
 			]
 		};
 		this.sendResponse(response);
@@ -414,6 +406,6 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	private createSource(filePath: string): Source {
-		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'mock-adapter-data');
+		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'teal-txn-group-adapter-data');
 	}
 }
