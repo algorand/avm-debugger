@@ -10,7 +10,7 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { TxnGroupWalkerRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './txnGroupWalkerRuntime';
+import { TxnGroupWalkerRuntime, IRuntimeBreakpoint, FileAccessor } from './txnGroupWalkerRuntime';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
 import { TEALDebuggingAssets, isAsciiPrintable, limitArray } from './utils';
@@ -45,8 +45,6 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
 
 
-type AvmValueScope = 'stack' | 'scratch';
-
 export class TxnGroupDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
@@ -55,7 +53,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	// txn group walker runtime for walking txn group.
 	private _runtime: TxnGroupWalkerRuntime;
 
-	private _variableHandles = new Handles<'execution' | 'chain' | AvmValueScope | AvmValueReference>();
+	private _variableHandles = new Handles<'execution' | 'chain' | 'app' | AppStateScope | AppSpecificStateScope | ExecutionScope | AvmValueReference>();
 
 	private _configurationDone = new Subject();
 
@@ -299,17 +297,6 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		let variables: DebugProtocol.Variable[] = [];
 
 		const v = this._variableHandles.get(args.variablesReference);
-		// if (v === 'scratches') {
-		// 	const vs = this._runtime.getScratchVariables();
-		// 	variables = vs.map(v => this.convertFromRuntime(v));
-		// } else if (v === 'stacks') {
-		// 	const stackValues = this._runtime.getStackValues();
-		// 	variables = this.convertStackValues(stackValues);
-		// } else if (v === 'app') {
-		// 	// TODO
-		// } else if (v && Array.isArray(v.value)) {
-		// 	variables = v.value.map(v => this.convertFromRuntime(v));
-		// }
 
 		if (v === 'execution') {
 			const stackValues = this._runtime.getStackValues();
@@ -336,39 +323,106 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					},
 				}
 			];
-		} else if (v === 'chain') {
-			// variables = [{
-			// 	name: 'App State',
-			// 	value: '[...]',
-			// 	type: 'object',
-			// 	variablesReference: this._variableHandles.create('app'),
-			// }];
 		} else if (v === 'stack') {
 			const stackValues = this._runtime.getStackValues();
 			if (args.filter !== 'named') {
 				variables = stackValues.map((value, index) => this.convertAvmValue('stack', value, index));
-				variables = limitArray(variables, args.start, args.count);
 			}
 		} else if (v === 'scratch') {
 			const scratchValues = this._runtime.getScratchValues();
 			if (args.filter !== 'named') {
 				variables = scratchValues.map((value, index) => this.convertAvmValue('scratch', value, index));
-				variables = limitArray(variables, args.start, args.count);
+			}
+		} else if (v === 'chain') {
+			const appIDs = this._runtime.getAppStateReferences();
+			variables = [{
+				name: 'app',
+				value: '',
+				type: 'object',
+				variablesReference: this._variableHandles.create('app'),
+				namedVariables: appIDs.length
+			}];
+		} else if (v === 'app') {
+			const appIDs = this._runtime.getAppStateReferences();
+			variables = appIDs.map(appID => ({
+				name: appID.toString(),
+				value: '',
+				type: 'object',
+				variablesReference: this._variableHandles.create(new AppStateScope(appID)),
+				namedVariables: 3,
+			}));
+		} else if (v instanceof AppStateScope) {
+			variables = [
+				{
+					name: 'global',
+					value: '',
+					type: 'object',
+					variablesReference: this._variableHandles.create(new AppSpecificStateScope('global', v.appID)),
+					namedVariables: 1, // TODO
+				},
+				{
+					name: 'local',
+					value: '',
+					type: 'object',
+					variablesReference: this._variableHandles.create(new AppSpecificStateScope('local', v.appID)),
+					namedVariables: 1, // TODO
+				},
+				{
+					name: 'box',
+					value: '',
+					type: 'object',
+					variablesReference: this._variableHandles.create(new AppSpecificStateScope('box', v.appID)),
+					namedVariables: 1, // TODO
+				}
+			];
+		} else if (v instanceof AppSpecificStateScope) {
+			if (v.scope === 'global') {
+				const globalState = this._runtime.getAppGlobalStateArray(v.appID);
+				variables = globalState.map(kv => this.convertAvmKeyValue(v, kv));
+			} else if (v.scope === 'local') {
+				// TODO
+			} else if (v.scope === 'box') {
+				// TODO
 			}
 		} else if (v instanceof AvmValueReference) {
-			let toExpand: algosdk.modelsv2.AvmValue;
-			if (v.scope === 'stack') {
-				const stackValues = this._runtime.getStackValues();
-				toExpand = stackValues[v.index];
-			} else if (v.scope === 'scratch') {
-				const scratchValues = this._runtime.getScratchValues();
-				toExpand = scratchValues[v.index];
-			} else {
-				throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+			if (typeof v.scope === 'string') {
+				let toExpand: algosdk.modelsv2.AvmValue;
+				if (v.scope === 'stack') {
+					const stackValues = this._runtime.getStackValues();
+					toExpand = stackValues[v.key as number];
+				} else if (v.scope === 'scratch') {
+					const scratchValues = this._runtime.getScratchValues();
+					toExpand = scratchValues[v.key as number];
+				} else {
+					throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+				}
+				variables = this.expandAvmValue(toExpand, args.filter);
+			} else if (v.scope instanceof AppSpecificStateScope && typeof v.key === 'string' && v.key.startsWith('0x')) {
+				let toExpand: algosdk.modelsv2.AvmKeyValue;
+				const keyHex = v.key.slice(2);
+				if (v.scope.scope === 'global') {
+					const globalState = this._runtime.getAppGlobalStateMap(v.scope.appID);
+					const value = globalState.getHex(keyHex);
+					if (value) {
+						const keyBytes = Buffer.from(keyHex, 'hex');
+						toExpand = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
+					} else {
+						throw new Error(`key "${v.key}" not found in global state`);
+					}
+				} else if (v.scope.scope === 'local') {
+					// TODO
+					throw new Error('TODO');
+				} else if (v.scope.scope === 'box') {
+					// TODO
+					throw new Error('TODO');
+				} else {
+					throw new Error(`Unexpected AppSpecificStateScope scope: ${v.scope}`);
+				}
+				variables = this.expandAvmKeyValue(v.scope, toExpand, args.filter);
 			}
-			variables = this.expandAvmValue(toExpand, args.filter);
-			variables = limitArray(variables, args.start, args.count);
 		}
+
+		variables = limitArray(variables, args.start, args.count);
 
 		response.body = {
 			variables
@@ -382,34 +436,57 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		// Note, can use args.context to perform different actions based on where the expression is evaluated
 
-		const stackMatches = /^stack\[(-?\d+)\]$/.exec(args.expression);
-		const scratchMatches = /^scratch\[(\d+)\]$/.exec(args.expression);
+		const result = evaluateNameToScope(args.expression);
 
-		if (stackMatches && stackMatches.length === 2) {
-			let index = parseInt(stackMatches[1], 10);
-			const stackValues = this._runtime.getStackValues();
-			if (index < 0) {
-				const adjustedIndex = index + stackValues.length;
-				if (adjustedIndex < 0) {
-					reply = `stack[${index}] out of range`;
-				} else {
-					index = adjustedIndex;
+		if (result) {
+			const [scope, key] = result;
+			if (scope === 'stack') {
+				let index = key as number;
+				const stackValues = this._runtime.getStackValues();
+				if (index < 0) {
+					const adjustedIndex = index + stackValues.length;
+					if (adjustedIndex < 0) {
+						reply = `stack[${index}] out of range`;
+					} else {
+						index = adjustedIndex;
+					}
 				}
-			}
-			if (0 <= index && index < stackValues.length) {
-				rv = this.convertAvmValue('stack', stackValues[index], index);
-			} else if (index < 0 && stackValues.length + index >= 0) {
-				rv = this.convertAvmValue('stack', stackValues[stackValues.length + index], index);
-			} else {
-				reply = `stack[${index}] out of range`;
-			}
-		} else if (scratchMatches && scratchMatches.length === 2) {
-			const index = parseInt(scratchMatches[1], 10);
-			const scratchValues = this._runtime.getScratchValues();
-			if (0 <= index && index < scratchValues.length) {
-				rv = this.convertAvmValue('scratch', scratchValues[index], index);
-			} else {
-				reply = `scratch[${index}] out of range`;
+				if (0 <= index && index < stackValues.length) {
+					rv = this.convertAvmValue('stack', stackValues[index], index);
+				} else if (index < 0 && stackValues.length + index >= 0) {
+					rv = this.convertAvmValue('stack', stackValues[stackValues.length + index], index);
+				} else {
+					reply = `stack[${index}] out of range`;
+				}
+			} else if (scope === 'scratch') {
+				const index = key as number;
+				const scratchValues = this._runtime.getScratchValues();
+				if (0 <= index && index < scratchValues.length) {
+					rv = this.convertAvmValue('scratch', scratchValues[index], index);
+				} else {
+					reply = `scratch[${index}] out of range`;
+				}
+			} else if (typeof key === 'string' && key.startsWith('0x')) {
+				if (scope.property) {
+					reply = `cannot evaluate property "${scope.property}"`;
+				} else if (scope.scope === 'global') {
+					const globalState = this._runtime.getAppGlobalStateMap(scope.appID);
+					const keyHex = key.slice(2);
+					const value = globalState.getHex(keyHex);
+					if (value) {
+						const keyBytes = Buffer.from(keyHex, 'hex');
+						const kv = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
+						rv = this.convertAvmKeyValue(scope, kv);
+					} else {
+						reply = `key "${key}" not found in global state`;
+					}
+				} else if (scope.scope === 'local') {
+					// TODO
+					reply = "TODO";
+				} else if (scope.scope === 'box') {
+					// TODO
+					reply = "TODO";
+				}
 			}
 		}
 
@@ -472,40 +549,37 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 	//---- helpers
 
-	private convertAvmValue(scope: AvmValueScope, avmValue: algosdk.modelsv2.AvmValue, index: number): DebugProtocol.Variable {
-		let convertedValue: string;
+	private convertAvmValue(scope: AvmValueScope, avmValue: algosdk.modelsv2.AvmValue, key: number | string, overrideVariableReference?: boolean): DebugProtocol.Variable {
 		let namedVariables: number | undefined = undefined;
 		let indexedVariables: number | undefined = undefined;
-		let variablesReference: number = 0;
 		let presentationHint: DebugProtocol.VariablePresentationHint | undefined = undefined;
+		let makeVariableReference = false;
 		if (avmValue.type === 1) {
 			// byte array
 			const bytes = avmValue.bytes || new Uint8Array();
-			convertedValue = '0x' + Buffer.from(bytes).toString('hex');
 			namedVariables = 2;
 			if (isAsciiPrintable(bytes)) {
 				namedVariables++;
 			}
 			indexedVariables = bytes.length;
-			variablesReference = this._variableHandles.create(new AvmValueReference(scope, index));
 			presentationHint = {
 				kind: 'data',
 				attributes: ['rawString'],
 			};
-		} else {
-			// uint64
-			const uint = avmValue.uint || 0;
-			convertedValue = uint.toString();
+			makeVariableReference = true;
+		}
+		if (typeof overrideVariableReference !== 'undefined') {
+			makeVariableReference = overrideVariableReference;
 		}
 		return {
-			name: index.toString(),
-			value: convertedValue,
+			name: key.toString(),
+			value: this.avmValueToString(avmValue),
 			type: avmValue.type === 1 ? 'byte[]' : 'uint64',
-			variablesReference,
+			variablesReference: makeVariableReference ? this._variableHandles.create(new AvmValueReference(scope, key)) : 0,
 			namedVariables,
 			indexedVariables,
 			presentationHint,
-			evaluateName: `${scope}[${index}]`,
+			evaluateName: evaluateNameForScope(scope, key),
 		};
 	}
 
@@ -568,6 +642,67 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		return values;
 	}
 
+	private convertAvmKeyValue(scope: AvmValueScope, avmKeyValue: algosdk.modelsv2.AvmKeyValue): DebugProtocol.Variable {
+		const keyString = '0x' + Buffer.from(avmKeyValue.key || new Uint8Array()).toString('hex');
+		const value = this.convertAvmValue(scope, avmKeyValue.value, keyString, true);
+		delete value.indexedVariables;
+		value.namedVariables = 2;
+		return value;
+	}
+
+	private expandAvmKeyValue(scope: AppSpecificStateScope, avmKeyValue: algosdk.modelsv2.AvmKeyValue, filter?: DebugProtocol.VariablesArguments['filter']): DebugProtocol.Variable[] {
+		if (typeof scope.property === 'undefined') {
+			if (filter === 'indexed') {
+				return [];
+			}
+			const keyString = '0x' + Buffer.from(avmKeyValue.key || new Uint8Array()).toString('hex');
+			const keyScope = new AppSpecificStateScope(scope.scope, scope.appID, 'key');
+			const valueScope = new AppSpecificStateScope(scope.scope, scope.appID, 'value');
+			const keyVariable = this.convertAvmValue(keyScope, new algosdk.modelsv2.AvmValue({ type: 1, bytes: avmKeyValue.key }), '', false);
+			const valueVariable = this.convertAvmValue(valueScope, avmKeyValue.value, '', false);
+			const valueHasChildren = valueVariable.namedVariables || valueVariable.indexedVariables;
+			return [
+				{
+					name: 'key',
+					type: 'object',
+					value: keyVariable.value,
+					variablesReference: this._variableHandles.create(new AvmValueReference(keyScope, keyString)),
+					namedVariables: keyVariable.namedVariables,
+					indexedVariables: keyVariable.indexedVariables,
+					presentationHint: keyVariable.presentationHint,
+					// evaluateName: evaluateNameForScope(keyScope, keyString),
+				}, {
+					name: 'value',
+					type: 'object',
+					value: valueVariable.value,
+					variablesReference: valueHasChildren ? this._variableHandles.create(new AvmValueReference(valueScope, keyString)) : 0,
+					namedVariables: keyVariable.namedVariables,
+					indexedVariables: keyVariable.indexedVariables,
+					presentationHint: keyVariable.presentationHint,
+					// evaluateName: valueHasChildren ? evaluateNameForScope(valueScope, keyString) : '',
+				}
+			];
+		}
+
+		if (scope.property === 'key') {
+			const avmKey = new algosdk.modelsv2.AvmValue({ type: 1, bytes: avmKeyValue.key });
+			return this.expandAvmValue(avmKey, filter);
+		}
+
+		return this.expandAvmValue(avmKeyValue.value, filter);
+	}
+
+	private avmValueToString(avmValue: algosdk.modelsv2.AvmValue): string {
+		if (avmValue.type === 1) {
+			// byte array
+			const bytes = avmValue.bytes || new Uint8Array();
+			return '0x' + Buffer.from(bytes).toString('hex');
+		}
+		// uint64
+		const uint = avmValue.uint || 0;
+		return uint.toString();
+	}
+
 	private formatAddress(x: number, pad = 8) {
 		return this._addressesInHex ? '0x' + x.toString(16).padStart(8, '0') : x.toString(10);
 	}
@@ -581,6 +716,55 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	}
 }
 
+type ExecutionScope = 'stack' | 'scratch';
+
+class AppStateScope {
+	constructor(public readonly appID: number) { }
+}
+
+class AppSpecificStateScope {
+	constructor(
+		public readonly scope: 'global' | 'local' | 'box',
+		public readonly appID: number,
+		public readonly property?: 'key' | 'value'
+	) { }
+}
+
+type AvmValueScope = ExecutionScope | AppSpecificStateScope;
+
 class AvmValueReference {
-	constructor(public readonly scope: AvmValueScope, public readonly index: number) { }
+	constructor(
+		public readonly scope: AvmValueScope,
+		public readonly key: number | string
+	) { }
+}
+
+function evaluateNameForScope(scope: AvmValueScope, key: number | string): string {
+	if (typeof scope === 'string') {
+		return `${scope}[${key}]`;
+	}
+	return `app[${scope.appID}].${scope.scope}[${key}]${scope.property ? '.' + scope.property : ''}`;
+}
+
+function evaluateNameToScope(name: string): [AvmValueScope, key: number | string] | undefined {
+	const stackMatches = /^stack\[(-?\d+)\]$/.exec(name);
+	if (stackMatches) {
+		return ['stack', parseInt(stackMatches[1], 10)];
+	}
+	const scratchMatches = /^scratch\[(\d+)\]$/.exec(name);
+	if (scratchMatches) {
+		return ['scratch', parseInt(scratchMatches[1], 10)];
+	}
+	const appMatches = /^app\[(\d+)\]\.(global|local|box)\[(.+)\](?:\.(key|value))?$/.exec(name);
+	if (appMatches) {
+		const scope = appMatches[2];
+		if (scope !== 'global' && scope !== 'local' && scope !== 'box') {
+			throw new Error(`Unexpected app scope: ${scope}`);
+		}
+		const property = appMatches.length > 4 ? appMatches[4] : undefined;
+		if (typeof property !== 'undefined' && property !== 'key' && property !== 'value') {
+			throw new Error(`Unexpected app property: ${property}`);
+		}
+		return [new AppSpecificStateScope(scope, parseInt(appMatches[1], 10), property), appMatches[3]];
+	}
 }

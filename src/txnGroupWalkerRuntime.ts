@@ -4,7 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './debugRequestHandlers';
-import { TEALDebuggingAssets, TxnGroupSourceDescriptor } from './utils';
+import { TEALDebuggingAssets, TxnGroupSourceDescriptor, ByteArrayMap } from './utils';
 import * as algosdk from 'algosdk';
 
 export interface FileAccessor {
@@ -39,18 +39,6 @@ interface IRuntimeStack {
 }
 
 export type IRuntimeVariableType = number | bigint | string;
-
-export class RuntimeVariable {
-	public get value() {
-		return this._value;
-	}
-
-	public set value(value: IRuntimeVariableType) {
-		this._value = value;
-	}
-
-	constructor(public name: string, private _value: IRuntimeVariableType) { }
-}
 
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
@@ -282,6 +270,23 @@ class TxnGroupTreeWalker {
 		return <string[]>this.digestToSrc.get(this.execTape[this.segmentIndex].hash);
 	}
 
+	public findTxnByPath(): algosdk.modelsv2.PendingTransactionResponse {
+		console.assert(this.execTape.length > 0);
+
+		let path = this.execTape[this.segmentIndex].txnPath;
+		let index = 0;
+
+		let txnGroup = this.debugAssets.simulateResponse.txnGroups[path[index++]];
+
+		let txn = txnGroup.txnResults[path[index++]].txnResult;
+
+		while (path.length > index) {
+			txn = txn.innerTxns![path[index++]];
+		}
+
+		return txn;
+	}
+
 	public findTraceByPath(): algosdk.modelsv2.SimulationTransactionExecTrace {
 		console.assert(this.execTape.length > 0);
 
@@ -304,17 +309,69 @@ class TxnGroupTreeWalker {
 
 		switch (this.execTape[this.segmentIndex].traceType) {
 			case TraceType.approval:
-				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.approvalProgramTrace;
+				return trace.approvalProgramTrace!;
 			case TraceType.clearState:
-				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.clearStateProgramTrace;
+				return trace.clearStateProgramTrace!;
 			case TraceType.logicSig:
-				return <algosdk.modelsv2.SimulationOpcodeTraceUnit[]>trace.logicSigTrace;
+				return trace.logicSigTrace!;
 			default:
 				return [];
 		}
 	}
+
+	public forEachTraceBeforeCurrent(callback: (trace: algosdk.modelsv2.SimulationTransactionExecTrace, appID: number) => void) {
+		console.assert(this.execTape.length > 0);
+
+		let path = this.execTape[this.segmentIndex].txnPath;
+		
+		for (let i = 0; i < path[0]; i++) {
+			const group = this.debugAssets.simulateResponse.txnGroups[i];
+			const txnResultsLimit = i === path[0]-1 ? path[1] : group.txnResults.length;
+			for (let j = 0; j < txnResultsLimit; j++) {
+				const txnResult = group.txnResults[j];
+				const pathForRecursiveCall = j === path[1]-1 ? path.slice(2) : undefined;
+				recursiveForEachTrace(txnResult.execTrace, txnResult.txnResult, pathForRecursiveCall, (trace, txnInfo) => {
+					callback(trace, txnInfo.txn.txn.apid || Number(txnInfo.applicationIndex));
+				});
+			}
+		}
+	}
+
+	public forEachUnit(filter: 'app' | 'logicsig' | 'all', callback: (unit: algosdk.modelsv2.SimulationOpcodeTraceUnit, txnInfo: algosdk.modelsv2.PendingTransactionResponse) => void) {
+		for (const group of this.debugAssets.simulateResponse.txnGroups) {
+			for (const txnResult of group.txnResults) {
+				recursiveForEachTrace(txnResult.execTrace, txnResult.txnResult, undefined, (trace, txnInfo) => {
+					if (filter === 'logicsig' || filter === 'all') {
+						for (const unit of trace.logicSigTrace || []) {
+							callback(unit, txnInfo);
+						}
+					}
+					if (filter === 'app' || filter === 'all') {
+						for (const unit of trace.approvalProgramTrace || []) {
+							callback(unit, txnInfo);
+						}
+						for (const unit of trace.clearStateProgramTrace || []) {
+							callback(unit, txnInfo);
+						}
+					}
+				});
+			}
+		}
+	}
 }
 
+function recursiveForEachTrace(trace: algosdk.modelsv2.SimulationTransactionExecTrace | undefined, txnInfo: algosdk.modelsv2.PendingTransactionResponse, pathLimit: number[] | undefined, callback: (trace: algosdk.modelsv2.SimulationTransactionExecTrace, txnInfo: algosdk.modelsv2.PendingTransactionResponse) => void) {
+	if (!trace) {
+		return;
+	}
+	callback(trace, txnInfo);
+	if (trace.innerTrace) {
+		const innerLimit = pathLimit ? pathLimit[0] : trace.innerTrace.length;
+		for (let i = 0; i < innerLimit; i++) {
+			recursiveForEachTrace(trace.innerTrace[i], txnInfo.innerTxns![i], pathLimit?.slice(1), callback);
+		}
+	}
+}
 
 export class TxnGroupWalkerRuntime extends EventEmitter {
 	private currentColumn: number | undefined;
@@ -527,6 +584,76 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		}
 
 		return stack;
+	}
+
+	public getAppStateReferences(): number[] {
+		const apps = new Set<number>();
+
+		const appInitialStates = this._debugAssets.simulateResponse.initialStates?.appInitialStates || [];
+		for (const appInitialState of appInitialStates) {
+			apps.add(Number(appInitialState.id));
+		}
+
+		this.treeWalker.forEachUnit('app', (unit, txnInfo) => {
+			if (unit.stateChanges?.length) {
+				if (txnInfo.txn.txn.apid) {
+					apps.add(txnInfo.txn.txn.apid);
+				} else if (txnInfo.applicationIndex) {
+					apps.add(Number(txnInfo.applicationIndex));
+				}
+			}
+		});
+
+		return Array.from(apps).sort((a, b) => a - b);
+	}
+
+	public getAppGlobalStateMap(appID: number): ByteArrayMap<algosdk.modelsv2.AvmValue> {
+		const globalState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
+
+		this.treeWalker.forEachTraceBeforeCurrent((trace, traceAppID) => {
+			if (traceAppID !== appID) {
+				return;
+			}
+			for (const unit of trace.approvalProgramTrace || trace.clearStateProgramTrace || []) {
+				for (const stateChange of unit.stateChanges || []) {
+					if (stateChange.appStateType === 'g') {
+						if (stateChange.operation === 'w') {
+							globalState.set(stateChange.key, stateChange.newValue!);
+						} else if (stateChange.operation === 'd') {
+							globalState.delete(stateChange.key);
+						}
+					}
+				}
+			}
+		});
+
+		const txn = this.treeWalker.findTxnByPath();
+		const currentTxnApp = txn.txn.txn.apid || txn.applicationIndex;
+		if (typeof currentTxnApp !== 'undefined' && Number(currentTxnApp) === appID) {
+			// The current trace may have additional state updates
+			const execUnits = this.treeWalker.findCurrentExecSteps();
+
+			for (let i = 0; i < this.treeWalker.pcIndex; i++) {
+				const unit = execUnits[i];
+
+				for (const stateChange of unit.stateChanges || []) {
+					if (stateChange.appStateType === 'g') {
+						if (stateChange.operation === 'w') {
+							globalState.set(stateChange.key, stateChange.newValue!);
+						} else if (stateChange.operation === 'd') {
+							globalState.delete(stateChange.key);
+						}
+					}
+				}
+			}
+		}
+
+		return globalState;
+	}
+
+	public getAppGlobalStateArray(appID: number): algosdk.modelsv2.AvmKeyValue[] {
+		return this.getAppGlobalStateMap(appID).toSortedArray()
+			.map(([key, value]) => new algosdk.modelsv2.AvmKeyValue({ key, value }));
 	}
 
 	/**

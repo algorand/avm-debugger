@@ -286,3 +286,60 @@ export function limitArray<T>(array: Array<T>, start?: number, count?: number): 
 export function parseJsonWithBigints(json: string): any {
     return JSON_BIG.parse(json);
 }
+
+export class ByteArrayMap<T> {
+    
+    private map: Map<string, T>;
+
+    constructor() {
+        this.map = new Map<string, T>();
+    }
+
+    public set(key: Uint8Array, value: T): void {
+        this.map.set(Buffer.from(key).toString('hex'), value);
+    }
+
+    public setHex(key: string, value: T): void {
+        this.map.set(key, value);
+    }
+
+    public get(key: Uint8Array): T | undefined {
+        return this.map.get(Buffer.from(key).toString('hex'));
+    }
+
+    public getHex(key: string): T | undefined {
+        return this.map.get(key);
+    }
+
+    public hasHex(key: string): boolean {
+        return this.map.has(key);
+    }
+
+    public has(key: Uint8Array): boolean {
+        return this.map.has(Buffer.from(key).toString('hex'));
+    }
+
+    public delete(key: Uint8Array): boolean {
+        return this.map.delete(Buffer.from(key).toString('hex'));
+    }
+
+    public deleteHex(key: string): boolean {
+        return this.map.delete(key);
+    }
+
+    public clear(): void {
+        this.map.clear();
+    }
+
+    public* entries(): IterableIterator<[Uint8Array, T]> {
+        for (const [key, value] of this.map.entries()) {
+            yield [Buffer.from(key, 'hex'), value];
+        }
+    }
+
+    public toSortedArray(): Array<[Uint8Array, T]> {
+        return Array.from(this.map.entries())
+            .sort()
+            .map(([key, value]) => [Buffer.from(key, 'hex'), value]);
+    }
+}
