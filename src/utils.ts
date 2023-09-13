@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as algosdk from 'algosdk';
 import * as _ from 'lodash';
+import JSONbigWithoutConfig from 'json-bigint';
+
+// TODO: replace with algosdk.parseJson once it is available in v3
+const JSON_BIG = JSONbigWithoutConfig({ useNativeBigInt: true, strict: true });
 
 function vscodeVariables(string, recursive = false) {
     console.assert(vscode.workspace.workspaceFolders);
@@ -218,7 +222,7 @@ export class TEALDebuggingAssets {
         );
         this._simulateResponse
             = algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
-                JSON.parse(jsonStringSimulate)
+                parseJsonWithBigints(jsonStringSimulate)
             );
 
         const jsonStringTxnG = fs.readFileSync(
@@ -246,4 +250,39 @@ export class TEALDebuggingAssets {
     public get txnGroupDescriptorList(): TxnGroupSourceDescriptorList {
         return this._txnGroupDescriptorList;
     }
+}
+
+export function isAsciiPrintable(data: Uint8Array): boolean {
+    for (let i = 0; i < data.length; i++) {
+        if (data[i] < 32 || data[i] > 126) {
+            return false;
+        }
+    }
+    return true;
+}
+
+export function limitArray<T>(array: Array<T>, start?: number, count?: number): Array<T> {
+    if (start === undefined) {
+        start = 0;
+    }
+    if (count === undefined) {
+        count = array.length;
+    }
+    if (start < 0) {
+        start = 0;
+    }
+    if (count < 0) {
+        count = 0;
+    }
+    if (start >= array.length) {
+        return [];
+    }
+    if (start + count > array.length) {
+        count = array.length - start;
+    }
+    return array.slice(start, start + count);
+}
+
+export function parseJsonWithBigints(json: string): any {
+    return JSON_BIG.parse(json);
 }

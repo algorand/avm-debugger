@@ -12,7 +12,8 @@ import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
 import { TxnGroupWalkerRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './txnGroupWalkerRuntime';
 import { Subject } from 'await-notify';
-import { TEALDebuggingAssets } from './utils';
+import * as algosdk from 'algosdk';
+import { TEALDebuggingAssets, isAsciiPrintable, limitArray } from './utils';
 
 export enum RuntimeEvents {
 	stopOnEntry = 'stopOnEntry',
@@ -44,6 +45,8 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
 
 
+type AvmValueScope = 'stack' | 'scratch';
+
 export class TxnGroupDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
@@ -52,7 +55,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	// txn group walker runtime for walking txn group.
 	private _runtime: TxnGroupWalkerRuntime;
 
-	private _variableHandles = new Handles<'scratches' | 'stacks' | RuntimeVariable>();
+	private _variableHandles = new Handles<'execution' | 'chain' | AvmValueScope | AvmValueReference>();
 
 	private _configurationDone = new Subject();
 
@@ -235,7 +238,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	}
 
 	protected breakpointLocationsRequest(response: DebugProtocol.BreakpointLocationsResponse, args: DebugProtocol.BreakpointLocationsArguments, request?: DebugProtocol.Request): void {
-
+		// TODO: shouldn't this get the breakpoints from this._runtime?
 		if (args.source.path) {
 			response.body = {
 				breakpoints: [{ line: args.line, }]
@@ -285,29 +288,145 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		response.body = {
 			scopes: [
-				new Scope("Scratches", this._variableHandles.create('scratches'), false),
-				new Scope("Stacks", this._variableHandles.create('stacks'), false)
+				new Scope("Execution State", this._variableHandles.create('execution'), false),
+				new Scope("On-chain State", this._variableHandles.create('chain'), false),
 			]
 		};
 		this.sendResponse(response);
 	}
 
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
-
-		let vs: RuntimeVariable[] = [];
+		let variables: DebugProtocol.Variable[] = [];
 
 		const v = this._variableHandles.get(args.variablesReference);
-		if (v === 'scratches') {
-			vs = this._runtime.getScratchVariables();
-		} else if (v === 'stacks') {
-			vs = this._runtime.getStackVariables();
-		} else if (v && Array.isArray(v.value)) {
-			vs = v.value;
+		// if (v === 'scratches') {
+		// 	const vs = this._runtime.getScratchVariables();
+		// 	variables = vs.map(v => this.convertFromRuntime(v));
+		// } else if (v === 'stacks') {
+		// 	const stackValues = this._runtime.getStackValues();
+		// 	variables = this.convertStackValues(stackValues);
+		// } else if (v === 'app') {
+		// 	// TODO
+		// } else if (v && Array.isArray(v.value)) {
+		// 	variables = v.value.map(v => this.convertFromRuntime(v));
+		// }
+
+		if (v === 'execution') {
+			const stackValues = this._runtime.getStackValues();
+			variables = [
+				{
+					name: 'stack',
+					value: stackValues.length === 0 ? '[]' : '[...]',
+					type: 'array',
+					variablesReference: this._variableHandles.create('stack'),
+					namedVariables: 1,
+					indexedVariables: stackValues.length,
+					presentationHint: {
+						kind: 'data',
+					},
+				},
+				{
+					name: 'scratch',
+					value: '[...]',
+					type: 'array',
+					variablesReference: this._variableHandles.create('scratch'),
+					indexedVariables: 256,
+					presentationHint: {
+						kind: 'data',
+					},
+				}
+			];
+		} else if (v === 'chain') {
+			// variables = [{
+			// 	name: 'App State',
+			// 	value: '[...]',
+			// 	type: 'object',
+			// 	variablesReference: this._variableHandles.create('app'),
+			// }];
+		} else if (v === 'stack') {
+			const stackValues = this._runtime.getStackValues();
+			if (args.filter !== 'named') {
+				variables = stackValues.map((value, index) => this.convertAvmValue('stack', value, index));
+				variables = limitArray(variables, args.start, args.count);
+			}
+		} else if (v === 'scratch') {
+			const scratchValues = this._runtime.getScratchValues();
+			if (args.filter !== 'named') {
+				variables = scratchValues.map((value, index) => this.convertAvmValue('scratch', value, index));
+				variables = limitArray(variables, args.start, args.count);
+			}
+		} else if (v instanceof AvmValueReference) {
+			let toExpand: algosdk.modelsv2.AvmValue;
+			if (v.scope === 'stack') {
+				const stackValues = this._runtime.getStackValues();
+				toExpand = stackValues[v.index];
+			} else if (v.scope === 'scratch') {
+				const scratchValues = this._runtime.getScratchValues();
+				toExpand = scratchValues[v.index];
+			} else {
+				throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+			}
+			variables = this.expandAvmValue(toExpand, args.filter);
+			variables = limitArray(variables, args.start, args.count);
 		}
 
 		response.body = {
-			variables: vs.map(v => this.convertFromRuntime(v))
+			variables
 		};
+		this.sendResponse(response);
+	}
+
+	protected async evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): Promise<void> {
+		let reply: string | undefined;
+		let rv: DebugProtocol.Variable | undefined = undefined;
+
+		// Note, can use args.context to perform different actions based on where the expression is evaluated
+
+		const stackMatches = /^stack\[(-?\d+)\]$/.exec(args.expression);
+		const scratchMatches = /^scratch\[(\d+)\]$/.exec(args.expression);
+
+		if (stackMatches && stackMatches.length === 2) {
+			let index = parseInt(stackMatches[1], 10);
+			const stackValues = this._runtime.getStackValues();
+			if (index < 0) {
+				const adjustedIndex = index + stackValues.length;
+				if (adjustedIndex < 0) {
+					reply = `stack[${index}] out of range`;
+				} else {
+					index = adjustedIndex;
+				}
+			}
+			if (0 <= index && index < stackValues.length) {
+				rv = this.convertAvmValue('stack', stackValues[index], index);
+			} else if (index < 0 && stackValues.length + index >= 0) {
+				rv = this.convertAvmValue('stack', stackValues[stackValues.length + index], index);
+			} else {
+				reply = `stack[${index}] out of range`;
+			}
+		} else if (scratchMatches && scratchMatches.length === 2) {
+			const index = parseInt(scratchMatches[1], 10);
+			const scratchValues = this._runtime.getScratchValues();
+			if (0 <= index && index < scratchValues.length) {
+				rv = this.convertAvmValue('scratch', scratchValues[index], index);
+			} else {
+				reply = `scratch[${index}] out of range`;
+			}
+		}
+
+		if (rv) {
+			response.body = {
+				result: rv.value,
+				type: rv.type,
+				variablesReference: rv.variablesReference,
+				presentationHint: rv.presentationHint
+			};
+		} else {
+			response.body = {
+				result: reply || `unknown expression: "${args.expression}"`,
+				variablesReference: 0
+			};
+		}
+
 		this.sendResponse(response);
 	}
 
@@ -353,39 +472,100 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 	//---- helpers
 
-	private convertFromRuntime(v: RuntimeVariable): DebugProtocol.Variable {
-
-		let dapVariable: DebugProtocol.Variable = {
-			name: v.name,
-			value: '???',
-			type: typeof v.value,
-			variablesReference: 0,
-			evaluateName: '$' + v.name
+	private convertAvmValue(scope: AvmValueScope, avmValue: algosdk.modelsv2.AvmValue, index: number): DebugProtocol.Variable {
+		let convertedValue: string;
+		let namedVariables: number | undefined = undefined;
+		let indexedVariables: number | undefined = undefined;
+		let variablesReference: number = 0;
+		let presentationHint: DebugProtocol.VariablePresentationHint | undefined = undefined;
+		if (avmValue.type === 1) {
+			// byte array
+			const bytes = avmValue.bytes || new Uint8Array();
+			convertedValue = '0x' + Buffer.from(bytes).toString('hex');
+			namedVariables = 2;
+			if (isAsciiPrintable(bytes)) {
+				namedVariables++;
+			}
+			indexedVariables = bytes.length;
+			variablesReference = this._variableHandles.create(new AvmValueReference(scope, index));
+			presentationHint = {
+				kind: 'data',
+				attributes: ['rawString'],
+			};
+		} else {
+			// uint64
+			const uint = avmValue.uint || 0;
+			convertedValue = uint.toString();
+		}
+		return {
+			name: index.toString(),
+			value: convertedValue,
+			type: avmValue.type === 1 ? 'byte[]' : 'uint64',
+			variablesReference,
+			namedVariables,
+			indexedVariables,
+			presentationHint,
+			evaluateName: `${scope}[${index}]`,
 		};
+	}
 
-		switch (typeof v.value) {
-			case 'number':
-				if (Math.round(v.value) === v.value) {
-					dapVariable.value = this.formatNumber(v.value);
-					(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
-					dapVariable.type = 'integer';
-				} else {
-					dapVariable.value = v.value.toString();
-					dapVariable.type = 'float';
-				}
-				break;
-			case 'string':
-				dapVariable.value = `"${v.value}"`;
-				break;
-			case 'boolean':
-				dapVariable.value = v.value ? 'true' : 'false';
-				break;
-			default:
-				dapVariable.value = typeof v.value;
-				break;
+	private expandAvmValue(avmValue: algosdk.modelsv2.AvmValue, filter?: DebugProtocol.VariablesArguments['filter']): DebugProtocol.Variable[] {
+		if (avmValue.type !== 1) {
+			return [];
 		}
 
-		return dapVariable;
+		const bytes = avmValue.bytes || new Uint8Array();
+
+		const values: DebugProtocol.Variable[] = [];
+
+		if (filter !== 'indexed') {
+			let formats: BufferEncoding[] = ['hex', 'base64'];
+			if (isAsciiPrintable(bytes)) {
+				// TODO: perhaps do this with UTF-8 instead, see https://stackoverflow.com/questions/75108373/how-to-check-if-a-node-js-buffer-contains-valid-utf-8
+				formats.push('ascii');
+			}
+			if (bytes.length === 0) {
+				formats = [];
+			}
+
+			for (const format of formats) {
+				values.push({
+					name: format,
+					type: 'string',
+					value: Buffer.from(bytes).toString(format),
+					variablesReference: 0,
+				});
+			}
+
+			if (bytes.length === 32) {
+				values.push({
+					name: 'address',
+					type: 'string',
+					value: algosdk.encodeAddress(bytes),
+					variablesReference: 0,
+				});
+			}
+
+			values.push({
+				name: 'length',
+				type: 'number',
+				value: bytes.length.toString(),
+				variablesReference: 0,
+			});
+		}
+
+		if (filter !== 'named') {
+			for (let i = 0; i < bytes.length; i++) {
+				values.push({
+					name: i.toString(),
+					type: 'uint8',
+					value: bytes[i].toString(),
+					variablesReference: 0,
+				});
+			}
+		}
+
+		return values;
 	}
 
 	private formatAddress(x: number, pad = 8) {
@@ -399,4 +579,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	private createSource(filePath: string): Source {
 		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'teal-txn-group-adapter-data');
 	}
+}
+
+class AvmValueReference {
+	constructor(public readonly scope: AvmValueScope, public readonly index: number) { }
 }

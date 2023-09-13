@@ -100,7 +100,7 @@ class TxnGroupTreeWalker {
 		let traceHash: Uint8Array = (traceType === TraceType.approval) ?
 			<Uint8Array>trace.approvalProgramHash : <Uint8Array>trace.clearStateProgramHash;
 
-		let traceHashStr = Buffer.from(<Uint8Array>traceHash).toString('base64');
+		let traceHashStr = Buffer.from(traceHash).toString('base64');
 
 		let txnSourceDescriptor: TxnGroupSourceDescriptor | undefined =
 			this.debugAssets.txnGroupDescriptorList.findByHash(traceHashStr);
@@ -480,11 +480,11 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
-	public getScratchVariables(): RuntimeVariable[] {
-
-		let a: RuntimeVariable[] = [];
-
-		let scratchMap: Map<number, IRuntimeVariableType> = new Map<number, IRuntimeVariableType>();
+	public getScratchValues(): algosdk.modelsv2.AvmValue[] {
+		const scratch: algosdk.modelsv2.AvmValue[] = [];
+		for (let i = 0; i < 256; i++) {
+			scratch.push(new algosdk.modelsv2.AvmValue({ type: 2, uint: 0 }));
+		}
 
 		// if (cancellationToken && cancellationToken()) { return a; }
 
@@ -492,25 +492,22 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 
 		for (let i = 0; i < this.treeWalker.pcIndex; i++) {
 			const unit = execUnits[i];
-			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges ? unit.scratchChanges : [];
+			const scratchWrites: algosdk.modelsv2.ScratchChange[] = unit.scratchChanges || [];
 
-			for (let j = 0; j < scratchWrites.length; j++) {
-				scratchMap.set(<number>scratchWrites[j].slot, this.avmValueToRTV(scratchWrites[j].newValue));
+			for (const scratchWrite of scratchWrites) {
+				const slot = Number(scratchWrite.slot);
+				if (slot < 0 || slot >= scratch.length) {
+					throw new Error(`Invalid scratch slot ${slot}`);
+				}
+				scratch[slot] = scratchWrite.newValue;
 			}
 		}
 
-		for (let [key, value] of scratchMap) {
-			a.push(new RuntimeVariable(`slot ` + key, value));
-		}
-
-		a.sort((rt0: RuntimeVariable, rt1: RuntimeVariable) => rt0.name > rt1.name ? 1 : -1);
-
-		return a;
+		return scratch;
 	}
 
-	public getStackVariables(): RuntimeVariable[] {
-
-		let a: RuntimeVariable[] = [];
+	public getStackValues(): algosdk.modelsv2.AvmValue[] {
+		let stack: algosdk.modelsv2.AvmValue[] = [];
 
 		// if (cancellationToken && cancellationToken()) { return a; }
 
@@ -518,20 +515,18 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 
 		for (let i = 0; i < this.treeWalker.pcIndex; i++) {
 			const unit = execUnits[i];
-			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions ? unit.stackAdditions : [];
-			const popCount = unit.stackPopCount ? unit.stackPopCount : 0;
-			for (let j = 0; j < popCount; j++) { a.shift(); }
-			for (let j = 0; j < stackAdditions.length; j++) {
-				let stackVar: IRuntimeVariableType = this.avmValueToRTV(stackAdditions[j]);
-				a.unshift(new RuntimeVariable("", stackVar));
+			const stackAdditions: algosdk.modelsv2.AvmValue[] = unit.stackAdditions || [];
+			const popCount = unit.stackPopCount ? Number(unit.stackPopCount) : 0;
+
+			if (popCount > stack.length) {
+				throw new Error(`Stack underflow: ${popCount} > ${stack.length}`);
 			}
+
+			stack = stack.slice(0, stack.length - popCount);
+			stack.push(...stackAdditions);
 		}
 
-		for (let i = 0; i < a.length; i++) {
-			a[i].name = i.toString();
-		}
-
-		return a;
+		return stack;
 	}
 
 	/**
@@ -561,7 +556,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 			const breakpoints = this.breakPoints.get(srcPath);
 
 			if (typeof possibleLine !== 'undefined' && breakpoints) {
-				const bps = breakpoints.filter(bp => bp.line === <number>possibleLine);
+				const bps = breakpoints.filter(bp => bp.line === possibleLine);
 				if (bps.length > 0) {
 					// send 'stopped' event
 					this.sendEvent(RuntimeEvents.stopOnBreakpoint);

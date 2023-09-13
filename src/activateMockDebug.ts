@@ -14,12 +14,11 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
-				// NOTE: SORRY FORCE TYPECAST
-				let localConfig: vscode.DebugConfiguration = config;
-				localConfig.name = 'Run File';
-				localConfig.program = targetResource.fsPath;
-
-				vscode.debug.startDebugging(undefined, localConfig,
+				vscode.debug.startDebugging(undefined, {
+					...config,
+					name: 'Run File',
+					program: targetResource.fsPath
+				},
 					{ noDebug: true }
 				);
 			}
@@ -30,12 +29,11 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 				targetResource = vscode.window.activeTextEditor.document.uri;
 			}
 			if (targetResource) {
-				// NOTE: SORRY FORCE TYPECAST
-				let localConfig: vscode.DebugConfiguration = config;
-				localConfig.name = 'Debug File';
-				localConfig.program = targetResource.fsPath;
-
-				vscode.debug.startDebugging(undefined, localConfig);
+				vscode.debug.startDebugging(undefined, {
+					...config,
+					name: 'Debug File',
+					program: targetResource.fsPath
+				});
 			}
 		})
 	);
@@ -71,7 +69,7 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 }
 
 export const workspaceFileAccessor: FileAccessor = {
-	isWindows: false,
+	isWindows: typeof process !== 'undefined' && process.platform === 'win32',
 	async readFile(path: string): Promise<Uint8Array> {
 		let uri: vscode.Uri;
 		try {
