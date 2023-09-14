@@ -376,13 +376,13 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 				}
 			];
 		} else if (v instanceof AppSpecificStateScope) {
+			const state = this._runtime.getAppState(v.appID);
 			if (v.scope === 'global') {
-				const globalState = this._runtime.getAppGlobalStateArray(v.appID);
-				variables = globalState.map(kv => this.convertAvmKeyValue(v, kv));
+				variables = state.globalStateArray().map(kv => this.convertAvmKeyValue(v, kv));
 			} else if (v.scope === 'local') {
 				// TODO
 			} else if (v.scope === 'box') {
-				// TODO
+				variables = state.boxStateArray().map(kv => this.convertAvmKeyValue(v, kv));
 			}
 		} else if (v instanceof AvmValueReference) {
 			if (typeof v.scope === 'string') {
@@ -399,10 +399,10 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 				variables = this.expandAvmValue(toExpand, args.filter);
 			} else if (v.scope instanceof AppSpecificStateScope && typeof v.key === 'string' && v.key.startsWith('0x')) {
 				let toExpand: algosdk.modelsv2.AvmKeyValue;
+				const state = this._runtime.getAppState(v.scope.appID);
 				const keyHex = v.key.slice(2);
 				if (v.scope.scope === 'global') {
-					const globalState = this._runtime.getAppGlobalStateMap(v.scope.appID);
-					const value = globalState.getHex(keyHex);
+					const value = state.globalState.getHex(keyHex);
 					if (value) {
 						const keyBytes = Buffer.from(keyHex, 'hex');
 						toExpand = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
@@ -413,8 +413,13 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					// TODO
 					throw new Error('TODO');
 				} else if (v.scope.scope === 'box') {
-					// TODO
-					throw new Error('TODO');
+					const value = state.boxState.getHex(keyHex);
+					if (value) {
+						const keyBytes = Buffer.from(keyHex, 'hex');
+						toExpand = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
+					} else {
+						throw new Error(`key "${v.key}" not found in box state`);
+					}
 				} else {
 					throw new Error(`Unexpected AppSpecificStateScope scope: ${v.scope}`);
 				}
@@ -467,12 +472,12 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					reply = `scratch[${index}] out of range`;
 				}
 			} else if (typeof key === 'string' && key.startsWith('0x')) {
+				const state = this._runtime.getAppState(scope.appID);
+				const keyHex = key.slice(2);
 				if (scope.property) {
 					reply = `cannot evaluate property "${scope.property}"`;
 				} else if (scope.scope === 'global') {
-					const globalState = this._runtime.getAppGlobalStateMap(scope.appID);
-					const keyHex = key.slice(2);
-					const value = globalState.getHex(keyHex);
+					const value = state.globalState.getHex(keyHex);
 					if (value) {
 						const keyBytes = Buffer.from(keyHex, 'hex');
 						const kv = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
@@ -484,8 +489,14 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					// TODO
 					reply = "TODO";
 				} else if (scope.scope === 'box') {
-					// TODO
-					reply = "TODO";
+					const value = state.boxState.getHex(keyHex);
+					if (value) {
+						const keyBytes = Buffer.from(keyHex, 'hex');
+						const kv = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
+						rv = this.convertAvmKeyValue(scope, kv);
+					} else {
+						reply = `key "${key}" not found in box state`;
+					}
 				}
 			}
 		}
@@ -622,7 +633,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 			values.push({
 				name: 'length',
-				type: 'number',
+				type: 'int',
 				value: bytes.length.toString(),
 				variablesReference: 0,
 			});
@@ -664,7 +675,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 			return [
 				{
 					name: 'key',
-					type: 'object',
+					type: keyVariable.type,
 					value: keyVariable.value,
 					variablesReference: this._variableHandles.create(new AvmValueReference(keyScope, keyString)),
 					namedVariables: keyVariable.namedVariables,
@@ -673,7 +684,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					// evaluateName: evaluateNameForScope(keyScope, keyString),
 				}, {
 					name: 'value',
-					type: 'object',
+					type: keyVariable.type,
 					value: valueVariable.value,
 					variablesReference: valueHasChildren ? this._variableHandles.create(new AvmValueReference(valueScope, keyString)) : 0,
 					namedVariables: keyVariable.namedVariables,

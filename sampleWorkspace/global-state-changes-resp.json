@@ -1,17 +1,52 @@
 {
-  "exec-trace-config": {
-    "enable": true,
-    "scratch-change": true,
-    "stack-change": true,
-    "state-change": true
-  },
-  "last-round": 1,
+  "last-round": 51,
   "txn-groups": [
     {
-      "app-budget-added": 700,
-      "app-budget-consumed": 20,
       "txn-results": [
         {
+          "txn-result": {
+            "pool-error": "",
+            "txn": {
+              "sig": "9Sm0GLdwLZ8a8VWVZXFgdTnk4Bc8Gsoq5Zkc1BKUAKBMuoZRuiD91I3AP8poj8lg5/tdecZuXvaPuaSocXpiBQ==",
+              "txn": {
+                "apaa": [
+                  "iRPB+A=="
+                ],
+                "apbx": [
+                  {
+                    "n": "Ym94LWtleS0x"
+                  },
+                  {
+                    "n": "Ym94LWtleS0y"
+                  }
+                ],
+                "apid": 1050,
+                "fee": 1000,
+                "fv": 48,
+                "gen": "sandnet-v1",
+                "gh": "LSfI/BB2PAth7oDeWEH/oYncUvwuhqkSVkvKxI5kd3I=",
+                "lv": 1048,
+                "snd": "54zalZwKNOYGxmz8XSAPhmaeXvOFrN5jZYadDledqng=",
+                "type": "appl"
+              }
+            },
+            "global-state-delta": [
+              {
+                "key": "Z2xvYmFsLWludC1rZXk=",
+                "value": {
+                  "action": 2,
+                  "uint": 3735928559
+                }
+              },
+              {
+                "key": "Z2xvYmFsLWJ5dGVzLWtleQ==",
+                "value": {
+                  "action": 1,
+                  "bytes": "d2VsdCBhbSBkcmFodA=="
+                }
+              }
+            ]
+          },
           "app-budget-consumed": 20,
           "exec-trace": {
             "approval-program-hash": "elIoqp1XgWrLCBLPmaZlDsKE3sEMZBY1dlxOvBXPtak=",
@@ -24,7 +59,7 @@
                 "stack-additions": [
                   {
                     "type": 2,
-                    "uint": 1001
+                    "uint": 1050
                   }
                 ]
               },
@@ -66,8 +101,8 @@
                 "pc": 16,
                 "stack-additions": [
                   {
-                    "bytes": "jhaTEQ==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "jhaTEQ=="
                   }
                 ]
               },
@@ -75,8 +110,8 @@
                 "pc": 22,
                 "stack-additions": [
                   {
-                    "bytes": "iRPB+A==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "iRPB+A=="
                   }
                 ]
               },
@@ -84,8 +119,8 @@
                 "pc": 28,
                 "stack-additions": [
                   {
-                    "bytes": "1RPETg==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "1RPETg=="
                   }
                 ]
               },
@@ -93,8 +128,8 @@
                 "pc": 34,
                 "stack-additions": [
                   {
-                    "bytes": "iRPB+A==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "iRPB+A=="
                   }
                 ]
               },
@@ -106,8 +141,8 @@
                 "pc": 99,
                 "stack-additions": [
                   {
-                    "bytes": "Z2xvYmFsLWludC1rZXk=",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "Z2xvYmFsLWludC1rZXk="
                   }
                 ]
               },
@@ -127,11 +162,11 @@
                   {
                     "app-state-type": "g",
                     "key": "Z2xvYmFsLWludC1rZXk=",
+                    "operation": "w",
                     "new-value": {
                       "type": 2,
                       "uint": 3735928559
-                    },
-                    "operation": "w"
+                    }
                   }
                 ]
               },
@@ -139,8 +174,8 @@
                 "pc": 122,
                 "stack-additions": [
                   {
-                    "bytes": "Z2xvYmFsLWJ5dGVzLWtleQ==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "Z2xvYmFsLWJ5dGVzLWtleQ=="
                   }
                 ]
               },
@@ -148,8 +183,8 @@
                 "pc": 140,
                 "stack-additions": [
                   {
-                    "bytes": "d2VsdCBhbSBkcmFodA==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "d2VsdCBhbSBkcmFodA=="
                   }
                 ]
               },
@@ -160,11 +195,11 @@
                   {
                     "app-state-type": "g",
                     "key": "Z2xvYmFsLWJ5dGVzLWtleQ==",
+                    "operation": "w",
                     "new-value": {
-                      "bytes": "d2VsdCBhbSBkcmFodA==",
-                      "type": 1
-                    },
-                    "operation": "w"
+                      "type": 1,
+                      "bytes": "d2VsdCBhbSBkcmFodA=="
+                    }
                   }
                 ]
               },
@@ -181,45 +216,25 @@
                 ]
               }
             ]
-          },
-          "txn-result": {
-            "global-state-delta": [
-              {
-                "key": "Z2xvYmFsLWJ5dGVzLWtleQ==",
-                "value": {
-                  "action": 1,
-                  "bytes": "d2VsdCBhbSBkcmFodA=="
-                }
-              },
-              {
-                "key": "Z2xvYmFsLWludC1rZXk=",
-                "value": {
-                  "action": 2,
-                  "uint": 3735928559
-                }
-              }
-            ],
-            "pool-error": "",
-            "txn": {
-              "sig": "u5ix9E1HT626CgO9+ZAkzJxARyR4+7CLuvqGQQfYCN60+AER/9vu68wRk4u6Z956BtjSBt54MXwqs4orO1uKAw==",
-              "txn": {
-                "apaa": [
-                  "iRPB+A=="
-                ],
-                "apid": 1001,
-                "fee": 1000,
-                "fv": 1,
-                "gh": "9R64KdarsDwr9P7Z3tguzE1CsjyZk6CBbsSJArHWJk8=",
-                "lv": 1001,
-                "note": "Q9Rh/EMfVl4=",
-                "snd": "EP7ATEF3MRJNXID7TCZS6SLW4NHKMBLVQOP6X72ZIJKU3HQ5KSDZFFRLLM",
-                "type": "appl"
-              }
-            }
           }
         }
-      ]
+      ],
+      "app-budget-added": 700,
+      "app-budget-consumed": 20
     }
   ],
-  "version": 2
+  "version": 2,
+  "exec-trace-config": {
+    "enable": true,
+    "scratch-change": true,
+    "stack-change": true,
+    "state-change": true
+  },
+  "initial-states": {
+    "app-initial-states": [
+      {
+        "id": 1050
+      }
+    ]
+  }
 }

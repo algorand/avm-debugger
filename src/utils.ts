@@ -337,9 +337,7 @@ export class ByteArrayMap<T> {
         }
     }
 
-    public toSortedArray(): Array<[Uint8Array, T]> {
-        return Array.from(this.map.entries())
-            .sort()
-            .map(([key, value]) => [Buffer.from(key, 'hex'), value]);
+    public entriesHex(): IterableIterator<[string, T]> {
+        return this.map.entries();
     }
 }

@@ -1,17 +1,36 @@
 {
-  "exec-trace-config": {
-    "enable": true,
-    "scratch-change": true,
-    "stack-change": true,
-    "state-change": true
-  },
-  "last-round": 2,
+  "last-round": 59,
   "txn-groups": [
     {
-      "app-budget-added": 700,
-      "app-budget-consumed": 19,
       "txn-results": [
         {
+          "txn-result": {
+            "pool-error": "",
+            "txn": {
+              "sig": "t9sBFT0TnKRnXz61oyYvW4XL9ngK67ciWUEIRl5syDun4N7bqiOta+Sub02OmzcusmChEMf9NOn8SODAWvsNBA==",
+              "txn": {
+                "apaa": [
+                  "1RPETg=="
+                ],
+                "apbx": [
+                  {
+                    "n": "Ym94LWtleS0x"
+                  },
+                  {
+                    "n": "Ym94LWtleS0y"
+                  }
+                ],
+                "apid": 1058,
+                "fee": 1000,
+                "fv": 56,
+                "gen": "sandnet-v1",
+                "gh": "LSfI/BB2PAth7oDeWEH/oYncUvwuhqkSVkvKxI5kd3I=",
+                "lv": 1056,
+                "snd": "pYKxUMFyrKlVPWTkwgnI6LhrU9SsEWlQYO4srVQrzPE=",
+                "type": "appl"
+              }
+            }
+          },
           "app-budget-consumed": 19,
           "exec-trace": {
             "approval-program-hash": "elIoqp1XgWrLCBLPmaZlDsKE3sEMZBY1dlxOvBXPtak=",
@@ -24,7 +43,7 @@
                 "stack-additions": [
                   {
                     "type": 2,
-                    "uint": 1001
+                    "uint": 1058
                   }
                 ]
               },
@@ -66,8 +85,8 @@
                 "pc": 16,
                 "stack-additions": [
                   {
-                    "bytes": "jhaTEQ==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "jhaTEQ=="
                   }
                 ]
               },
@@ -75,8 +94,8 @@
                 "pc": 22,
                 "stack-additions": [
                   {
-                    "bytes": "iRPB+A==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "iRPB+A=="
                   }
                 ]
               },
@@ -84,8 +103,8 @@
                 "pc": 28,
                 "stack-additions": [
                   {
-                    "bytes": "1RPETg==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "1RPETg=="
                   }
                 ]
               },
@@ -93,8 +112,8 @@
                 "pc": 34,
                 "stack-additions": [
                   {
-                    "bytes": "1RPETg==",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "1RPETg=="
                   }
                 ]
               },
@@ -106,8 +125,8 @@
                 "pc": 159,
                 "stack-additions": [
                   {
-                    "bytes": "Ym94LWtleS0x",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "Ym94LWtleS0x"
                   }
                 ]
               },
@@ -115,8 +134,8 @@
                 "pc": 170,
                 "stack-additions": [
                   {
-                    "bytes": "Ym94LXZhbHVlLTE=",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "Ym94LXZhbHVlLTE="
                   }
                 ]
               },
@@ -126,8 +145,12 @@
                 "state-changes": [
                   {
                     "app-state-type": "b",
-                    "key": "Ym94LXZhbHVlLTE=",
-                    "operation": "w"
+                    "key": "Ym94LWtleS0x",
+                    "operation": "w",
+                    "new-value": {
+                      "type": 1,
+                      "bytes": "Ym94LXZhbHVlLTE="
+                    }
                   }
                 ]
               },
@@ -135,8 +158,8 @@
                 "pc": 184,
                 "stack-additions": [
                   {
-                    "bytes": "Ym94LWtleS0y",
-                    "type": 1
+                    "type": 1,
+                    "bytes": "Ym94LWtleS0y"
                   }
                 ]
               },
@@ -154,8 +177,11 @@
                 "state-changes": [
                   {
                     "app-state-type": "b",
-                    "key": "",
-                    "operation": "w"
+                    "key": "Ym94LWtleS0y",
+                    "operation": "w",
+                    "new-value": {
+                      "type": 1
+                    }
                   }
                 ]
               },
@@ -169,37 +195,25 @@
                 ]
               }
             ]
-          },
-          "txn-result": {
-            "pool-error": "",
-            "txn": {
-              "sig": "zqHstiNVtcv+AgnxVAY2GF/j7dilpubWZyD96zlos+nvyULCIqdFqLO3O2wjJA9hHBw17Sc1UsU4vLsiKYjNAg==",
-              "txn": {
-                "apaa": [
-                  "1RPETg=="
-                ],
-                "apbx": [
-                  {
-                    "n": "Ym94LWtleS0x"
-                  },
-                  {
-                    "n": "Ym94LWtleS0y"
-                  }
-                ],
-                "apid": 1001,
-                "fee": 1000,
-                "fv": 1,
-                "gh": "9R64KdarsDwr9P7Z3tguzE1CsjyZk6CBbsSJArHWJk8=",
-                "lv": 1001,
-                "note": "mJ2zVVc/4SM=",
-                "snd": "EP7ATEF3MRJNXID7TCZS6SLW4NHKMBLVQOP6X72ZIJKU3HQ5KSDZFFRLLM",
-                "type": "appl"
-              }
-            }
           }
         }
-      ]
+      ],
+      "app-budget-added": 700,
+      "app-budget-consumed": 19
     }
   ],
-  "version": 2
+  "version": 2,
+  "exec-trace-config": {
+    "enable": true,
+    "scratch-change": true,
+    "stack-change": true,
+    "state-change": true
+  },
+  "initial-states": {
+    "app-initial-states": [
+      {
+        "id": 1058
+      }
+    ]
+  }
 }

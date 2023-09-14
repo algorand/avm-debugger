@@ -373,6 +373,40 @@ function recursiveForEachTrace(trace: algosdk.modelsv2.SimulationTransactionExec
 	}
 }
 
+function createAvmKvArray(map: ByteArrayMap<algosdk.modelsv2.AvmValue>): algosdk.modelsv2.AvmKeyValue[] {
+	return Array.from(map.entriesHex())
+		.sort()
+		.map(([key, value]) => new algosdk.modelsv2.AvmKeyValue({ key: Buffer.from(key, 'hex'), value }));
+}
+
+export class AppState {
+	globalState: ByteArrayMap<algosdk.modelsv2.AvmValue>;
+	localState: Map<string, ByteArrayMap<algosdk.modelsv2.AvmValue>>;
+	boxState: ByteArrayMap<algosdk.modelsv2.AvmValue>;
+
+	constructor() {
+		this.globalState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
+		this.localState = new Map<string, ByteArrayMap<algosdk.modelsv2.AvmValue>>();
+		this.boxState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
+	}
+
+	public globalStateArray(): algosdk.modelsv2.AvmKeyValue[] {
+		return createAvmKvArray(this.globalState);
+	}
+
+	public localStateArray(): Map<string, algosdk.modelsv2.AvmKeyValue[]> {
+		const result = new Map<string, algosdk.modelsv2.AvmKeyValue[]>();
+		for (const [addr, map] of this.localState) {
+			result.set(addr, createAvmKvArray(map));
+		}
+		return result;
+	}
+
+	public boxStateArray(): algosdk.modelsv2.AvmKeyValue[] {
+		return createAvmKvArray(this.boxState);
+	}
+}
+
 export class TxnGroupWalkerRuntime extends EventEmitter {
 	private currentColumn: number | undefined;
 
@@ -607,8 +641,8 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		return Array.from(apps).sort((a, b) => a - b);
 	}
 
-	public getAppGlobalStateMap(appID: number): ByteArrayMap<algosdk.modelsv2.AvmValue> {
-		const globalState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
+	public getAppState(appID: number): AppState {
+		const state = new AppState();
 
 		this.treeWalker.forEachTraceBeforeCurrent((trace, traceAppID) => {
 			if (traceAppID !== appID) {
@@ -616,11 +650,22 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 			}
 			for (const unit of trace.approvalProgramTrace || trace.clearStateProgramTrace || []) {
 				for (const stateChange of unit.stateChanges || []) {
-					if (stateChange.appStateType === 'g') {
+					switch (stateChange.appStateType) {
+					case 'g':
 						if (stateChange.operation === 'w') {
-							globalState.set(stateChange.key, stateChange.newValue!);
+							state.globalState.set(stateChange.key, stateChange.newValue!);
 						} else if (stateChange.operation === 'd') {
-							globalState.delete(stateChange.key);
+							state.globalState.delete(stateChange.key);
+						}
+						break;
+					case 'l':
+						// TODO
+						break;
+					case 'b':
+						if (stateChange.operation === 'w') {
+							state.boxState.set(stateChange.key, stateChange.newValue!);
+						} else if (stateChange.operation === 'd') {
+							state.boxState.delete(stateChange.key);
 						}
 					}
 				}
@@ -637,23 +682,29 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 				const unit = execUnits[i];
 
 				for (const stateChange of unit.stateChanges || []) {
-					if (stateChange.appStateType === 'g') {
+					switch (stateChange.appStateType) {
+					case 'g':
 						if (stateChange.operation === 'w') {
-							globalState.set(stateChange.key, stateChange.newValue!);
+							state.globalState.set(stateChange.key, stateChange.newValue!);
 						} else if (stateChange.operation === 'd') {
-							globalState.delete(stateChange.key);
+							state.globalState.delete(stateChange.key);
+						}
+						break;
+					case 'l':
+						// TODO
+						break;
+					case 'b':
+						if (stateChange.operation === 'w') {
+							state.boxState.set(stateChange.key, stateChange.newValue!);
+						} else if (stateChange.operation === 'd') {
+							state.boxState.delete(stateChange.key);
 						}
 					}
 				}
 			}
 		}
 
-		return globalState;
-	}
-
-	public getAppGlobalStateArray(appID: number): algosdk.modelsv2.AvmKeyValue[] {
-		return this.getAppGlobalStateMap(appID).toSortedArray()
-			.map(([key, value]) => new algosdk.modelsv2.AvmKeyValue({ key, value }));
+		return state;
 	}
 
 	/**
@@ -726,38 +777,6 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	}
 
 	// Helper functions
-
-	private avmValueToRTV(avmValue: algosdk.modelsv2.AvmValue): IRuntimeVariableType {
-		let runtimeVar: IRuntimeVariableType;
-
-		if (avmValue.type === 1) {
-
-			// STOLEN FROM ALGOSDK
-			const lineBreakOrd = '\n'.charCodeAt(0);
-			const blankSpaceOrd = ' '.charCodeAt(0);
-			const tildeOrd = '~'.charCodeAt(0);
-			const isPrintable = (x: number) => blankSpaceOrd <= x && x <= tildeOrd;
-			const isAsciiPrintable = (<Uint8Array>avmValue.bytes).every(
-				(x: number) => x === lineBreakOrd || isPrintable(x)
-			);
-
-			if (isAsciiPrintable) {
-				runtimeVar = String.fromCharCode(...<Uint8Array>avmValue.bytes);
-			} else {
-				runtimeVar = Buffer.from(<Uint8Array>avmValue.bytes).toString('base64');
-			}
-		} else {
-			if (!avmValue.uint) {
-				runtimeVar = 0;
-			} else if (typeof avmValue.uint === 'number') {
-				runtimeVar = <number>avmValue.uint;
-			} else {
-				runtimeVar = <bigint>avmValue.uint;
-			}
-		}
-
-		return runtimeVar;
-	}
 
 	private verifyBreakpoints(path: string) {
 
