@@ -357,21 +357,21 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					name: 'global',
 					value: '',
 					type: 'object',
-					variablesReference: this._variableHandles.create(new AppSpecificStateScope('global', v.appID)),
+					variablesReference: this._variableHandles.create(new AppSpecificStateScope({ scope: 'global', appID: v.appID })),
 					namedVariables: 1, // TODO
 				},
 				{
 					name: 'local',
 					value: '',
 					type: 'object',
-					variablesReference: this._variableHandles.create(new AppSpecificStateScope('local', v.appID)),
+					variablesReference: this._variableHandles.create(new AppSpecificStateScope({ scope: 'local', appID: v.appID })),
 					namedVariables: 1, // TODO
 				},
 				{
 					name: 'box',
 					value: '',
 					type: 'object',
-					variablesReference: this._variableHandles.create(new AppSpecificStateScope('box', v.appID)),
+					variablesReference: this._variableHandles.create(new AppSpecificStateScope({ scope: 'box', appID: v.appID })),
 					namedVariables: 1, // TODO
 				}
 			];
@@ -380,7 +380,19 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 			if (v.scope === 'global') {
 				variables = state.globalStateArray().map(kv => this.convertAvmKeyValue(v, kv));
 			} else if (v.scope === 'local') {
-				// TODO
+				if (typeof v.account === 'undefined') {
+					const accounts = this._runtime.getAppLocalStateAccounts(v.appID);
+					variables = accounts.map(account => ({
+						name: account,
+						value: 'local state',
+						type: 'object',
+						variablesReference: this._variableHandles.create(new AppSpecificStateScope({ scope: 'local', appID: v.appID, account })),
+						namedVariables: 1, // TODO
+						evaluateName: evaluateNameForScope(v, account),
+					}));
+				} else {
+					variables = state.localStateArray(v.account).map(kv => this.convertAvmKeyValue(v, kv));
+				}
 			} else if (v.scope === 'box') {
 				variables = state.boxStateArray().map(kv => this.convertAvmKeyValue(v, kv));
 			}
@@ -410,8 +422,19 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 						throw new Error(`key "${v.key}" not found in global state`);
 					}
 				} else if (v.scope.scope === 'local') {
-					// TODO
-					throw new Error('TODO');
+					if (typeof v.scope.account === 'undefined') {
+						throw new Error('this shouldn\'t happen: ' + JSON.stringify(v));
+					} else {
+						const accountState = state.localState.get(v.scope.account);
+						if (!accountState) {
+							throw new Error(`account "${v.scope.account}" not found in local state`);
+						}
+						const value = accountState.getHex(keyHex);
+						if (!value) {
+							throw new Error(`key "${v.key}" not found in local state for account "${v.scope.account}"`);
+						}
+						toExpand = new algosdk.modelsv2.AvmKeyValue({ key: Buffer.from(keyHex, 'hex'), value });
+					}
 				} else if (v.scope.scope === 'box') {
 					const value = state.boxState.getHex(keyHex);
 					if (value) {
@@ -441,7 +464,12 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		// Note, can use args.context to perform different actions based on where the expression is evaluated
 
-		const result = evaluateNameToScope(args.expression);
+		let result: [AvmValueScope, number | string] | undefined = undefined;
+		try {
+			result = evaluateNameToScope(args.expression);
+		} catch (e) {
+			reply = (e as Error).message;
+		}
 
 		if (result) {
 			const [scope, key] = result;
@@ -471,12 +499,12 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 				} else {
 					reply = `scratch[${index}] out of range`;
 				}
-			} else if (typeof key === 'string' && key.startsWith('0x')) {
+			} else if (typeof key === 'string') {
 				const state = this._runtime.getAppState(scope.appID);
-				const keyHex = key.slice(2);
 				if (scope.property) {
 					reply = `cannot evaluate property "${scope.property}"`;
-				} else if (scope.scope === 'global') {
+				} else if (scope.scope === 'global' && key.startsWith('0x')) {
+					const keyHex = key.slice(2);
 					const value = state.globalState.getHex(keyHex);
 					if (value) {
 						const keyBytes = Buffer.from(keyHex, 'hex');
@@ -486,9 +514,35 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 						reply = `key "${key}" not found in global state`;
 					}
 				} else if (scope.scope === 'local') {
-					// TODO
-					reply = "TODO";
-				} else if (scope.scope === 'box') {
+					if (typeof scope.account === 'undefined') {
+						rv = {
+							name: key,
+							value: 'local state',
+							type: 'object',
+							variablesReference: this._variableHandles.create(new AppSpecificStateScope({ scope: 'local', appID: scope.appID, account: key })),
+							namedVariables: 1, // TODO
+							evaluateName: evaluateNameForScope(scope, key),
+						};
+					} else {
+						const accountState = state.localState.get(scope.account);
+						if (!accountState) {
+							reply = `account "${scope.account}" not found in local state`;
+						} else if (key.startsWith('0x')) {
+							const keyHex = key.slice(2);
+							const value = accountState.getHex(keyHex);
+							if (value) {
+								const keyBytes = Buffer.from(keyHex, 'hex');
+								const kv = new algosdk.modelsv2.AvmKeyValue({ key: keyBytes, value });
+								rv = this.convertAvmKeyValue(scope, kv);
+							} else {
+								reply = `key "${key}" not found in local state for account "${scope.account}"`;
+							}
+						} else {
+							reply = `cannot evaluate property "${key}"`;
+						}
+					}
+				} else if (scope.scope === 'box' && key.startsWith('0x')) {
+					const keyHex = key.slice(2);
 					const value = state.boxState.getHex(keyHex);
 					if (value) {
 						const keyBytes = Buffer.from(keyHex, 'hex');
@@ -667,8 +721,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 				return [];
 			}
 			const keyString = '0x' + Buffer.from(avmKeyValue.key || new Uint8Array()).toString('hex');
-			const keyScope = new AppSpecificStateScope(scope.scope, scope.appID, 'key');
-			const valueScope = new AppSpecificStateScope(scope.scope, scope.appID, 'value');
+			const keyScope = new AppSpecificStateScope({ scope: scope.scope, appID: scope.appID, account: scope.account, property: 'key' });
+			const valueScope = new AppSpecificStateScope({ scope: scope.scope, appID: scope.appID, account: scope.account, property: 'value' });
 			const keyVariable = this.convertAvmValue(keyScope, new algosdk.modelsv2.AvmValue({ type: 1, bytes: avmKeyValue.key }), '', false);
 			const valueVariable = this.convertAvmValue(valueScope, avmKeyValue.value, '', false);
 			const valueHasChildren = valueVariable.namedVariables || valueVariable.indexedVariables;
@@ -734,11 +788,27 @@ class AppStateScope {
 }
 
 class AppSpecificStateScope {
-	constructor(
-		public readonly scope: 'global' | 'local' | 'box',
-		public readonly appID: number,
-		public readonly property?: 'key' | 'value'
-	) { }
+	public readonly scope: 'global' | 'local' | 'box';
+	public readonly appID: number;
+	public readonly account?: string;
+	public readonly property?: 'key' | 'value';
+
+	constructor({
+		scope,
+		appID,
+		account,
+		property
+	}: {
+		scope: 'global' | 'local' | 'box',
+		appID: number,
+		account?: string,
+		property?: 'key' | 'value'
+	}) {
+		this.scope = scope;
+		this.appID = appID;
+		this.account = account;
+		this.property = property;
+	}
 }
 
 type AvmValueScope = ExecutionScope | AppSpecificStateScope;
@@ -754,10 +824,16 @@ function evaluateNameForScope(scope: AvmValueScope, key: number | string): strin
 	if (typeof scope === 'string') {
 		return `${scope}[${key}]`;
 	}
+	if (scope.scope === 'local') {
+		if (typeof scope.account === 'undefined') {
+			return `app[${scope.appID}].local[${key}]`;
+		}
+		return `app[${scope.appID}].local[${scope.account}][${key}]`;
+	}
 	return `app[${scope.appID}].${scope.scope}[${key}]${scope.property ? '.' + scope.property : ''}`;
 }
 
-function evaluateNameToScope(name: string): [AvmValueScope, key: number | string] | undefined {
+function evaluateNameToScope(name: string): [AvmValueScope, key: number | string] {
 	const stackMatches = /^stack\[(-?\d+)\]$/.exec(name);
 	if (stackMatches) {
 		return ['stack', parseInt(stackMatches[1], 10)];
@@ -766,16 +842,50 @@ function evaluateNameToScope(name: string): [AvmValueScope, key: number | string
 	if (scratchMatches) {
 		return ['scratch', parseInt(scratchMatches[1], 10)];
 	}
-	const appMatches = /^app\[(\d+)\]\.(global|local|box)\[(.+)\](?:\.(key|value))?$/.exec(name);
+	const appMatches = /^app\[(\d+)\]\.(global|box)\[(0[xX][0-9a-fA-F]+)\](?:\.(key|value))?$/.exec(name);
 	if (appMatches) {
 		const scope = appMatches[2];
-		if (scope !== 'global' && scope !== 'local' && scope !== 'box') {
+		if (scope !== 'global' && scope !== 'box') {
 			throw new Error(`Unexpected app scope: ${scope}`);
 		}
 		const property = appMatches.length > 4 ? appMatches[4] : undefined;
 		if (typeof property !== 'undefined' && property !== 'key' && property !== 'value') {
 			throw new Error(`Unexpected app property: ${property}`);
 		}
-		return [new AppSpecificStateScope(scope, parseInt(appMatches[1], 10), property), appMatches[3]];
+		const newScope = new AppSpecificStateScope({
+			scope: scope,
+			appID: parseInt(appMatches[1], 10),
+			property
+		});
+		return [newScope, appMatches[3]];
 	}
+	const appLocalMatches = /^app\[(\d+)\]\.local\[([A-Z2-7]{58})\](?:\[(0[xX][0-9a-fA-F]+)\](?:\.(key|value))?)?$/.exec(name);
+	if (appLocalMatches) {
+		const property = appLocalMatches.length > 4 ? appLocalMatches[4] : undefined;
+		if (typeof property !== 'undefined' && property !== 'key' && property !== 'value') {
+			throw new Error(`Unexpected app property: ${property}`);
+		}
+		try {
+			algosdk.decodeAddress(appLocalMatches[2]); // ensure valid address
+		} catch {
+			throw new Error(`Invalid address: ${appLocalMatches[2]}:`);
+		}
+		let account: string | undefined;
+		let key: string;
+		if (appLocalMatches.length > 3 && typeof appLocalMatches[3] !== 'undefined') {
+			account = appLocalMatches[2];
+			key = appLocalMatches[3];
+		} else {
+			account = undefined;
+			key = appLocalMatches[2];
+		}
+		const newScope = new AppSpecificStateScope({
+			scope: 'local',
+			appID: parseInt(appLocalMatches[1], 10),
+			account,
+			property
+		});
+		return [newScope, key];
+	}
+	throw new Error(`Unexpected expression: ${name}`);
 }

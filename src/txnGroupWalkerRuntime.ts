@@ -394,12 +394,12 @@ export class AppState {
 		return createAvmKvArray(this.globalState);
 	}
 
-	public localStateArray(): Map<string, algosdk.modelsv2.AvmKeyValue[]> {
-		const result = new Map<string, algosdk.modelsv2.AvmKeyValue[]>();
-		for (const [addr, map] of this.localState) {
-			result.set(addr, createAvmKvArray(map));
+	public localStateArray(account: string): algosdk.modelsv2.AvmKeyValue[] {
+		const map = this.localState.get(account);
+		if (!map) {
+			return [];
 		}
-		return result;
+		return createAvmKvArray(map);
 	}
 
 	public boxStateArray(): algosdk.modelsv2.AvmKeyValue[] {
@@ -641,8 +641,71 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		return Array.from(apps).sort((a, b) => a - b);
 	}
 
+	public getAppLocalStateAccounts(appID: number): string[] {
+		const accounts = new Set<string>();
+
+		const appInitialStates = this._debugAssets.simulateResponse.initialStates?.appInitialStates || [];
+		for (const appInitialState of appInitialStates) {
+			if (appInitialState.id === appID) {
+				for (const accountLocal of appInitialState.appLocals || []) {
+					accounts.add(accountLocal.account!);
+				}
+				break;
+			}
+		}
+
+		this.treeWalker.forEachUnit('app', (unit, txnInfo) => {
+			const unitAppID = txnInfo.txn.txn.apid || txnInfo.applicationIndex;
+			if (typeof unitAppID === 'undefined' || Number(unitAppID) !== appID) {
+				return;
+			}
+			for (const stateChange of unit.stateChanges || []) {
+				if (stateChange.appStateType === 'l') {
+					accounts.add(stateChange.account!);
+				}
+			}
+		});
+
+		return Array.from(accounts).sort();
+	}
+
 	public getAppState(appID: number): AppState {
 		const state = new AppState();
+
+		const updateState = (stateChange: algosdk.modelsv2.ApplicationStateOperation) => {
+			switch (stateChange.appStateType) {
+			case 'g':
+				if (stateChange.operation === 'w') {
+					state.globalState.set(stateChange.key, stateChange.newValue!);
+				} else if (stateChange.operation === 'd') {
+					state.globalState.delete(stateChange.key);
+				}
+				break;
+			case 'l':
+				if (stateChange.operation === 'w') {
+					const accountState = state.localState.get(stateChange.account!);
+					if (!accountState) {
+						const newState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
+						newState.set(stateChange.key, stateChange.newValue!);
+						state.localState.set(stateChange.account!, newState);
+					} else {
+						accountState.set(stateChange.key, stateChange.newValue!);
+					}
+				} else if (stateChange.operation === 'd') {
+					const accountState = state.localState.get(stateChange.account!);
+					if (accountState) {
+						accountState.delete(stateChange.key);
+					}
+				}
+				break;
+			case 'b':
+				if (stateChange.operation === 'w') {
+					state.boxState.set(stateChange.key, stateChange.newValue!);
+				} else if (stateChange.operation === 'd') {
+					state.boxState.delete(stateChange.key);
+				}
+			}
+		};
 
 		this.treeWalker.forEachTraceBeforeCurrent((trace, traceAppID) => {
 			if (traceAppID !== appID) {
@@ -650,24 +713,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 			}
 			for (const unit of trace.approvalProgramTrace || trace.clearStateProgramTrace || []) {
 				for (const stateChange of unit.stateChanges || []) {
-					switch (stateChange.appStateType) {
-					case 'g':
-						if (stateChange.operation === 'w') {
-							state.globalState.set(stateChange.key, stateChange.newValue!);
-						} else if (stateChange.operation === 'd') {
-							state.globalState.delete(stateChange.key);
-						}
-						break;
-					case 'l':
-						// TODO
-						break;
-					case 'b':
-						if (stateChange.operation === 'w') {
-							state.boxState.set(stateChange.key, stateChange.newValue!);
-						} else if (stateChange.operation === 'd') {
-							state.boxState.delete(stateChange.key);
-						}
-					}
+					updateState(stateChange);
 				}
 			}
 		});
@@ -680,26 +726,8 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 
 			for (let i = 0; i < this.treeWalker.pcIndex; i++) {
 				const unit = execUnits[i];
-
 				for (const stateChange of unit.stateChanges || []) {
-					switch (stateChange.appStateType) {
-					case 'g':
-						if (stateChange.operation === 'w') {
-							state.globalState.set(stateChange.key, stateChange.newValue!);
-						} else if (stateChange.operation === 'd') {
-							state.globalState.delete(stateChange.key);
-						}
-						break;
-					case 'l':
-						// TODO
-						break;
-					case 'b':
-						if (stateChange.operation === 'w') {
-							state.boxState.set(stateChange.key, stateChange.newValue!);
-						} else if (stateChange.operation === 'd') {
-							state.boxState.delete(stateChange.key);
-						}
-					}
+					updateState(stateChange);
 				}
 			}
 		}
