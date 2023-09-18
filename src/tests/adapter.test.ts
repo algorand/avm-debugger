@@ -22,9 +22,11 @@ export const testFileAccessor: FileAccessor = {
 };
 
 async function assertVariables(dc: DebugClient, {
+	pc,
 	stack,
 }: {
-	stack: string[],
+	pc?: number,
+	stack?: Array<number | Uint8Array>,
 }) {
 	const scopesResponse = await dc.scopesRequest({ frameId: 0 });
 	assert.ok(scopesResponse.success);
@@ -37,18 +39,40 @@ async function assertVariables(dc: DebugClient, {
 	assert.ok(executionScopeResponse.success);
 	const executionScopeVariables = executionScopeResponse.body.variables;
 
-	const stackParentVariable = executionScopeVariables.find(variable => variable.name === 'stack');
-	assert.ok(stackParentVariable);
+	if (typeof pc !== 'undefined') {
+		const pcVariable = executionScopeVariables.find(variable => variable.name === 'pc');
+		assert.ok(pcVariable);
+		assert.strictEqual(pcVariable.value, pc.toString());
+	}
 
-	const stackVariableResponse = await dc.variablesRequest({ variablesReference: stackParentVariable.variablesReference });
-	assert.ok(stackVariableResponse.success);
-	const stackVariables = stackVariableResponse.body.variables;
+	if (typeof stack !== 'undefined') {
+		const stackParentVariable = executionScopeVariables.find(variable => variable.name === 'stack');
+		assert.ok(stackParentVariable);
 
-	assert.strictEqual(stackVariables.length, stack.length);
+		const stackVariableResponse = await dc.variablesRequest({ variablesReference: stackParentVariable.variablesReference });
+		assert.ok(stackVariableResponse.success);
+		const stackVariables = stackVariableResponse.body.variables;
 
-	for (let i = 0; i < stack.length; i++) {
-		assert.strictEqual(stackVariables[0].name, i.toString());
-		assert.strictEqual(stackVariables[0].value, stack[i]);
+		assert.strictEqual(stackVariables.length, stack.length);
+
+		for (let i = 0; i < stack.length; i++) {
+			assert.strictEqual(stackVariables[i].name, i.toString());
+
+			const actualValue = stackVariables[i].value;
+			const expectedValue = stack[i];
+			
+			if (expectedValue instanceof Uint8Array) {
+				assert.strictEqual(stackVariables[i].type, 'byte[]');
+				assert.ok(actualValue.startsWith('0x'));
+				const actualBytes = Buffer.from(actualValue.slice(2), 'hex');
+				assert.deepStrictEqual(new Uint8Array(actualBytes), new Uint8Array(expectedValue));
+			} else if (typeof expectedValue === 'number') {
+				assert.strictEqual(stackVariables[i].type, 'uint64');
+				assert.strictEqual(Number(actualValue), expectedValue);
+			} else {
+				throw new Error(`Improper expected stack value: ${expectedValue}`);
+			}
+		}
 	}
 }
 
@@ -195,7 +219,26 @@ suite('Node Debug Adapter', () => {
 			await assertEvaluationEquals(dc, 'stack[2]', '0xd513c44e');
 			await assertEvaluationEquals(dc, 'stack[3]', '0x8e169311');
 
+			await assertVariables(dc, {
+				pc: 37,
+				stack: [
+					Buffer.from('8e169311', 'hex'),
+					Buffer.from('8913c1f8', 'hex'),
+					Buffer.from('d513c44e', 'hex'),
+					Buffer.from('8e169311', 'hex'),
+				],
+			});
+
 			await advanceTo(dc, { program: PROGRAM, line: 25 });
+
+			await assertVariables(dc, {
+				pc: 95,
+				stack: [
+					0,
+					Buffer.from('local-bytes-key'),
+					Buffer.from('xqcL'),
+				]
+			});
 
 			await assertEvaluationEquals(dc, 'stack[-1]', '0x' + Buffer.from('xqcL').toString('hex'));
 			await assertEvaluationEquals(dc, 'stack[-2]', '0x' + Buffer.from('local-bytes-key').toString('hex'));

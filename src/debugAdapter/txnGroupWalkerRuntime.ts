@@ -569,6 +569,12 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		this.breakPoints.delete(this.normalizePathAndCasing(path));
 	}
 
+	public getPC(): number {
+		const execUnits = this.treeWalker.findCurrentExecSteps();
+		const currentUnit = execUnits[this.treeWalker.pcIndex];
+		return Number(currentUnit.pc);
+	}
+
 	public getScratchValues(): algosdk.modelsv2.AvmValue[] {
 		const scratch: algosdk.modelsv2.AvmValue[] = [];
 		for (let i = 0; i < 256; i++) {

@@ -301,6 +301,12 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 			const stackValues = this._runtime.getStackValues();
 			variables = [
 				{
+					name: 'pc',
+					value: this._runtime.getPC().toString(),
+					type: 'uint64',
+					variablesReference: 0,
+				},
+				{
 					name: 'stack',
 					value: stackValues.length === 0 ? '[]' : '[...]',
 					type: 'array',
