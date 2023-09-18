@@ -1,7 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './debugRequestHandlers';
 import { TEALDebuggingAssets, TxnGroupSourceDescriptor, ByteArrayMap } from './utils';
@@ -100,7 +96,7 @@ class TxnGroupTreeWalker {
 			this.execTape.push({
 				txnPath: currentPath,
 				traceType: traceType,
-				srcFSPath: txnSourceDescriptor?.fileLocation.path,
+				srcFSPath: txnSourceDescriptor?.fileLocation,
 				srcMap: txnSourceDescriptor?.sourcemap,
 				hash: traceHashStr,
 				startPCIndex: 0,
@@ -116,7 +112,7 @@ class TxnGroupTreeWalker {
 				this.execTape.push({
 					txnPath: currentPath,
 					traceType: traceType,
-					srcFSPath: txnSourceDescriptor?.fileLocation.path,
+					srcFSPath: txnSourceDescriptor?.fileLocation,
 					srcMap: txnSourceDescriptor?.sourcemap,
 					hash: traceHashStr,
 					startPCIndex: startPCIndex,
@@ -132,7 +128,7 @@ class TxnGroupTreeWalker {
 			this.execTape.push({
 				txnPath: currentPath,
 				traceType: traceType,
-				srcFSPath: txnSourceDescriptor?.fileLocation.path,
+				srcFSPath: txnSourceDescriptor?.fileLocation,
 				srcMap: txnSourceDescriptor?.sourcemap,
 				hash: traceHashStr,
 				startPCIndex: startPCIndex,
@@ -168,7 +164,7 @@ class TxnGroupTreeWalker {
 					traceType: TraceType.logicSig,
 					startPCIndex: 0,
 					endPCIndex: trace.logicSigTrace.length - 1,
-					srcFSPath: txnSourceDescriptor?.fileLocation.path,
+					srcFSPath: txnSourceDescriptor?.fileLocation,
 					srcMap: txnSourceDescriptor?.sourcemap,
 					hash: traceHashStr,
 				};
@@ -427,12 +423,14 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		this.treeWalker = new TxnGroupTreeWalker(this._debugAssets);
 	}
 
+	public async setupSources() {
+		await this.treeWalker.setupSources(this.fileAccessor);
+	}
+
 	/**
 	 * Start executing the given program.
 	 */
 	public async start(stopOnEntry: boolean, debug: boolean): Promise<void> {
-		await this.treeWalker.setupSources(this.fileAccessor);
-
 		if (debug) {
 
 			for (let [fsPath, _] of this.treeWalker.fsPathTodigest) {
@@ -813,6 +811,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		if (!digest) {
 			return;
 		}
+
 		const lines = <string[]>this.treeWalker.digestToSrc.get(digest);
 		if (bps) {
 			bps.forEach(bp => {

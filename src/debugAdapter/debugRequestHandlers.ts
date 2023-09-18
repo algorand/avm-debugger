@@ -1,7 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
 import {
 	Logger, logger,
 	LoggingDebugSession,
@@ -100,7 +96,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	 * The 'initialize' request is the first request called by the frontend
 	 * to interrogate the features the debug adapter provides.
 	 */
-	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
+	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments) {
+		await this._runtime.setupSources();
 
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
@@ -201,6 +198,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		
+		// TODO: use args.program
 
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
@@ -214,19 +213,19 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 
 		const path = args.source.path as string;
-		const clientLines = args.lines || [];
+		const clientBreakpoints = args.breakpoints || [];
 
 		// clear all breakpoints for this file
 		this._runtime.clearBreakpoints(path);
 
 		// set and verify breakpoint locations
-		const actualBreakpoints0 = clientLines.map(async l => {
-			const { verified, line, id } = await this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
+		const actualBreakpoints0 = clientBreakpoints.map(async clientBp => {
+			const { verified, line, id } = await this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientBp.line));
 			const bp = new Breakpoint(verified, this.convertDebuggerLineToClient(line)) as DebugProtocol.Breakpoint;
 			bp.id = id;
 			return bp;
 		});
-		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint>(actualBreakpoints0);
+		const actualBreakpoints = await Promise.all(actualBreakpoints0);
 
 		// send back the actual breakpoint positions
 		response.body = {

@@ -1,7 +1,7 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import { FileAccessor } from './txnGroupWalkerRuntime';
+import { FileAccessor } from './debugAdapter/txnGroupWalkerRuntime';
 import { TEALDebugAdapterDescriptorFactory } from './extension';
 import { TealDebugConfigProvider } from './configuration';
 
@@ -71,17 +71,12 @@ export function activateTealDebug(context: vscode.ExtensionContext, factory: TEA
 export const workspaceFileAccessor: FileAccessor = {
 	isWindows: typeof process !== 'undefined' && process.platform === 'win32',
 	async readFile(path: string): Promise<Uint8Array> {
-		let uri: vscode.Uri;
-		try {
-			uri = pathToUri(path);
-		} catch (e) {
-			return new TextEncoder().encode(`cannot read '${path}'`);
-		}
-
+		const uri = pathToUri(path);
 		return await vscode.workspace.fs.readFile(uri);
 	},
 	async writeFile(path: string, contents: Uint8Array) {
-		await vscode.workspace.fs.writeFile(pathToUri(path), contents);
+		const uri = pathToUri(path);
+		await vscode.workspace.fs.writeFile(uri, contents);
 	}
 };
 
@@ -89,6 +84,6 @@ function pathToUri(path: string) {
 	try {
 		return vscode.Uri.file(path);
 	} catch (e) {
-		return vscode.Uri.parse(path);
+		return vscode.Uri.parse(path, true);
 	}
 }

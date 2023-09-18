@@ -3,9 +3,10 @@
 import * as Net from 'net';
 import * as vscode from 'vscode';
 import { ProviderResult } from 'vscode';
-import { TxnGroupDebugSession } from './debugRequestHandlers';
+import { TxnGroupDebugSession } from './debugAdapter/debugRequestHandlers';
 import { activateTealDebug, workspaceFileAccessor } from './activateMockDebug';
-import { TEALDebuggingAssets, TEALDebuggingAssetsDescriptor, loadTEALDAConfiguration } from './utils';
+import { TEALDebuggingAssetsDescriptor, loadTEALDAConfiguration } from './utils';
+import { TEALDebuggingAssets } from './debugAdapter/utils';
 
 const runMode: 'external' | 'server' = 'server';
 
@@ -20,8 +21,8 @@ export function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
-	const debugAssetDescriptor: TEALDebuggingAssetsDescriptor = new TEALDebuggingAssetsDescriptor(config);
-	const debugAssets: TEALDebuggingAssets = new TEALDebuggingAssets(config);
+	const debugAssetDescriptor = new TEALDebuggingAssetsDescriptor(config);
+	const debugAssets = TEALDebuggingAssets.loadFromFiles(workspaceFileAccessor, debugAssetDescriptor.simulateResponseFullPath.fsPath, debugAssetDescriptor.txnGroupSourceDescriptionFullPath.fsPath);
 
 	switch (runMode) {
 		case 'server':
@@ -88,20 +89,20 @@ class TEALDebugAdapterServerDescriptorFactory
 
 	private server?: Net.Server;
 
-	private _debugAssets: TEALDebuggingAssets;
+	private _debugAssets: Promise<TEALDebuggingAssets>;
 
-	constructor(debugAssets: TEALDebuggingAssets) {
+	constructor(debugAssets: Promise<TEALDebuggingAssets>) {
 		this._debugAssets = debugAssets;
 	}
 
-	createDebugAdapterDescriptor(
+	async createDebugAdapterDescriptor(
 		_session: vscode.DebugSession,
 		_executable: vscode.DebugAdapterExecutable | undefined
-	): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
-
+	): Promise<vscode.DebugAdapterDescriptor> {
 		if (!this.server) {
+			const debugAssets = await this._debugAssets;
 			this.server = Net.createServer(socket => {
-				const session = new TxnGroupDebugSession(workspaceFileAccessor, this._debugAssets);
+				const session = new TxnGroupDebugSession(workspaceFileAccessor, debugAssets);
 				session.setRunAsServer(true);
 				session.start(socket as NodeJS.ReadableStream, socket);
 			}).listen(0);
