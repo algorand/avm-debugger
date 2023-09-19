@@ -46,7 +46,8 @@ export interface TEALDebugAdapterDescriptorFactory
 
 class TEALDebugAdapterExecutableFactory
 	implements TEALDebugAdapterDescriptorFactory {
-
+	
+	// @ts-ignore TS6133
 	private _debugAssetDescriptor: TEALDebuggingAssetsDescriptor;
 
 	constructor(debugAssetDescriptor: TEALDebuggingAssetsDescriptor) {

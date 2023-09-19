@@ -53,10 +53,6 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 	private _configurationDone = new Subject();
 
-	private _valuesInHex = false;
-
-	private _addressesInHex = true;
-
 	private _debugAssets: TEALDebuggingAssets;
 
 	/**
@@ -781,14 +777,6 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		return uint.toString();
 	}
 
-	private formatAddress(x: number, pad = 8) {
-		return this._addressesInHex ? '0x' + x.toString(16).padStart(8, '0') : x.toString(10);
-	}
-
-	private formatNumber(x: number) {
-		return this._valuesInHex ? '0x' + x.toString(16) : x.toString(10);
-	}
-
 	private createSource(filePath: string): Source {
 		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'teal-txn-group-adapter-data');
 	}
@@ -846,7 +834,7 @@ function evaluateNameForScope(scope: AvmValueScope, key: number | string): strin
 	return `app[${scope.appID}].${scope.scope}[${key}]${scope.property ? '.' + scope.property : ''}`;
 }
 
-function evaluateNameToScope(name: string): [AvmValueScope, key: number | string] {
+function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
 	if (name === 'pc') {
 		return ['pc', 0];
 	}
