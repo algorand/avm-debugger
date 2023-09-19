@@ -278,8 +278,8 @@ describe('Debug Adapter Tests', () => {
 			await dc.start(server.port());
 		});
 
-		afterEach(() => {
-			dc.stop();
+		afterEach(async () => {
+			await dc.stop();
 			server.dispose();
 		});
 
@@ -374,8 +374,8 @@ describe('Debug Adapter Tests', () => {
 			await dc.start(server.port());
 		});
 
-		afterEach(() => {
-			dc.stop();
+		afterEach(async () => {
+			await dc.stop();
 			server.dispose();
 		});
 
@@ -479,8 +479,8 @@ describe('Debug Adapter Tests', () => {
 			await dc.start(server.port());
 		});
 
-		afterEach(() => {
-			dc.stop();
+		afterEach(async () => {
+			await dc.stop();
 			server.dispose();
 		});
 
@@ -600,8 +600,8 @@ describe('Debug Adapter Tests', () => {
 			await dc.start(server.port());
 		});
 
-		afterEach(() => {
-			dc.stop();
+		afterEach(async () => {
+			await dc.stop();
 			server.dispose();
 		});
 
