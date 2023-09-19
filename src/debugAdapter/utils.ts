@@ -58,6 +58,10 @@ export class ByteArrayMap<T> {
         }
     }
 
+    public get size(): number {
+        return this.map.size;
+    }
+
     public set(key: Uint8Array, value: T): void {
         this.map.set(Buffer.from(key).toString('hex'), value);
     }

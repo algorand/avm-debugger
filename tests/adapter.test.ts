@@ -41,7 +41,8 @@ async function assertVariables(dc: DebugClient, {
 	scratch?: Map<number, number | bigint | Uint8Array>,
 	apps?: Array<{
 		appID: number,
-		globalState?: ByteArrayMap<number | bigint | Uint8Array>
+		globalState?: ByteArrayMap<number | bigint | Uint8Array>,
+		boxState?: ByteArrayMap<number | bigint | Uint8Array>,
 	}>,
 }) {
 	const scopesResponse = await dc.scopesRequest({ frameId: 0 });
@@ -147,7 +148,7 @@ async function assertVariables(dc: DebugClient, {
 
 	if (typeof apps !== 'undefined') {
 		for (const expectedAppState of apps) {
-			const { appID, globalState } = expectedAppState;
+			const { appID, globalState, boxState } = expectedAppState;
 			const appState = appStates.find(variable => variable.name === appID.toString());
 			assert.ok(appState, `Expected app state for app ID ${appID} not found`);
 
@@ -169,6 +170,26 @@ async function assertVariables(dc: DebugClient, {
 					assert.ok(actual, `Expected global state key "${keyStr}" not found`);
 					assertAvmValuesEqual(actual, expectedValue);
 				}
+
+				assert.strictEqual(globalStateVariables.length, globalState.size);
+			}
+
+			if (typeof boxState !== 'undefined') {
+				const boxStateVariable = appStateVariables.find(variable => variable.name === 'box');
+				assert.ok(boxStateVariable);
+
+				const boxStateResponse = await dc.variablesRequest({ variablesReference: boxStateVariable.variablesReference });
+				assert.ok(boxStateResponse.success);
+				const boxStateVariables = boxStateResponse.body.variables;
+
+				for (const [key, expectedValue] of boxState.entries()) {
+					const keyStr = '0x' + Buffer.from(key).toString('hex');
+					const actual = boxStateVariables.find(variable => variable.name === keyStr);
+					assert.ok(actual, `Expected box state key "${keyStr}" not found`);
+					assertAvmValuesEqual(actual, expectedValue);
+				}
+
+				assert.strictEqual(boxStateVariables.length, boxState.size);
 			}
 		}
 	}
@@ -462,6 +483,111 @@ describe('Debug Adapter Tests', () => {
 					Buffer.from('local-bytes-key'),
 					Buffer.from('xqcL'),
 				],
+			});
+		});
+	});
+
+	describe('Box state changes', () => {
+		let server: BasicServer;
+		let dc: DebugClient;
+
+		beforeEach(async () => {
+			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+				testFileAccessor,
+				path.join(DATA_ROOT, 'box-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-sources.json')
+			);
+			server = new BasicServer(testFileAccessor, debugAssets);
+
+			dc = new DebugClient('node', '', 'teal');
+			await dc.start(server.port());
+		});
+
+		afterEach(() => {
+			dc.stop();
+			server.dispose();
+		});
+
+		it('should return variables correctly', async () => {
+			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+
+			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+
+			await assertVariables(dc, {
+				pc: 6,
+				stack: [
+					1058
+				],
+				apps: [{
+					appID: 1058,
+					boxState: new ByteArrayMap()
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 14 });
+
+			await assertVariables(dc, {
+				pc: 37,
+				stack: [
+					Buffer.from('8e169311', 'hex'),
+					Buffer.from('8913c1f8', 'hex'),
+					Buffer.from('d513c44e', 'hex'),
+					Buffer.from('d513c44e', 'hex'),
+				],
+				apps: [{
+					appID: 1058,
+					boxState: new ByteArrayMap()
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 40 });
+
+			await assertVariables(dc, {
+				pc: 183,
+				stack: [
+					Buffer.from('box-key-1'),
+					Buffer.from('box-value-1'),
+				],
+				apps: [{
+					appID: 1058,
+					boxState: new ByteArrayMap()
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 41 });
+
+			await assertVariables(dc, {
+				pc: 184,
+				stack: [],
+				apps: [{
+					appID: 1058,
+					boxState: new ByteArrayMap([
+						[
+							Buffer.from('box-key-1'),
+							Buffer.from('box-value-1'),
+						],
+					])
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 46 });
+
+			await assertVariables(dc, {
+				pc: 198,
+				stack: [],
+				apps: [{
+					appID: 1058,
+					boxState: new ByteArrayMap([
+						[
+							Buffer.from('box-key-1'),
+							Buffer.from('box-value-1'),
+						],
+						[
+							Buffer.from('box-key-2'),
+							Buffer.from(''),
+						]
+					])
+				}],
 			});
 		});
 	});
