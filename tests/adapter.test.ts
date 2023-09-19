@@ -269,7 +269,7 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'local-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-local-resp.json'),
 				path.join(DATA_ROOT, 'state-changes-sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
@@ -358,6 +358,194 @@ describe('Debug Adapter Tests', () => {
 		});
 	});
 
+	describe('Stack and scratch changes', () => {
+		let server: BasicServer;
+		let dc: DebugClient;
+
+		beforeEach(async () => {
+			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+				testFileAccessor,
+				path.join(DATA_ROOT, 'stack-scratch-resp.json'),
+				path.join(DATA_ROOT, 'stack-scratch-sources.json')
+			);
+			server = new BasicServer(testFileAccessor, debugAssets);
+
+			dc = new DebugClient('node', '', 'teal');
+			await dc.start(server.port());
+		});
+
+		afterEach(async () => {
+			await dc.stop();
+			server.dispose();
+		});
+
+		it.only('should return variables correctly', async () => {
+			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch.teal');
+
+			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+
+			await assertVariables(dc, {
+				pc: 6,
+				stack: [
+					1005
+				],
+				scratch: new Map(),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 12 });
+
+			await assertVariables(dc, {
+				pc: 18,
+				stack: [
+					10
+				],
+				scratch: new Map(),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 22 });
+
+			await assertVariables(dc, {
+				pc: 34,
+				stack: [
+					10,
+					0,
+					0,
+					0,
+					0,
+					0,
+					0,
+				],
+				scratch: new Map(),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 35 });
+
+			await assertVariables(dc, {
+				pc: 63,
+				stack: [
+					10,
+					30,
+					Buffer.from("1!"),
+					Buffer.from("5!"),
+				],
+				scratch: new Map(),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 36 });
+
+			await assertVariables(dc, {
+				pc: 80,
+				stack: [
+					10,
+					30,
+					Buffer.from("1!"),
+					Buffer.from("5!"),
+					0,
+					2,
+					1,
+					1,
+					5,
+					BigInt('18446744073709551615')
+				],
+				scratch: new Map(),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 37 });
+
+			await assertVariables(dc, {
+				pc: 82,
+				stack: [
+					10,
+					30,
+					Buffer.from("1!"),
+					Buffer.from("5!"),
+					0,
+					2,
+					1,
+					1,
+					5,
+				],
+				scratch: new Map([
+					[
+						1,
+						BigInt('18446744073709551615')
+					],
+				]),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 39 });
+
+			await assertVariables(dc, {
+				pc: 85,
+				stack: [
+					10,
+					30,
+					Buffer.from("1!"),
+					Buffer.from("5!"),
+					0,
+					2,
+					1,
+					1,
+				],
+				scratch: new Map([
+					[
+						1,
+						BigInt('18446744073709551615')
+					],
+					[
+						5,
+						BigInt('18446744073709551615')
+					],
+				]),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 41 });
+
+			await assertVariables(dc, {
+				pc: 89,
+				stack: [
+					10,
+					30,
+					Buffer.from("1!"),
+					Buffer.from("5!"),
+					0,
+					2,
+					1,
+					1,
+				],
+				scratch: new Map([
+					[
+						1,
+						BigInt('18446744073709551615')
+					],
+					[
+						5,
+						BigInt('18446744073709551615')
+					],
+				]),
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 13 });
+
+			await assertVariables(dc, {
+				pc: 21,
+				stack: [
+					30,
+				],
+				scratch: new Map([
+					[
+						1,
+						BigInt('18446744073709551615')
+					],
+					[
+						5,
+						BigInt('18446744073709551615')
+					],
+				]),
+			});
+		});
+	});
+
 	describe('Global state changes', () => {
 		let server: BasicServer;
 		let dc: DebugClient;
@@ -365,7 +553,7 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'global-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-global-resp.json'),
 				path.join(DATA_ROOT, 'state-changes-sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
@@ -470,7 +658,7 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'local-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-local-resp.json'),
 				path.join(DATA_ROOT, 'state-changes-sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
@@ -591,7 +779,7 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'box-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-box-resp.json'),
 				path.join(DATA_ROOT, 'state-changes-sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
