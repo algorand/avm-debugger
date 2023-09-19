@@ -139,7 +139,7 @@
           "teal"
         ],
         "label": "TEAL Debug",
-        "program": "./out/debugAdapter.js",
+        "program": "./out/src/debugAdaptor/debugAdapter.js",
         "runtime": "node",
         "configurationAttributes": {
           "launch": {

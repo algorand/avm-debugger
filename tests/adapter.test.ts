@@ -164,8 +164,9 @@ async function assertVariables(dc: DebugClient, {
 				const globalStateVariables = globalStateResponse.body.variables;
 
 				for (const [key, expectedValue] of globalState.entries()) {
-					const actual = globalStateVariables.find(variable => variable.name === key.toString());
-					assert.ok(actual, `Expected global state key "${Buffer.from(key).toString('hex')}" not found`);
+					const keyStr = '0x' + Buffer.from(key).toString('hex');
+					const actual = globalStateVariables.find(variable => variable.name === keyStr);
+					assert.ok(actual, `Expected global state key "${keyStr}" not found`);
 					assertAvmValuesEqual(actual, expectedValue);
 				}
 			}
@@ -205,107 +206,233 @@ const PROJECT_ROOT = path.join(__dirname, '../');
 const DATA_ROOT = path.join(PROJECT_ROOT, 'tests/data/');
 
 describe('Debug Adapter Tests', () => {
-	let server: BasicServer;
-	let dc: DebugClient;
 
-	beforeEach(async () => {
-		const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-			testFileAccessor,
-			path.join(DATA_ROOT, 'local-state-changes-resp.json'),
-			path.join(DATA_ROOT, 'state-changes-sources.json')
-		);
-		server = new BasicServer(testFileAccessor, debugAssets);
+	describe('general', () => {
+		let server: BasicServer;
+		let dc: DebugClient;
 
-		dc = new DebugClient('node', '', 'teal');
-		await dc.start(server.port());
-	});
+		beforeEach(async () => {
+			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+				testFileAccessor,
+				path.join(DATA_ROOT, 'local-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-sources.json')
+			);
+			server = new BasicServer(testFileAccessor, debugAssets);
 
-	afterEach(() => {
-		dc.stop();
-		server.dispose();
-	});
-
-	describe('basic', () => {
-		it('should produce error for unknown request', async () => {
-			let success: boolean;
-			try {
-				await dc.send('illegal_request');
-				success = true;
-			} catch (err) {
-				success = false;
-			}
-			assert.strictEqual(success, false);
+			dc = new DebugClient('node', '', 'teal');
+			await dc.start(server.port());
 		});
-	});
 
-	describe('initialize', () => {
+		afterEach(() => {
+			dc.stop();
+			server.dispose();
+		});
 
-		it('should return supported features', () => {
-			return dc.initializeRequest().then(response => {
-				response.body = response.body || {};
-				assert.strictEqual(response.body.supportsConfigurationDoneRequest, true);
+		describe('basic', () => {
+			it('should produce error for unknown request', async () => {
+				let success: boolean;
+				try {
+					await dc.send('illegal_request');
+					success = true;
+				} catch (err) {
+					success = false;
+				}
+				assert.strictEqual(success, false);
 			});
 		});
 
-		it('should produce error for invalid \'pathFormat\'', async () => {
-			let success: boolean;
-			try {
-				await dc.initializeRequest({
-					adapterID: 'teal',
-					linesStartAt1: true,
-					columnsStartAt1: true,
-					pathFormat: 'url'
+		describe('initialize', () => {
+
+			it('should return supported features', () => {
+				return dc.initializeRequest().then(response => {
+					response.body = response.body || {};
+					assert.strictEqual(response.body.supportsConfigurationDoneRequest, true);
 				});
-				success = true;
-			} catch (err) {
-				success = false;
-			}
-			assert.strictEqual(success, false);
+			});
+
+			it('should produce error for invalid \'pathFormat\'', async () => {
+				let success: boolean;
+				try {
+					await dc.initializeRequest({
+						adapterID: 'teal',
+						linesStartAt1: true,
+						columnsStartAt1: true,
+						pathFormat: 'url'
+					});
+					success = true;
+				} catch (err) {
+					success = false;
+				}
+				assert.strictEqual(success, false);
+			});
+		});
+
+		describe('launch', () => {
+
+			it('should run program to the end', async () => {
+				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+
+				await Promise.all([
+					dc.configurationSequence(),
+					dc.launch({ program: PROGRAM }),
+					dc.waitForEvent('terminated')
+				]);
+			});
+
+			it('should stop on entry', async () => {
+				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+				const ENTRY_LINE = 1;
+
+				await Promise.all([
+					dc.configurationSequence(),
+					dc.launch({ program: PROGRAM, stopOnEntry: true }),
+					dc.assertStoppedLocation('entry', { line: ENTRY_LINE } )
+				]);
+			});
+		});
+
+		describe('setBreakpoints', () => {
+
+			it('should stop on a breakpoint', async () => {
+
+				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+				const BREAKPOINT_LINE = 2;
+
+				await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
+			});
 		});
 	});
 
-	describe('launch', () => {
+	describe('Global state changes', () => {
+		let server: BasicServer;
+		let dc: DebugClient;
 
-		it('should run program to the end', async () => {
-			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+		beforeEach(async () => {
+			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+				testFileAccessor,
+				path.join(DATA_ROOT, 'global-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-sources.json')
+			);
+			server = new BasicServer(testFileAccessor, debugAssets);
 
-			await Promise.all([
-				dc.configurationSequence(),
-				dc.launch({ program: PROGRAM }),
-				dc.waitForEvent('terminated')
-			]);
+			dc = new DebugClient('node', '', 'teal');
+			await dc.start(server.port());
 		});
 
-		it('should stop on entry', async () => {
-			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
-			const ENTRY_LINE = 1;
+		afterEach(() => {
+			dc.stop();
+			server.dispose();
+		});
 
-			await Promise.all([
-				dc.configurationSequence(),
-				dc.launch({ program: PROGRAM, stopOnEntry: true }),
-				dc.assertStoppedLocation('entry', { line: ENTRY_LINE } )
-			]);
+		it('should return variables correctly', async () => {
+			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+
+			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+
+			await assertVariables(dc, {
+				pc: 6,
+				stack: [
+					1050
+				],
+				apps: [{
+					appID: 1050,
+					globalState: new ByteArrayMap()
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 14 });
+
+			await assertVariables(dc, {
+				pc: 37,
+				stack: [
+					Buffer.from('8e169311', 'hex'),
+					Buffer.from('8913c1f8', 'hex'),
+					Buffer.from('d513c44e', 'hex'),
+					Buffer.from('8913c1f8', 'hex'),
+				],
+				apps: [{
+					appID: 1050,
+					globalState: new ByteArrayMap()
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 31 });
+
+			await assertVariables(dc, {
+				pc: 121,
+				stack: [
+					Buffer.from('global-int-key'),
+					0xdeadbeef,
+				],
+				apps: [{
+					appID: 1050,
+					globalState: new ByteArrayMap()
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 32 });
+
+			await assertVariables(dc, {
+				pc: 122,
+				stack: [],
+				apps: [{
+					appID: 1050,
+					globalState: new ByteArrayMap([
+						[
+							Buffer.from('global-int-key'),
+							0xdeadbeef,
+						],
+					])
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 35 });
+
+			await assertVariables(dc, {
+				pc: 156,
+				stack: [],
+				apps: [{
+					appID: 1050,
+					globalState: new ByteArrayMap<number | bigint | Uint8Array>([
+						[
+							Buffer.from('global-int-key'),
+							0xdeadbeef,
+						],
+						[
+							Buffer.from('global-bytes-key'),
+							Buffer.from('welt am draht'),
+						]
+					])
+				}],
+			});
 		});
 	});
 
-	describe('setBreakpoints', () => {
+	describe('Local state changes', () => {
+		let server: BasicServer;
+		let dc: DebugClient;
 
-		it('should stop on a breakpoint', async () => {
+		beforeEach(async () => {
+			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+				testFileAccessor,
+				path.join(DATA_ROOT, 'local-state-changes-resp.json'),
+				path.join(DATA_ROOT, 'state-changes-sources.json')
+			);
+			server = new BasicServer(testFileAccessor, debugAssets);
 
-			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
-			const BREAKPOINT_LINE = 2;
-
-			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
+			dc = new DebugClient('node', '', 'teal');
+			await dc.start(server.port());
 		});
-	});
 
-	describe('evaluation', () => {
+		afterEach(() => {
+			dc.stop();
+			server.dispose();
+		});
 
-		it('should return variables', async () => {
+		it('should return variables correctly', async () => {
 			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
-			const BREAKPOINT_LINE = 3;
 
-			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
+			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
 			await assertVariables(dc, {
 				pc: 6,
