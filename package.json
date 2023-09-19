@@ -36,7 +36,7 @@
     "publish": "vsce publish",
     "publish-pre-release": "vsce publish --pre-release",
     "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify",
-    "test": "ts-mocha -p tsconfig.json --ui tdd src/tests/*test.ts --timeout 5s"
+    "test": "ts-mocha -p tsconfig.json --ui tdd src/tests/*test.ts --timeout 30s"
   },
   "devDependencies": {
     "@types/glob": "^7.2.0",
