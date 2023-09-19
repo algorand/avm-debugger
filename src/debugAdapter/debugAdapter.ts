@@ -1,7 +1,3 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
 import { TxnGroupDebugSession } from './debugRequestHandlers';
 
 import { promises as fs } from 'fs';
