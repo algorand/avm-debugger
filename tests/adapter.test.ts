@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as algosdk from 'algosdk';
 import { DebugClient } from '@vscode/debugadapter-testsupport';
 import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
 import { BasicServer } from '../src/debugAdapter/basicServer';
@@ -42,6 +43,10 @@ async function assertVariables(dc: DebugClient, {
 	apps?: Array<{
 		appID: number,
 		globalState?: ByteArrayMap<number | bigint | Uint8Array>,
+		localState?: Array<{
+			account: string,
+			state: ByteArrayMap<number | bigint | Uint8Array>,
+		}>,
 		boxState?: ByteArrayMap<number | bigint | Uint8Array>,
 	}>,
 }) {
@@ -148,7 +153,7 @@ async function assertVariables(dc: DebugClient, {
 
 	if (typeof apps !== 'undefined') {
 		for (const expectedAppState of apps) {
-			const { appID, globalState, boxState } = expectedAppState;
+			const { appID, globalState, localState, boxState } = expectedAppState;
 			const appState = appStates.find(variable => variable.name === appID.toString());
 			assert.ok(appState, `Expected app state for app ID ${appID} not found`);
 
@@ -172,6 +177,35 @@ async function assertVariables(dc: DebugClient, {
 				}
 
 				assert.strictEqual(globalStateVariables.length, globalState.size);
+			}
+
+			if (typeof localState !== 'undefined') {
+				const localStateVariable = appStateVariables.find(variable => variable.name === 'local');
+				assert.ok(localStateVariable);
+
+				const localStateResponse = await dc.variablesRequest({ variablesReference: localStateVariable.variablesReference });
+				assert.ok(localStateResponse.success);
+				const localStateAccounts = localStateResponse.body.variables;
+
+				for (const expectedAccountState of localState) {
+					const accountLocalState = localStateAccounts.find(variable => variable.name === expectedAccountState.account);
+					assert.ok(accountLocalState, `Expected local state for account ${expectedAccountState.account} not found`);
+
+					const accountLocalStateResponse = await dc.variablesRequest({ variablesReference: accountLocalState.variablesReference });
+					assert.ok(accountLocalStateResponse.success);
+					const accountLocalStateVariables = accountLocalStateResponse.body.variables;
+
+					for (const [key, expectedValue] of expectedAccountState.state.entries()) {
+						const keyStr = '0x' + Buffer.from(key).toString('hex');
+						const actual = accountLocalStateVariables.find(variable => variable.name === keyStr);
+						assert.ok(actual, `Expected local state key "${keyStr}" not found`);
+						assertAvmValuesEqual(actual, expectedValue);
+					}
+
+					assert.strictEqual(accountLocalStateVariables.length, expectedAccountState.state.size);
+				}
+
+				assert.strictEqual(localStateAccounts.length, localState.length);
 			}
 
 			if (typeof boxState !== 'undefined') {
@@ -460,6 +494,13 @@ describe('Debug Adapter Tests', () => {
 				stack: [
 					1054
 				],
+				apps: [{
+					appID: 1054,
+					localState: [{
+						account: 'YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4',
+						state: new ByteArrayMap(),
+					}],
+				}],
 			});
 
 			await advanceTo(dc, { program: PROGRAM, line: 14 });
@@ -472,17 +513,73 @@ describe('Debug Adapter Tests', () => {
 					Buffer.from('d513c44e', 'hex'),
 					Buffer.from('8e169311', 'hex'),
 				],
+				apps: [{
+					appID: 1054,
+					localState: [{
+						account: 'YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4',
+						state: new ByteArrayMap(),
+					}],
+				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 25 });
+			await advanceTo(dc, { program: PROGRAM, line: 21 });
 
 			await assertVariables(dc, {
-				pc: 95,
+				pc: 69,
 				stack: [
-					0,
-					Buffer.from('local-bytes-key'),
-					Buffer.from('xqcL'),
+					algosdk.decodeAddress('YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4').publicKey,
+					Buffer.from('local-int-key'),
+					0xcafeb0ba,
 				],
+				apps: [{
+					appID: 1054,
+					localState: [{
+						account: 'YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4',
+						state: new ByteArrayMap(),
+					}],
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 22 });
+
+			await assertVariables(dc, {
+				pc: 70,
+				stack: [],
+				apps: [{
+					appID: 1054,
+					localState: [{
+						account: 'YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4',
+						state: new ByteArrayMap([
+							[
+								Buffer.from('local-int-key'),
+								0xcafeb0ba,
+							],
+						]),
+					}],
+				}],
+			});
+
+			await advanceTo(dc, { program: PROGRAM, line: 26 });
+
+			await assertVariables(dc, {
+				pc: 96,
+				stack: [],
+				apps: [{
+					appID: 1054,
+					localState: [{
+						account: 'YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4',
+						state: new ByteArrayMap<number | bigint | Uint8Array>([
+							[
+								Buffer.from('local-int-key'),
+								0xcafeb0ba,
+							],
+							[
+								Buffer.from('local-bytes-key'),
+								Buffer.from('xqcL'),
+							],
+						]),
+					}],
+				}],
 			});
 		});
 	});
