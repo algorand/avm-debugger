@@ -1,8 +1,8 @@
 import * as assert from 'assert';
-import * as Path from 'path';
+import * as path from 'path';
 import * as fs from 'fs';
 import { DebugClient } from '@vscode/debugadapter-testsupport';
-import { TEALDebuggingAssets } from '../debugAdapter/utils';
+import { TEALDebuggingAssets, ByteArrayMap } from '../debugAdapter/utils';
 import { BasicServer } from '../debugAdapter/basicServer';
 import { FileAccessor } from '../debugAdapter/txnGroupWalkerRuntime';
 
@@ -16,12 +16,33 @@ export const testFileAccessor: FileAccessor = {
 	}
 };
 
+function assertAvmValuesEqual(actual: { value: string, type?: string }, expectedValue: number | bigint | Uint8Array) {
+	if (expectedValue instanceof Uint8Array) {
+		assert.strictEqual(actual.type, 'byte[]');
+		assert.ok(actual.value.startsWith('0x'));
+		const actualBytes = Buffer.from(actual.value.slice(2), 'hex');
+		assert.deepStrictEqual(new Uint8Array(actualBytes), new Uint8Array(expectedValue));
+	} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
+		assert.strictEqual(actual.type, 'uint64');
+		assert.strictEqual(BigInt(actual.value), BigInt(expectedValue));
+	} else {
+		throw new Error(`Improper expected value: ${expectedValue}`);
+	}
+}
+
 async function assertVariables(dc: DebugClient, {
 	pc,
 	stack,
+	scratch,
+	apps,
 }: {
 	pc?: number,
 	stack?: Array<number | bigint | Uint8Array>,
+	scratch?: Map<number, number | bigint | Uint8Array>,
+	apps?: Array<{
+		appID: number,
+		globalState?: ByteArrayMap<number | bigint | Uint8Array>
+	}>,
 }) {
 	const scopesResponse = await dc.scopesRequest({ frameId: 0 });
 	assert.ok(scopesResponse.success);
@@ -33,6 +54,20 @@ async function assertVariables(dc: DebugClient, {
 	const executionScopeResponse = await dc.variablesRequest({ variablesReference: executionScope.variablesReference });
 	assert.ok(executionScopeResponse.success);
 	const executionScopeVariables = executionScopeResponse.body.variables;
+
+	const onChainScope = scopes.find(scope => scope.name === 'On-chain State');
+	assert.ok(onChainScope);
+
+	const onChainScopeResponse = await dc.variablesRequest({ variablesReference: onChainScope.variablesReference });
+	assert.ok(onChainScopeResponse.success);
+	const onChainScopeVariables = onChainScopeResponse.body.variables;
+
+	const appStateVariable = onChainScopeVariables.find(variable => variable.name === 'app');
+	assert.ok(appStateVariable);
+
+	const appStateVariableResponse = await dc.variablesRequest({ variablesReference: appStateVariable.variablesReference });
+	assert.ok(appStateVariableResponse.success);
+	const appStates = appStateVariableResponse.body.variables;
 
 	if (typeof pc !== 'undefined') {
 		const pcVariable = executionScopeVariables.find(variable => variable.name === 'pc');
@@ -55,21 +90,7 @@ async function assertVariables(dc: DebugClient, {
 
 		for (let i = 0; i < stack.length; i++) {
 			assert.strictEqual(stackVariables[i].name, i.toString());
-
-			const actualValue = stackVariables[i].value;
-			const expectedValue = stack[i];
-			
-			if (expectedValue instanceof Uint8Array) {
-				assert.strictEqual(stackVariables[i].type, 'byte[]');
-				assert.ok(actualValue.startsWith('0x'));
-				const actualBytes = Buffer.from(actualValue.slice(2), 'hex');
-				assert.deepStrictEqual(new Uint8Array(actualBytes), new Uint8Array(expectedValue));
-			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				assert.strictEqual(stackVariables[i].type, 'uint64');
-				assert.strictEqual(BigInt(actualValue), BigInt(expectedValue));
-			} else {
-				throw new Error(`Improper expected stack value: ${expectedValue}`);
-			}
+			assertAvmValuesEqual(stackVariables[i], stack[i]);
 		}
 
 		await Promise.all(stack.map(async (expectedValue, i) => {
@@ -81,6 +102,74 @@ async function assertVariables(dc: DebugClient, {
 				throw new Error(`Improper expected stack value: ${expectedValue}`);
 			}
 		}));
+	}
+
+	if (typeof scratch !== 'undefined') {
+		for (const key of scratch.keys()) {
+			if (key < 0 || key > 255) {
+				assert.fail(`Invalid scratch key: ${key}`);
+			}
+		}
+
+		const scratchParentVariable = executionScopeVariables.find(variable => variable.name === 'scratch');
+		assert.ok(scratchParentVariable);
+
+		const scratchVariableResponse = await dc.variablesRequest({ variablesReference: scratchParentVariable.variablesReference });
+		assert.ok(scratchVariableResponse.success);
+		const scratchVariables = scratchVariableResponse.body.variables;
+
+		assert.strictEqual(scratchVariables.length, 256);
+
+		for (let i = 0; i < 256; i++) {
+			assert.strictEqual(scratchVariables[i].name, i.toString());
+			let expectedValue = scratch.get(i);
+			if (typeof expectedValue === 'undefined') {
+				expectedValue = 0;
+			}
+			assertAvmValuesEqual(scratchVariables[i], expectedValue);
+		}
+
+		await Promise.all(scratchVariables.map(async (actual, i) => {
+			let expectedValue = scratch.get(i);
+			if (typeof expectedValue === 'undefined') {
+				expectedValue = 0;
+			}
+
+			if (expectedValue instanceof Uint8Array) {
+				await assertEvaluationEquals(dc, `scratch[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
+			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
+				await assertEvaluationEquals(dc, `scratch[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
+			} else {
+				throw new Error(`Improper expected scratch value: ${expectedValue}`);
+			}
+		}));
+	}
+
+	if (typeof apps !== 'undefined') {
+		for (const expectedAppState of apps) {
+			const { appID, globalState } = expectedAppState;
+			const appState = appStates.find(variable => variable.name === appID.toString());
+			assert.ok(appState, `Expected app state for app ID ${appID} not found`);
+
+			const appStateResponse = await dc.variablesRequest({ variablesReference: appState.variablesReference });
+			assert.ok(appStateResponse.success);
+			const appStateVariables = appStateResponse.body.variables;
+
+			if (typeof globalState !== 'undefined') {
+				const globalStateVariable = appStateVariables.find(variable => variable.name === 'global');
+				assert.ok(globalStateVariable);
+
+				const globalStateResponse = await dc.variablesRequest({ variablesReference: globalStateVariable.variablesReference });
+				assert.ok(globalStateResponse.success);
+				const globalStateVariables = globalStateResponse.body.variables;
+
+				for (const [key, expectedValue] of globalState.entries()) {
+					const actual = globalStateVariables.find(variable => variable.name === key.toString());
+					assert.ok(actual, `Expected global state key "${Buffer.from(key).toString('hex')}" not found`);
+					assertAvmValuesEqual(actual, expectedValue);
+				}
+			}
+		}
 	}
 }
 
@@ -112,89 +201,86 @@ async function assertEvaluationEquals(dc: DebugClient, expression: string, expec
 	}
 }
 
-suite('Node Debug Adapter', () => {
+const PROJECT_ROOT = path.join(__dirname, '../../');
+const DATA_ROOT = path.join(PROJECT_ROOT, 'src/tests/data/');
 
-	const DEBUG_ADAPTER = './out/debugAdapter.js';
-
-	const PROJECT_ROOT = Path.join(__dirname, '../../');
-	const DATA_ROOT = Path.join(PROJECT_ROOT, 'src/tests/data/');
-
-
+describe('Debug Adapter Tests', () => {
 	let server: BasicServer;
 	let dc: DebugClient;
 
-	setup( async () => {
+	beforeEach(async () => {
 		const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 			testFileAccessor,
-			Path.join(DATA_ROOT, 'local-state-changes-resp.json'),
-			Path.join(DATA_ROOT, 'state-changes-sources.json')
+			path.join(DATA_ROOT, 'local-state-changes-resp.json'),
+			path.join(DATA_ROOT, 'state-changes-sources.json')
 		);
 		server = new BasicServer(testFileAccessor, debugAssets);
 
-		dc = new DebugClient('node', DEBUG_ADAPTER, 'teal');
+		dc = new DebugClient('node', '', 'teal');
 		await dc.start(server.port());
 	});
 
-	teardown( () => {
+	afterEach(() => {
 		dc.stop();
 		server.dispose();
 	});
 
-
-	suite('basic', () => {
-
-		test('unknown request should produce error', done => {
-			dc.send('illegal_request').then(() => {
-				done(new Error("does not report error on unknown request"));
-			}).catch(() => {
-				done();
-			});
+	describe('basic', () => {
+		it('should produce error for unknown request', async () => {
+			let success: boolean;
+			try {
+				await dc.send('illegal_request');
+				success = true;
+			} catch (err) {
+				success = false;
+			}
+			assert.strictEqual(success, false);
 		});
 	});
 
-	suite('initialize', () => {
+	describe('initialize', () => {
 
-		test('should return supported features', () => {
+		it('should return supported features', () => {
 			return dc.initializeRequest().then(response => {
 				response.body = response.body || {};
 				assert.strictEqual(response.body.supportsConfigurationDoneRequest, true);
 			});
 		});
 
-		test('should produce error for invalid \'pathFormat\'', done => {
-			dc.initializeRequest({
-				adapterID: 'teal',
-				linesStartAt1: true,
-				columnsStartAt1: true,
-				pathFormat: 'url'
-			}).then(response => {
-				done(new Error("does not report error on invalid 'pathFormat' attribute"));
-			}).catch(err => {
-				// error expected
-				done();
-			});
+		it('should produce error for invalid \'pathFormat\'', async () => {
+			let success: boolean;
+			try {
+				await dc.initializeRequest({
+					adapterID: 'teal',
+					linesStartAt1: true,
+					columnsStartAt1: true,
+					pathFormat: 'url'
+				});
+				success = true;
+			} catch (err) {
+				success = false;
+			}
+			assert.strictEqual(success, false);
 		});
 	});
 
-	suite('launch', () => {
+	describe('launch', () => {
 
-		test('should run program to the end', () => {
+		it('should run program to the end', async () => {
+			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
 
-			const PROGRAM = Path.join(DATA_ROOT, 'state-changes.teal');
-
-			return Promise.all([
+			await Promise.all([
 				dc.configurationSequence(),
 				dc.launch({ program: PROGRAM }),
 				dc.waitForEvent('terminated')
 			]);
 		});
 
-		test('should stop on entry', () => {
-
-			const PROGRAM = Path.join(DATA_ROOT, 'state-changes.teal');
+		it('should stop on entry', async () => {
+			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
 			const ENTRY_LINE = 1;
 
-			return Promise.all([
+			await Promise.all([
 				dc.configurationSequence(),
 				dc.launch({ program: PROGRAM, stopOnEntry: true }),
 				dc.assertStoppedLocation('entry', { line: ENTRY_LINE } )
@@ -202,21 +288,21 @@ suite('Node Debug Adapter', () => {
 		});
 	});
 
-	suite('setBreakpoints', () => {
+	describe('setBreakpoints', () => {
 
-		test('should stop on a breakpoint', () => {
+		it('should stop on a breakpoint', async () => {
 
-			const PROGRAM = Path.join(DATA_ROOT, 'state-changes.teal');
+			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
 			const BREAKPOINT_LINE = 2;
 
-			return dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
+			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
 		});
 	});
 
-	suite('evaluation', () => {
+	describe('evaluation', () => {
 
-		test('should return variables', async () => {
-			const PROGRAM = Path.join(DATA_ROOT, 'state-changes.teal');
+		it('should return variables', async () => {
+			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
 			const BREAKPOINT_LINE = 3;
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
@@ -248,7 +334,7 @@ suite('Node Debug Adapter', () => {
 					0,
 					Buffer.from('local-bytes-key'),
 					Buffer.from('xqcL'),
-				]
+				],
 			});
 		});
 	});

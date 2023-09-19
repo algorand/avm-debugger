@@ -51,8 +51,11 @@ export class ByteArrayMap<T> {
     
     private map: Map<string, T>;
 
-    constructor() {
+    constructor(entries?: Array<[Uint8Array, T]> | null) {
         this.map = new Map<string, T>();
+        for (const [key, value] of entries || []) {
+            this.set(key, value);
+        }
     }
 
     public set(key: Uint8Array, value: T): void {
