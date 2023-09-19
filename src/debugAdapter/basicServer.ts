@@ -13,9 +13,12 @@ export class BasicServer {
             session.setRunAsServer(true);
             session.start(socket as NodeJS.ReadableStream, socket);
             socket.on('error', (err) => {
-                console.error(err);
+                throw err;
             });
         }).listen(0);
+        this.server.on('error', (err) => {
+            throw err;
+        });
     }
 
     port(): number {
