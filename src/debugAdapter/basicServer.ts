@@ -12,6 +12,9 @@ export class BasicServer {
             const session = new TxnGroupDebugSession(fileAccessor, debugAssets);
             session.setRunAsServer(true);
             session.start(socket as NodeJS.ReadableStream, socket);
+            socket.on('error', (err) => {
+                console.error(err);
+            });
         }).listen(0);
     }
 

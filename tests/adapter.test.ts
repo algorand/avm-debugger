@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as algosdk from 'algosdk';
 import { DebugClient } from '@vscode/debugadapter-testsupport';
 import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
@@ -10,10 +10,10 @@ import { FileAccessor } from '../src/debugAdapter/txnGroupWalkerRuntime';
 export const testFileAccessor: FileAccessor = {
 	isWindows: typeof process !== 'undefined' && process.platform === 'win32',
 	async readFile(path: string): Promise<Uint8Array> {
-		return fs.readFileSync(path);
+		return await fs.readFile(path);
 	},
 	async writeFile(path: string, contents: Uint8Array) {
-		return fs.writeFileSync(path, contents);
+		return await fs.writeFile(path, contents);
 	}
 };
 
