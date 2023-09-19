@@ -2,9 +2,9 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs';
 import { DebugClient } from '@vscode/debugadapter-testsupport';
-import { TEALDebuggingAssets, ByteArrayMap } from '../debugAdapter/utils';
-import { BasicServer } from '../debugAdapter/basicServer';
-import { FileAccessor } from '../debugAdapter/txnGroupWalkerRuntime';
+import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
+import { BasicServer } from '../src/debugAdapter/basicServer';
+import { FileAccessor } from '../src/debugAdapter/txnGroupWalkerRuntime';
 
 export const testFileAccessor: FileAccessor = {
 	isWindows: typeof process !== 'undefined' && process.platform === 'win32',
@@ -201,8 +201,8 @@ async function assertEvaluationEquals(dc: DebugClient, expression: string, expec
 	}
 }
 
-const PROJECT_ROOT = path.join(__dirname, '../../');
-const DATA_ROOT = path.join(PROJECT_ROOT, 'src/tests/data/');
+const PROJECT_ROOT = path.join(__dirname, '../');
+const DATA_ROOT = path.join(PROJECT_ROOT, 'tests/data/');
 
 describe('Debug Adapter Tests', () => {
 	let server: BasicServer;
