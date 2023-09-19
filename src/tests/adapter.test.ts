@@ -26,7 +26,7 @@ async function assertVariables(dc: DebugClient, {
 	stack,
 }: {
 	pc?: number,
-	stack?: Array<number | Uint8Array>,
+	stack?: Array<number | bigint | Uint8Array>,
 }) {
 	const scopesResponse = await dc.scopesRequest({ frameId: 0 });
 	assert.ok(scopesResponse.success);
@@ -42,7 +42,10 @@ async function assertVariables(dc: DebugClient, {
 	if (typeof pc !== 'undefined') {
 		const pcVariable = executionScopeVariables.find(variable => variable.name === 'pc');
 		assert.ok(pcVariable);
+		assert.strictEqual(pcVariable.type, 'uint64');
 		assert.strictEqual(pcVariable.value, pc.toString());
+
+		await assertEvaluationEquals(dc, 'pc', { value: pc.toString(), type: 'uint64' });
 	}
 
 	if (typeof stack !== 'undefined') {
@@ -66,13 +69,23 @@ async function assertVariables(dc: DebugClient, {
 				assert.ok(actualValue.startsWith('0x'));
 				const actualBytes = Buffer.from(actualValue.slice(2), 'hex');
 				assert.deepStrictEqual(new Uint8Array(actualBytes), new Uint8Array(expectedValue));
-			} else if (typeof expectedValue === 'number') {
+			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
 				assert.strictEqual(stackVariables[i].type, 'uint64');
-				assert.strictEqual(Number(actualValue), expectedValue);
+				assert.strictEqual(BigInt(actualValue), BigInt(expectedValue));
 			} else {
 				throw new Error(`Improper expected stack value: ${expectedValue}`);
 			}
 		}
+
+		await Promise.all(stack.map(async (expectedValue, i) => {
+			if (expectedValue instanceof Uint8Array) {
+				await assertEvaluationEquals(dc, `stack[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
+			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
+				await assertEvaluationEquals(dc, `stack[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
+			} else {
+				throw new Error(`Improper expected stack value: ${expectedValue}`);
+			}
+		}));
 	}
 }
 
@@ -95,10 +108,13 @@ async function advanceTo(dc: DebugClient, args: { program: string, line: number,
 	await dc.assertStoppedLocation('breakpoint', { path: args.program, line: args.line, column: args.column });
 }
 
-async function assertEvaluationEquals(dc: DebugClient, expression: string, expectedValue: string) {
+async function assertEvaluationEquals(dc: DebugClient, expression: string, expected: { value: string, type?: string }) {
 	const response = await dc.evaluateRequest({ expression });
 	assert.ok(response.success);
-	assert.strictEqual(response.body.result, expectedValue, `Expected "${expression}" to evaluate to "${expectedValue}", but got "${response.body.result}"`);
+	assert.strictEqual(response.body.result, expected.value, `Expected "${expression}" to evaluate to "${expected.value}", but got "${response.body.result}"`);
+	if (expected.type) {
+		assert.strictEqual(response.body.type, expected.type, `Expected "${expression}" to have type "${expected.type}", but got "${response.body.type}"`);
+	}
 }
 
 suite('Node Debug Adapter', () => {
@@ -210,14 +226,14 @@ suite('Node Debug Adapter', () => {
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
 
-			await assertEvaluationEquals(dc, 'stack[0]', '1054');
+			await assertVariables(dc, {
+				pc: 6,
+				stack: [
+					1054
+				],
+			});
 
 			await advanceTo(dc, { program: PROGRAM, line: 14 });
-
-			await assertEvaluationEquals(dc, 'stack[0]', '0x8e169311');
-			await assertEvaluationEquals(dc, 'stack[1]', '0x8913c1f8');
-			await assertEvaluationEquals(dc, 'stack[2]', '0xd513c44e');
-			await assertEvaluationEquals(dc, 'stack[3]', '0x8e169311');
 
 			await assertVariables(dc, {
 				pc: 37,
@@ -239,9 +255,6 @@ suite('Node Debug Adapter', () => {
 					Buffer.from('xqcL'),
 				]
 			});
-
-			await assertEvaluationEquals(dc, 'stack[-1]', '0x' + Buffer.from('xqcL').toString('hex'));
-			await assertEvaluationEquals(dc, 'stack[-2]', '0x' + Buffer.from('local-bytes-key').toString('hex'));
 		});
 	});
 });

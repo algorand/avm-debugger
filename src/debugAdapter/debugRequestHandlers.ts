@@ -305,13 +305,13 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 					value: this._runtime.getPC().toString(),
 					type: 'uint64',
 					variablesReference: 0,
+					evaluateName: 'pc'
 				},
 				{
 					name: 'stack',
 					value: stackValues.length === 0 ? '[]' : '[...]',
 					type: 'array',
 					variablesReference: this._variableHandles.create('stack'),
-					namedVariables: 1,
 					indexedVariables: stackValues.length,
 					presentationHint: {
 						kind: 'data',
@@ -478,7 +478,15 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		if (result) {
 			const [scope, key] = result;
-			if (scope === 'stack') {
+			if (scope === 'pc') {
+				rv = {
+					name: 'pc',
+					value: this._runtime.getPC().toString(),
+					type: 'uint64',
+					variablesReference: 0,
+					evaluateName: 'pc'
+				};
+			} else if (scope === 'stack') {
 				let index = key as number;
 				const stackValues = this._runtime.getStackValues();
 				if (index < 0) {
@@ -786,7 +794,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	}
 }
 
-type ExecutionScope = 'stack' | 'scratch';
+type ExecutionScope = 'pc' | 'stack' | 'scratch';
 
 class AppStateScope {
 	constructor(public readonly appID: number) { }
@@ -839,6 +847,9 @@ function evaluateNameForScope(scope: AvmValueScope, key: number | string): strin
 }
 
 function evaluateNameToScope(name: string): [AvmValueScope, key: number | string] {
+	if (name === 'pc') {
+		return ['pc', 0];
+	}
 	const stackMatches = /^stack\[(-?\d+)\]$/.exec(name);
 	if (stackMatches) {
 		return ['stack', parseInt(stackMatches[1], 10)];
