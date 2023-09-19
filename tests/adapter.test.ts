@@ -379,7 +379,7 @@ describe('Debug Adapter Tests', () => {
 			server.dispose();
 		});
 
-		it.only('should return variables correctly', async () => {
+		it('should return variables correctly', async () => {
 			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch.teal');
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
