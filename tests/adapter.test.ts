@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as algosdk from 'algosdk';
-import { DebugClient } from '@vscode/debugadapter-testsupport';
+import { DebugClient } from './client';
 import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
 import { BasicServer } from '../src/debugAdapter/basicServer';
 import { FileAccessor } from '../src/debugAdapter/txnGroupWalkerRuntime';
@@ -285,6 +285,11 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
+			// dc = new DebugClient('node', [
+			// 	'./out/src/debugAdaptor/debugAdaptor.js',
+			// 	'--simulateResponsePath=' + path.join(DATA_ROOT, 'state-changes-local-resp.json'),
+			// 	'--txnGroupSourcesDescriptionPath=' + path.join(DATA_ROOT, 'state-changes-sources.json'),
+			// ] as any, 'teal');
 			dc = new DebugClient('node', '', 'teal');
 			await dc.start(server.port());
 		});
@@ -381,7 +386,7 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', '', 'teal');
+			dc = new DebugClient('node', './out/debugAdaptor/debugAdaptor.js', 'teal');
 			await dc.start(server.port());
 
 			console.log('beforeEach done');

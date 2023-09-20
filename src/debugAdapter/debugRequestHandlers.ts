@@ -59,10 +59,10 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	 * Creates a new debug adapter that is used for one debug session.
 	 * We configure the default implementation of a debug adapter here.
 	 */
-	public constructor(fileAccessor: FileAccessor, debugAssets?: TEALDebuggingAssets) {
+	public constructor(fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
 		super("mock-debug.txt");
 
-		this._debugAssets = <TEALDebuggingAssets>debugAssets;
+		this._debugAssets = debugAssets;
 
 		// this debugger uses zero-based lines and columns
 		this.setDebuggerLinesStartAt1(false);
