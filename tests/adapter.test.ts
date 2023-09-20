@@ -259,6 +259,7 @@ async function assertEvaluationEquals(dc: DebugClient, expression: string, expec
 }
 
 const PROJECT_ROOT = path.join(__dirname, '../');
+const DEBUG_CLIENT_PATH = path.join(PROJECT_ROOT, 'out/debugAdapter/debugAdapter.js');
 const DATA_ROOT = path.join(PROJECT_ROOT, 'tests/data/');
 
 describe('Debug Adapter Tests', () => {
@@ -275,12 +276,17 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
-			// dc = new DebugClient('node', [
-			// 	'./out/src/debugAdaptor/debugAdaptor.js',
-			// 	'--simulateResponsePath=' + path.join(DATA_ROOT, 'state-changes-local-resp.json'),
-			// 	'--txnGroupSourcesDescriptionPath=' + path.join(DATA_ROOT, 'state-changes-sources.json'),
-			// ] as any, 'teal');
-			dc = new DebugClient('node', '', 'teal');
+			// dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal', {
+			// 	env: {
+			// 		...process.env,
+			// 		/* eslint-disable @typescript-eslint/naming-convention */
+			// 		ALGORAND_SIMULATION_RESPONSE_PATH: path.join(DATA_ROOT, 'state-changes-local-resp.json'),
+			// 		ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH: path.join(DATA_ROOT, 'state-changes-sources.json'),
+			// 		/* eslint-enable @typescript-eslint/naming-convention */
+			// 	}
+			// }, true);
+			// await dc.start();
+			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
 			await dc.start(server.port());
 		});
 
@@ -376,7 +382,7 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', './out/debugAdaptor/debugAdaptor.js', 'teal');
+			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
 			await dc.start(server.port());
 		});
 
@@ -564,7 +570,7 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', '', 'teal');
+			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
 			await dc.start(server.port());
 		});
 
@@ -669,7 +675,7 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', '', 'teal');
+			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
 			await dc.start(server.port());
 		});
 
@@ -790,7 +796,7 @@ describe('Debug Adapter Tests', () => {
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', '', 'teal');
+			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
 			await dc.start(server.port());
 		});
 

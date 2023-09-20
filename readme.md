@@ -1,8 +1,8 @@
-# TEAL Debug Adaptor for VS Code
+# TEAL Debug Adapter for VS Code
 
 ## Summary
 
-This repo contains a TEAL debugger which adheres to the [Debug Adaptor Protocol](https://microsoft.github.io/debug-adapter-protocol/).
+This repo contains a TEAL debugger which adheres to the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/).
 This protocol is used by a variety of clients, and this repo specifically
 implements a client for VS Code.
 

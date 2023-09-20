@@ -36,8 +36,8 @@ async function run() {
 
 	// first parse command line arguments to see whether the debug adapter should run as a server
 	let port = 0;
-	let simulateResponsePath: string | undefined = undefined;
-	let txnGroupSourcesDescriptionPath: string | undefined = undefined;
+	let simulateResponsePath = process.env.ALGORAND_SIMULATION_RESPONSE_PATH;
+	let txnGroupSourcesDescriptionPath = process.env.ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH;
 
 	const args = process.argv.slice(2);
 	args.forEach(function (val, index, array) {
@@ -45,21 +45,13 @@ async function run() {
 		if (portMatch) {
 			port = parseInt(portMatch[1], 10);
 		}
-		const simulateResponsePathMatch = /^--simulateResponsePath=(.+)$/.exec(val);
-		if (simulateResponsePathMatch) {
-			simulateResponsePath = simulateResponsePathMatch[1];
-		}
-		const txnGroupSourcesDescriptionPathMatch = /^--txnGroupSourcesDescriptionPath=(.+)$/.exec(val);
-		if (txnGroupSourcesDescriptionPathMatch) {
-			txnGroupSourcesDescriptionPath = txnGroupSourcesDescriptionPathMatch[1];
-		}
 	});
 
 	if (typeof simulateResponsePath === 'undefined') {
-		throw new Error('missing --simulateResponsePath');
+		throw new Error('missing ALGORAND_SIMULATION_RESPONSE_PATH');
 	}
 	if (typeof txnGroupSourcesDescriptionPath === 'undefined') {
-		throw new Error('missing --txnGroupSourcesDescriptionPath');
+		throw new Error('missing ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH');
 	}
 
 	const assets = await TEALDebuggingAssets.loadFromFiles(fsAccessor, simulateResponsePath, txnGroupSourcesDescriptionPath);
