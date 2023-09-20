@@ -1,7 +1,7 @@
 import {
 	Logger, logger,
 	LoggingDebugSession,
-	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent,
+	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
@@ -17,6 +17,7 @@ export enum RuntimeEvents {
 	stopOnBreakpoint = 'stopOnBreakpoint',
 	breakpointValidated = 'breakpointValidated',
 	end = 'end',
+	error = 'error',
 }
 
 /**
@@ -85,6 +86,9 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		});
 		this._runtime.on(RuntimeEvents.end, () => {
 			this.sendEvent(new TerminatedEvent());
+		});
+		this._runtime.on('error', (err: Error) => {
+			this.sendEvent(new OutputEvent(err.message, 'stderr'));
 		});
 	}
 
@@ -201,7 +205,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		await this._configurationDone.wait(1000);
 
 		// start the program in the runtime
-		await this._runtime.start(!!args.stopOnEntry, !args.noDebug);
+		this._runtime.start(!!args.stopOnEntry, !args.noDebug);
 
 		this.sendResponse(response);
 	}

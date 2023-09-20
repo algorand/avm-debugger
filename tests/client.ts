@@ -11,30 +11,26 @@ export class DebugClient extends DebugClientBase {
         super(debugAdapterRuntime, debugAdapterExecutable, debugType, spawnOptions, enableStderr);
 
         this.on('stopped', event => {
-            console.log('rogue stop event received');
             this.lastStoppedEvent = event;
         });
         this.on('continued', () => {
-            console.log('rogue continue event received');
             this.lastStoppedEvent = undefined;
         });
     }
 
     async continueRequest(args: DebugProtocol.ContinueArguments): Promise<DebugProtocol.ContinueResponse> {
+        // Optimistically clear the last stopped event. It's important to do this before we send the
+        // continue request, otherwise we might miss a stopped event that happens immediately after.
         this.lastStoppedEvent = undefined;
-        console.log('clearing last stopped event');
         const response = await super.continueRequest(args);
         return response;
     }
 
     async waitForStop(): Promise<DebugProtocol.StoppedEvent> {
         if (typeof this.lastStoppedEvent !== 'undefined') {
-            console.log('waitForStop: already stopped');
             return Promise.resolve(this.lastStoppedEvent);
         }
-        console.log('waitForStop: need to wait for stop');
         const event = (await this.waitForEvent('stopped')) as DebugProtocol.StoppedEvent;
-        console.log(`waitForStop: waiting complete: event=${event}, lastStoppedEvent=${this.lastStoppedEvent}, equals=${event === this.lastStoppedEvent}`);
         return event;
     }
 

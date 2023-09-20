@@ -423,6 +423,17 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		this.treeWalker = new TxnGroupTreeWalker(this._debugAssets);
 	}
 
+	private nextTickWithErrorReporting(fn: () => Promise<void> | void) {
+		setTimeout(async () => {
+			try {
+				await fn();
+			} catch (e) {
+				console.error(e);
+				this.sendEvent(RuntimeEvents.error, e);
+			}
+		}, 0);
+	}
+
 	public async setupSources() {
 		await this.treeWalker.setupSources(this.fileAccessor);
 	}
@@ -430,45 +441,50 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(stopOnEntry: boolean, debug: boolean): Promise<void> {
-		if (debug) {
-
-			for (let [fsPath, _] of this.treeWalker.fsPathTodigest) {
-				this.verifyBreakpoints(fsPath);
-			}
-
-			if (stopOnEntry) {
-				this.findNextStatement(false, RuntimeEvents.stopOnEntry);
+	public async start(stopOnEntry: boolean, debug: boolean) {
+		this.nextTickWithErrorReporting(() => {
+			if (debug) {
+				for (let [fsPath, _] of this.treeWalker.fsPathTodigest) {
+					this.verifyBreakpoints(fsPath);
+				}
+	
+				if (stopOnEntry) {
+					this.findNextStatement(false, RuntimeEvents.stopOnEntry);
+				} else {
+					// we just start to run until we hit a breakpoint, an exception, or the end of the program
+					this.continue(false);
+				}
 			} else {
-				// we just start to run until we hit a breakpoint, an exception, or the end of the program
 				this.continue(false);
 			}
-		} else {
-			this.continue(false);
-		}
+		});
 	}
 
 	/**
 	 * Continue execution to the end/beginning.
 	 */
 	public continue(reverse: boolean) {
-		while (true) {
-			if (!this.updateCurrentLine(reverse)) {
-				break;
+		this.nextTickWithErrorReporting(() => {
+			while (true) {
+				if (!this.updateCurrentLine(reverse)) {
+					break;
+				}
+				if (this.findNextStatement(reverse)) {
+					break;
+				}
 			}
-			if (this.findNextStatement(reverse)) {
-				break;
-			}
-		}
+		});
 	}
 
 	/**
 	 * Step to the next/previous non empty line.
 	 */
 	public step(reverse: boolean) {
-		if (this.updateCurrentLine(reverse)) {
-			this.findNextStatement(reverse, RuntimeEvents.stopOnStep);
-		}
+		this.nextTickWithErrorReporting(() => {
+			if (this.updateCurrentLine(reverse)) {
+				this.findNextStatement(reverse, RuntimeEvents.stopOnStep);
+			}
+		});
 	}
 
 	private updateCurrentLine(reverse: boolean): boolean {
