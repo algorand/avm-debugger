@@ -23,6 +23,7 @@ export class DebugClient extends DebugClientBase {
     async continueRequest(args: DebugProtocol.ContinueArguments): Promise<DebugProtocol.ContinueResponse> {
         const response = await super.continueRequest(args);
         this.lastStoppedEvent = undefined;
+        console.log('clearing last stopped event');
         return response;
     }
 
