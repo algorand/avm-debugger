@@ -10,10 +10,12 @@ export class DebugClient extends DebugClientBase {
     constructor(debugAdapterRuntime: string, debugAdapterExecutable: string, debugType: string, spawnOptions?: SpawnOptions, enableStderr?: boolean) {
         super(debugAdapterRuntime, debugAdapterExecutable, debugType, spawnOptions, enableStderr);
 
-        this.on('stop', event => {
+        this.on('stopped', event => {
+            console.log('rogue stop event received');
             this.lastStoppedEvent = event;
         });
         this.on('continued', () => {
+            console.log('rogue continue event received');
             this.lastStoppedEvent = undefined;
         });
     }
@@ -24,11 +26,15 @@ export class DebugClient extends DebugClientBase {
         return response;
     }
 
-    waitForStop(): Promise<DebugProtocol.StoppedEvent> {
+    async waitForStop(): Promise<DebugProtocol.StoppedEvent> {
         if (typeof this.lastStoppedEvent !== 'undefined') {
+            console.log('waitForStop: already stopped');
             return Promise.resolve(this.lastStoppedEvent);
         }
-        return this.waitForEvent('stopped') as Promise<DebugProtocol.StoppedEvent>;
+        console.log('waitForStop: need to wait for stop');
+        const event = (await this.waitForEvent('stopped')) as DebugProtocol.StoppedEvent;
+        console.log(`waitForStop: waiting complete: event=${event}, lastStoppedEvent=${this.lastStoppedEvent}, equals=${event === this.lastStoppedEvent}`);
+        return event;
     }
 
     async assertStoppedLocation(reason: string, expected: {
