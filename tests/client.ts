@@ -36,10 +36,10 @@ export class DebugClient extends DebugClientBase {
         line?: number;
         column?: number;
     }): Promise<DebugProtocol.StackTraceResponse> {
-        const stoppedEvent = await this.waitForEvent('stopped');
+        const stoppedEvent = await this.waitForStop();
         assert.strictEqual(stoppedEvent.body.reason, reason);
 
-        const stackTraceResponse = await this.stackTraceRequest({ threadId: stoppedEvent.body.threadId });
+        const stackTraceResponse = await this.stackTraceRequest({ threadId: stoppedEvent.body.threadId! });
 
         const frame = stackTraceResponse.body.stackFrames[0];
         if (typeof expected.path === 'string' || expected.path instanceof RegExp) {
