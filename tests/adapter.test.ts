@@ -230,6 +230,8 @@ async function assertVariables(dc: DebugClient, {
 }
 
 async function advanceTo(dc: DebugClient, args: { program: string, line: number, column?: number} ) {
+	console.log(`advanceTo: started with ${JSON.stringify(args)}`);
+
 	const breakpointResponse = await dc.setBreakpointsRequest({
 		source: { path: args.program },
 		breakpoints: [{
@@ -237,15 +239,24 @@ async function advanceTo(dc: DebugClient, args: { program: string, line: number,
 			column: args.column
 		}],
 	});
+
+	console.log(`advanceTo: breakpoint set`);
+
 	assert.ok(breakpointResponse.success);
 	assert.strictEqual(breakpointResponse.body.breakpoints.length, 1);
 	const bp = breakpointResponse.body.breakpoints[0];
 	assert.ok(bp.verified);
 
+	console.log(`advanceTo: continue request sending`);
+
 	const continueResponse = await dc.continueRequest({ threadId: 0 });
 	assert.ok(continueResponse.success);
 
+	console.log(`advanceTo: continue request done`);
+
 	await dc.assertStoppedLocation('breakpoint', { path: args.program, line: args.line, column: args.column });
+
+	console.log(`advanceTo: done`);
 }
 
 async function assertEvaluationEquals(dc: DebugClient, expression: string, expected: { value: string, type?: string }) {
@@ -372,15 +383,23 @@ describe('Debug Adapter Tests', () => {
 
 			dc = new DebugClient('node', '', 'teal');
 			await dc.start(server.port());
+
+			console.log('beforeEach done');
 		});
 
 		afterEach(async () => {
+			console.log('afterEach started');
+
 			await dc.stop();
 			server.dispose();
+
+			console.log('afterEach done');
 		});
 
 		it('should return variables correctly', async () => {
 			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch.teal');
+
+			console.log('a');
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
@@ -392,6 +411,8 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
+			console.log('b');
+
 			await advanceTo(dc, { program: PROGRAM, line: 12 });
 
 			await assertVariables(dc, {
@@ -401,6 +422,8 @@ describe('Debug Adapter Tests', () => {
 				],
 				scratch: new Map(),
 			});
+
+			console.log('c');
 
 			await advanceTo(dc, { program: PROGRAM, line: 22 });
 
@@ -418,6 +441,8 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
+			console.log('d');
+
 			await advanceTo(dc, { program: PROGRAM, line: 35 });
 
 			await assertVariables(dc, {
@@ -430,6 +455,8 @@ describe('Debug Adapter Tests', () => {
 				],
 				scratch: new Map(),
 			});
+
+			console.log('e');
 
 			await advanceTo(dc, { program: PROGRAM, line: 36 });
 
@@ -449,6 +476,8 @@ describe('Debug Adapter Tests', () => {
 				],
 				scratch: new Map(),
 			});
+
+			console.log('f');
 
 			await advanceTo(dc, { program: PROGRAM, line: 37 });
 
@@ -472,6 +501,8 @@ describe('Debug Adapter Tests', () => {
 					],
 				]),
 			});
+
+			console.log('g');
 
 			await advanceTo(dc, { program: PROGRAM, line: 39 });
 
@@ -499,6 +530,8 @@ describe('Debug Adapter Tests', () => {
 				]),
 			});
 
+			console.log('h');
+
 			await advanceTo(dc, { program: PROGRAM, line: 41 });
 
 			await assertVariables(dc, {
@@ -525,6 +558,8 @@ describe('Debug Adapter Tests', () => {
 				]),
 			});
 
+			console.log('i');
+
 			await advanceTo(dc, { program: PROGRAM, line: 13 });
 
 			await assertVariables(dc, {
@@ -543,6 +578,8 @@ describe('Debug Adapter Tests', () => {
 					],
 				]),
 			});
+
+			console.log('j');
 		});
 	});
 
