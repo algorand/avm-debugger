@@ -219,7 +219,7 @@
     ]
   },
   "dependencies": {
-    "algosdk": "github:algorand/js-algorand-sdk",
+    "algosdk": "^2.6.0",
     "json-bigint": "^1.0.0",
     "lodash": "^4.17.21"
   }
