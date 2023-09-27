@@ -1,7 +1,12 @@
 import * as path from 'path';
 import * as JSONbigWithoutConfig from 'json-bigint';
 import * as algosdk from 'algosdk';
-import { FileAccessor } from './txnGroupWalkerRuntime';
+
+export interface FileAccessor {
+	isWindows: boolean;
+	readFile(path: string): Promise<Uint8Array>;
+	writeFile(path: string, contents: Uint8Array): Promise<void>;
+}
 
 export function isAsciiPrintable(data: Uint8Array): boolean {
     for (let i = 0; i < data.length; i++) {
@@ -51,7 +56,7 @@ export class ByteArrayMap<T> {
     
     private map: Map<string, T>;
 
-    constructor(entries?: Array<[Uint8Array, T]> | null) {
+    constructor(entries?: Iterable<[Uint8Array, T]> | null) {
         this.map = new Map<string, T>();
         for (const [key, value] of entries || []) {
             this.set(key, value);
@@ -107,6 +112,12 @@ export class ByteArrayMap<T> {
     public entriesHex(): IterableIterator<[string, T]> {
         return this.map.entries();
     }
+
+    public clone(): ByteArrayMap<T> {
+        const clone = new ByteArrayMap<T>();
+        clone.map = new Map(this.map.entries());
+        return clone;
+    }
 }
 
 function filePathRelativeTo(base: string, filePath: string): string {
@@ -143,7 +154,7 @@ export class TxnGroupSourceDescriptor {
         return this._sourcemap;
     }
 
-    public get hash(): string | undefined {
+    public get hash(): string {
         return this._hash;
     }
 
@@ -173,7 +184,10 @@ export class TxnGroupSourceDescriptorList {
         return this._txnGroupSources;
     }
 
-    public findByHash(hash: string): TxnGroupSourceDescriptor | undefined {
+    public findByHash(hash: string | Uint8Array): TxnGroupSourceDescriptor | undefined {
+        if (typeof hash !== 'string') {
+            hash = Buffer.from(hash).toString('base64');
+        }
         for (let i = 0; i < this._txnGroupSources.length; i++) {
             if (this._txnGroupSources[i].hash && this._txnGroupSources[i].hash === hash) {
                 return this._txnGroupSources[i];

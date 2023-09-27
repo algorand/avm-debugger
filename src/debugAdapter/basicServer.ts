@@ -1,7 +1,6 @@
 import * as Net from 'net';
 import { TxnGroupDebugSession } from './debugRequestHandlers';
-import { TEALDebuggingAssets } from './utils';
-import { FileAccessor } from './txnGroupWalkerRuntime';
+import { FileAccessor, TEALDebuggingAssets } from './utils';
 
 export class BasicServer {
 

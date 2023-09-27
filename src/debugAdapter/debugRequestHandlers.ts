@@ -6,10 +6,11 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { TxnGroupWalkerRuntime, IRuntimeBreakpoint, FileAccessor } from './txnGroupWalkerRuntime';
+import { TxnGroupWalkerRuntime, IRuntimeBreakpoint } from './txnGroupWalkerRuntime';
+import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
-import { TEALDebuggingAssets, isAsciiPrintable, limitArray } from './utils';
+import { FileAccessor, TEALDebuggingAssets, isAsciiPrintable, limitArray } from './utils';
 
 export enum RuntimeEvents {
 	stopOnEntry = 'stopOnEntry',
@@ -50,7 +51,9 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	// txn group walker runtime for walking txn group.
 	private _runtime: TxnGroupWalkerRuntime;
 
-	private _variableHandles = new Handles<'execution' | 'chain' | 'app' | AppStateScope | AppSpecificStateScope | ExecutionScope | AvmValueReference>();
+	private _variableHandles = new Handles<ProgramStateScope | OnChainStateScope | AppStateScope | AppSpecificStateScope | AvmValueReference>();
+
+	private _sourceHandles = new Handles<{ content: string, mimeType?: string }>();
 
 	private _configurationDone = new Subject();
 
@@ -96,9 +99,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	 * The 'initialize' request is the first request called by the frontend
 	 * to interrogate the features the debug adapter provides.
 	 */
-	protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments) {
-		await this._runtime.setupSources();
-
+	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments) {
 		// build and return the capabilities of this debug adapter:
 		response.body = response.body || {};
 
@@ -260,18 +261,41 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	}
 
 	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
-
 		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
-		const endFrame = startFrame + maxLevels;
 
-		const stk = this._runtime.stack(startFrame, endFrame);
+		// The runtime has a stack where the latest call is the last element. We need to return the
+		// reverse of that.
+		const adjustedEndFrame = this._runtime.stackLength() - startFrame;
+		const adjustedStartFrame = Math.max(0, adjustedEndFrame - maxLevels);
+
+		const stk = this._runtime.stack(adjustedStartFrame, adjustedEndFrame);
+
+		const stackFramesForResponse = stk.frames.map((frame, index) => {
+			const id = adjustedStartFrame + index;
+
+			const sourceFile = frame.sourceFile();
+			let source: Source | undefined = undefined;
+			if (typeof sourceFile.path !== 'undefined') {
+				source = this.createSource(sourceFile.path);
+			} else if (typeof sourceFile.content !== 'undefined') {
+				source = this.createSourceWithContent(sourceFile.name, sourceFile.content, sourceFile.contentMimeType);
+			}
+
+			const sourceLocation = frame.sourceLocation();
+			const line = this.convertDebuggerLineToClient(sourceLocation.line);
+			const column = sourceLocation.column ? this.convertDebuggerColumnToClient(sourceLocation.column) : undefined;
+
+			const protocolFrame = new StackFrame(id, frame.name(), source, line, column);
+			protocolFrame.endLine = sourceLocation.endLine;
+			protocolFrame.endColumn = sourceLocation.endColumn;
+			return protocolFrame;
+		});
+		stackFramesForResponse.reverse();
 
 		response.body = {
-			stackFrames: stk.frames.map((f, ix) => {
-				const sf: DebugProtocol.StackFrame = new StackFrame(f.index, f.name, this.createSource(f.file), this.convertDebuggerLineToClient(f.line));
-				return sf;
-			}),
+			totalFrames: stk.count,
+			stackFrames: stackFramesForResponse,
 			// 4 options for 'totalFrames':
 			//omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
 			// totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
@@ -282,13 +306,22 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	}
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
+		const frame = this._runtime.getStackFrame(args.frameId);
 
-		response.body = {
-			scopes: [
-				new Scope("Execution State", this._variableHandles.create('execution'), false),
-				new Scope("On-chain State", this._variableHandles.create('chain'), false),
-			]
-		};
+		let scopes: DebugProtocol.Scope[] = [];
+		if (typeof frame !== 'undefined') {
+			if (frame instanceof ProgramStackFrame) {
+				const programScope = new ProgramStateScope(args.frameId);
+				scopes.push(
+					new Scope("Program State", this._variableHandles.create(programScope), false)
+				);
+			}
+			scopes.push(
+				new Scope("On-chain State", this._variableHandles.create('chain'), false)
+			);
+		}
+
+		response.body = { scopes };
 		this.sendResponse(response);
 	}
 
@@ -297,46 +330,55 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		const v = this._variableHandles.get(args.variablesReference);
 
-		if (v === 'execution') {
-			const stackValues = this._runtime.getStackValues();
-			variables = [
-				{
-					name: 'pc',
-					value: this._runtime.getPC().toString(),
-					type: 'uint64',
-					variablesReference: 0,
-					evaluateName: 'pc'
-				},
-				{
-					name: 'stack',
-					value: stackValues.length === 0 ? '[]' : '[...]',
-					type: 'array',
-					variablesReference: this._variableHandles.create('stack'),
-					indexedVariables: stackValues.length,
-					presentationHint: {
-						kind: 'data',
-					},
-				},
-				{
-					name: 'scratch',
-					value: '[...]',
-					type: 'array',
-					variablesReference: this._variableHandles.create('scratch'),
-					indexedVariables: 256,
-					presentationHint: {
-						kind: 'data',
-					},
-				}
-			];
-		} else if (v === 'stack') {
-			const stackValues = this._runtime.getStackValues();
-			if (args.filter !== 'named') {
-				variables = stackValues.map((value, index) => this.convertAvmValue('stack', value, index));
+		if (v instanceof ProgramStateScope) {
+			const frame = this._runtime.getStackFrame(v.frameIndex);
+			if (!frame || !(frame instanceof ProgramStackFrame)) {
+				throw new Error(`Unexpected frame: ${typeof frame}`);
 			}
-		} else if (v === 'scratch') {
-			const scratchValues = this._runtime.getScratchValues();
-			if (args.filter !== 'named') {
-				variables = scratchValues.map((value, index) => this.convertAvmValue('scratch', value, index));
+			const programState = frame.state;
+
+			if (typeof v.specificState === 'undefined') {
+				variables = [
+					{
+						name: 'pc',
+						value: programState.pc.toString(),
+						type: 'uint64',
+						variablesReference: 0,
+						evaluateName: 'pc'
+					},
+					{
+						name: 'stack',
+						value: programState.stack.length === 0 ? '[]' : '[...]',
+						type: 'array',
+						variablesReference: this._variableHandles.create(new ProgramStateScope(v.frameIndex, 'stack')),
+						indexedVariables: programState.stack.length,
+						presentationHint: {
+							kind: 'data',
+						},
+					},
+					{
+						name: 'scratch',
+						value: '[...]',
+						type: 'array',
+						variablesReference: this._variableHandles.create(new ProgramStateScope(v.frameIndex, 'scratch')),
+						indexedVariables: 256,
+						presentationHint: {
+							kind: 'data',
+						},
+					}
+				];
+			} else if (v.specificState === 'stack') {
+				if (args.filter !== 'named') {
+					variables = programState.stack.map((value, index) => this.convertAvmValue(v, value, index));
+				}
+			} else if (v.specificState === 'scratch') {
+				const expandedScratch: algosdk.modelsv2.AvmValue[] = [];
+				for (let i = 0; i < 256; i++) {
+					expandedScratch.push(programState.scratch.get(i) || new algosdk.modelsv2.AvmValue({ type: 2 }));
+				}
+				if (args.filter !== 'named') {
+					variables = expandedScratch.map((value, index) => this.convertAvmValue(v, value, index));
+				}
 			}
 		} else if (v === 'chain') {
 			const appIDs = this._runtime.getAppStateReferences();
@@ -402,14 +444,16 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 				variables = state.boxStateArray().map(kv => this.convertAvmKeyValue(v, kv));
 			}
 		} else if (v instanceof AvmValueReference) {
-			if (typeof v.scope === 'string') {
+			if (v.scope instanceof ProgramStateScope) {
+				const frame = this._runtime.getStackFrame(v.scope.frameIndex);
+				if (!frame || !(frame instanceof ProgramStackFrame)) {
+					throw new Error(`Unexpected frame: ${typeof frame}`);
+				}
 				let toExpand: algosdk.modelsv2.AvmValue;
-				if (v.scope === 'stack') {
-					const stackValues = this._runtime.getStackValues();
-					toExpand = stackValues[v.key as number];
-				} else if (v.scope === 'scratch') {
-					const scratchValues = this._runtime.getScratchValues();
-					toExpand = scratchValues[v.key as number];
+				if (v.scope.specificState === 'stack') {
+					toExpand = frame.state.stack[v.key as number];
+				} else if (v.scope.specificState === 'scratch') {
+					toExpand = frame.state.scratch.get(v.key as number) || new algosdk.modelsv2.AvmValue({ type: 2 });
 				} else {
 					throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
 				}
@@ -478,39 +522,50 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		if (result) {
 			const [scope, key] = result;
-			if (scope === 'pc') {
-				rv = {
-					name: 'pc',
-					value: this._runtime.getPC().toString(),
-					type: 'uint64',
-					variablesReference: 0,
-					evaluateName: 'pc'
-				};
-			} else if (scope === 'stack') {
-				let index = key as number;
-				const stackValues = this._runtime.getStackValues();
-				if (index < 0) {
-					const adjustedIndex = index + stackValues.length;
-					if (adjustedIndex < 0) {
-						reply = `stack[${index}] out of range`;
+			if (scope instanceof ProgramStateScope) {
+				if (typeof args.frameId === 'undefined') {
+					reply = 'frameId required for program state';
+				} else {
+					const scopeWithFrame = new ProgramStateScope(args.frameId, scope.specificState);
+					const frame = this._runtime.getStackFrame(args.frameId);
+					if (!frame || !(frame instanceof ProgramStackFrame)) {
+						reply = `Unexpected frame: ${typeof frame}`;
 					} else {
-						index = adjustedIndex;
+						if (scope.specificState === 'pc') {
+							rv = {
+								name: 'pc',
+								value: frame.state.pc.toString(),
+								type: 'uint64',
+								variablesReference: 0,
+								evaluateName: 'pc'
+							};
+						} else if (scope.specificState === 'stack') {
+							let index = key as number;
+							const stackValues = frame.state.stack;
+							if (index < 0) {
+								const adjustedIndex = index + stackValues.length;
+								if (adjustedIndex < 0) {
+									reply = `stack[${index}] out of range`;
+								} else {
+									index = adjustedIndex;
+								}
+							}
+							if (0 <= index && index < stackValues.length) {
+								rv = this.convertAvmValue(scopeWithFrame, stackValues[index], index);
+							} else if (index < 0 && stackValues.length + index >= 0) {
+								rv = this.convertAvmValue(scopeWithFrame, stackValues[stackValues.length + index], index);
+							} else {
+								reply = `stack[${index}] out of range`;
+							}
+						} else if (scope.specificState === 'scratch') {
+							const index = key as number;
+							if (0 <= index && index < 256) {
+								rv = this.convertAvmValue(scopeWithFrame, frame.state.scratch.get(index) || new algosdk.modelsv2.AvmValue({ type: 2 }), index);
+							} else {
+								reply = `scratch[${index}] out of range`;
+							}
+						}
 					}
-				}
-				if (0 <= index && index < stackValues.length) {
-					rv = this.convertAvmValue('stack', stackValues[index], index);
-				} else if (index < 0 && stackValues.length + index >= 0) {
-					rv = this.convertAvmValue('stack', stackValues[stackValues.length + index], index);
-				} else {
-					reply = `stack[${index}] out of range`;
-				}
-			} else if (scope === 'scratch') {
-				const index = key as number;
-				const scratchValues = this._runtime.getScratchValues();
-				if (0 <= index && index < scratchValues.length) {
-					rv = this.convertAvmValue('scratch', scratchValues[index], index);
-				} else {
-					reply = `scratch[${index}] out of range`;
 				}
 			} else if (typeof key === 'string') {
 				const state = this._runtime.getAppState(scope.appID);
@@ -585,22 +640,41 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
+	protected sourceRequest(response: DebugProtocol.SourceResponse, args: DebugProtocol.SourceArguments, request?: DebugProtocol.Request): void {
+		const sourceInfo = this._sourceHandles.get(args.sourceReference);
+		if (typeof sourceInfo !== 'undefined') {
+			response.body = {
+				content: sourceInfo.content,
+				mimeType: sourceInfo.mimeType
+			};
+		} else {
+			response.body = {
+				content: `source not available`
+			};
+		}
+		this.sendResponse(response);
+	}
+
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
+		this.executionResumed();
 		this._runtime.continue(false);
 		this.sendResponse(response);
 	}
 
 	protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): void {
+		this.executionResumed();
 		this._runtime.continue(true);
 		this.sendResponse(response);
 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
+		this.executionResumed();
 		this._runtime.step(false);
 		this.sendResponse(response);
 	}
 
 	protected stepBackRequest(response: DebugProtocol.StepBackResponse, args: DebugProtocol.StepBackArguments): void {
+		this.executionResumed();
 		this._runtime.step(true);
 		this.sendResponse(response);
 	}
@@ -616,13 +690,20 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	}
 
 	protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
+		this.executionResumed();
 		this._runtime.stepIn(args.targetId);
 		this.sendResponse(response);
 	}
 
 	protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
+		this.executionResumed();
 		this._runtime.stepOut();
 		this.sendResponse(response);
+	}
+
+	private executionResumed(): void {
+		this._variableHandles.reset();
+		this._sourceHandles.reset();
 	}
 
 	//---- helpers
@@ -784,9 +865,28 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 	private createSource(filePath: string): Source {
 		return new Source(basename(filePath), this.convertDebuggerPathToClient(filePath), undefined, undefined, 'teal-txn-group-adapter-data');
 	}
+
+	private createSourceWithContent(fileName: string, content: string, mimeType?: string) {
+		const id = this._sourceHandles.create({ content, mimeType });
+		return new Source(fileName, undefined, id);
+	}
 }
 
-type ExecutionScope = 'pc' | 'stack' | 'scratch';
+class ProgramStateScope {
+	constructor(
+		public readonly frameIndex: number,
+		public readonly specificState?: 'pc' | 'stack' | 'scratch'
+	) { }
+
+	public scopeString(): string {
+		if (typeof this.specificState === 'undefined') {
+			return `program`;
+		}
+		return this.specificState;
+	}
+}
+
+type OnChainStateScope = 'chain' | 'app';
 
 class AppStateScope {
 	constructor(public readonly appID: number) { }
@@ -816,7 +916,7 @@ class AppSpecificStateScope {
 	}
 }
 
-type AvmValueScope = ExecutionScope | AppSpecificStateScope;
+type AvmValueScope = ProgramStateScope | AppSpecificStateScope;
 
 class AvmValueReference {
 	constructor(
@@ -826,8 +926,8 @@ class AvmValueReference {
 }
 
 function evaluateNameForScope(scope: AvmValueScope, key: number | string): string {
-	if (typeof scope === 'string') {
-		return `${scope}[${key}]`;
+	if (scope instanceof ProgramStateScope) {
+		return `${scope.scopeString()}[${key}]`;
 	}
 	if (scope.scope === 'local') {
 		if (typeof scope.account === 'undefined') {
@@ -840,15 +940,15 @@ function evaluateNameForScope(scope: AvmValueScope, key: number | string): strin
 
 function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
 	if (name === 'pc') {
-		return ['pc', 0];
+		return [new ProgramStateScope(-1, 'pc'), 0];
 	}
 	const stackMatches = /^stack\[(-?\d+)\]$/.exec(name);
 	if (stackMatches) {
-		return ['stack', parseInt(stackMatches[1], 10)];
+		return [new ProgramStateScope(-1, 'stack'), parseInt(stackMatches[1], 10)];
 	}
 	const scratchMatches = /^scratch\[(\d+)\]$/.exec(name);
 	if (scratchMatches) {
-		return ['scratch', parseInt(scratchMatches[1], 10)];
+		return [new ProgramStateScope(-1, 'scratch'), parseInt(scratchMatches[1], 10)];
 	}
 	const appMatches = /^app\[(\d+)\]\.(global|box)\[(0[xX][0-9a-fA-F]+)\](?:\.(key|value))?$/.exec(name);
 	if (appMatches) {

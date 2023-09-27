@@ -46,13 +46,13 @@ export class DebugClient extends DebugClientBase {
 
         const frame = stackTraceResponse.body.stackFrames[0];
         if (typeof expected.path === 'string' || expected.path instanceof RegExp) {
-            this.assertPath(frame.source?.path!, expected.path, 'stopped location: path mismatch');
+            this.assertPath(frame.source?.path!, expected.path, `stopped location: path mismatch: ${frame.source?.path} vs ${expected.path}`);
         }
         if (typeof expected.line === 'number') {
-            assert.strictEqual(frame.line, expected.line, 'stopped location: line mismatch');
+            assert.strictEqual(frame.line, expected.line, `stopped location: line mismatch: ${frame.line} vs ${expected.line}`);
         }
         if (typeof expected.column === 'number') {
-            assert.strictEqual(frame.column, expected.column, 'stopped location: column mismatch');
+            assert.strictEqual(frame.column, expected.column, `stopped location: column mismatch: ${frame.column} vs ${expected.column}`);
         }
         return stackTraceResponse;
     }

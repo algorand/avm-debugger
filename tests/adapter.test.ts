@@ -3,9 +3,8 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as algosdk from 'algosdk';
 import { DebugClient } from './client';
-import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
+import { FileAccessor, TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
 import { BasicServer } from '../src/debugAdapter/basicServer';
-import { FileAccessor } from '../src/debugAdapter/txnGroupWalkerRuntime';
 
 export const testFileAccessor: FileAccessor = {
 	isWindows: typeof process !== 'undefined' && process.platform === 'win32',
@@ -50,11 +49,15 @@ async function assertVariables(dc: DebugClient, {
 		boxState?: ByteArrayMap<number | bigint | Uint8Array>,
 	}>,
 }) {
-	const scopesResponse = await dc.scopesRequest({ frameId: 0 });
+	const stackResponse = await dc.stackTraceRequest({ threadId: 1 });
+	assert.ok(stackResponse.success);
+	const latestFrame = stackResponse.body.stackFrames[0].id;
+
+	const scopesResponse = await dc.scopesRequest({ frameId: latestFrame });
 	assert.ok(scopesResponse.success);
 	const scopes = scopesResponse.body.scopes;
 
-	const executionScope = scopes.find(scope => scope.name === 'Execution State');
+	const executionScope = scopes.find(scope => scope.name === 'Program State');
 	assert.ok(executionScope);
 
 	const executionScopeResponse = await dc.variablesRequest({ variablesReference: executionScope.variablesReference });
@@ -81,7 +84,7 @@ async function assertVariables(dc: DebugClient, {
 		assert.strictEqual(pcVariable.type, 'uint64');
 		assert.strictEqual(pcVariable.value, pc.toString());
 
-		await assertEvaluationEquals(dc, 'pc', { value: pc.toString(), type: 'uint64' });
+		await assertEvaluationEquals(dc, latestFrame, 'pc', { value: pc.toString(), type: 'uint64' });
 	}
 
 	if (typeof stack !== 'undefined') {
@@ -101,9 +104,9 @@ async function assertVariables(dc: DebugClient, {
 
 		await Promise.all(stack.map(async (expectedValue, i) => {
 			if (expectedValue instanceof Uint8Array) {
-				await assertEvaluationEquals(dc, `stack[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
+				await assertEvaluationEquals(dc, latestFrame, `stack[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
 			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				await assertEvaluationEquals(dc, `stack[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
+				await assertEvaluationEquals(dc, latestFrame, `stack[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
 			} else {
 				throw new Error(`Improper expected stack value: ${expectedValue}`);
 			}
@@ -142,9 +145,9 @@ async function assertVariables(dc: DebugClient, {
 			}
 
 			if (expectedValue instanceof Uint8Array) {
-				await assertEvaluationEquals(dc, `scratch[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
+				await assertEvaluationEquals(dc, latestFrame, `scratch[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
 			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				await assertEvaluationEquals(dc, `scratch[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
+				await assertEvaluationEquals(dc, latestFrame, `scratch[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
 			} else {
 				throw new Error(`Improper expected scratch value: ${expectedValue}`);
 			}
@@ -249,8 +252,8 @@ async function advanceTo(dc: DebugClient, args: { program: string, line: number,
 	await dc.assertStoppedLocation('breakpoint', { path: args.program, line: args.line, column: args.column });
 }
 
-async function assertEvaluationEquals(dc: DebugClient, expression: string, expected: { value: string, type?: string }) {
-	const response = await dc.evaluateRequest({ expression });
+async function assertEvaluationEquals(dc: DebugClient, frameId: number, expression: string, expected: { value: string, type?: string }) {
+	const response = await dc.evaluateRequest({ expression, frameId });
 	assert.ok(response.success);
 	assert.strictEqual(response.body.result, expected.value, `Expected "${expression}" to evaluate to "${expected.value}", but got "${response.body.result}"`);
 	if (expected.type) {
@@ -348,7 +351,7 @@ describe('Debug Adapter Tests', () => {
 
 			it('should stop on entry', async () => {
 				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
-				const ENTRY_LINE = 1;
+				const ENTRY_LINE = 2;
 
 				await Promise.all([
 					dc.configurationSequence(),

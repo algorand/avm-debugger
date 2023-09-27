@@ -2,8 +2,7 @@ import { TxnGroupDebugSession } from './debugRequestHandlers';
 
 import { promises as fs } from 'fs';
 import * as Net from 'net';
-import { FileAccessor } from './txnGroupWalkerRuntime';
-import { TEALDebuggingAssets } from './utils';
+import { FileAccessor, TEALDebuggingAssets } from './utils';
 
 /*
  * debugAdapter.js is the entrypoint of the debug adapter when it runs as a separate process.
