@@ -101,12 +101,30 @@ export class TraceReplayEngine {
     }
 
 	public forward(): boolean {
-        this.currentFrame().forward(this.stack);
-        return this.stack.length !== 0;
+        let length: number;
+        do {
+            length = this.stack.length;
+            this.currentFrame().forward(this.stack);
+            if (this.stack.length === 0) {
+                return false;
+            }
+        } while (this.stack.length < length);
+        return true;
 	}
 
     public backward(): boolean {
-        throw new Error('Not implemented');
+        let length: number;
+        do {
+           length = this.stack.length;
+           this.currentFrame().backward(this.stack);
+            if (this.stack.length === 0) {
+                this.stack = [
+                    new TopLevelTransactionGroupsFrame(this, this.debugAssets.simulateResponse)
+                ];
+                return false;
+            }
+        } while (this.stack.length < length);
+        return true;
     }
 }
 
@@ -159,7 +177,9 @@ export abstract class TraceReplayStackFrame {
     public abstract name(): string;
     public abstract sourceFile(): FrameSource;
     public abstract sourceLocation(): FrameSourceLocation;
+
     public abstract forward(stack: TraceReplayStackFrame[]): void;
+    public abstract backward(stack: TraceReplayStackFrame[]): void;
 }
 
 export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
@@ -235,11 +255,25 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
         const txnGroupFrame = new TransactionStackFrame(this.engine, index, false, txnInfos, txnTraces);
         return txnGroupFrame;
     }
+
+    public backward(stack: TraceReplayStackFrame[]): void {
+        if (this.txnGroupDone) {
+            this.txnGroupDone = false;
+            return;
+        }
+        if (this.index === 0) {
+            stack.pop();
+            return;
+        }
+        this.index--;
+        this.txnGroupDone = true;
+    }
 }
 
 export class TransactionStackFrame extends TraceReplayStackFrame {
 
     private txnIndex: number = 0;
+    private preambleDone: boolean = false;
     private logicSigDone: boolean;
     private appDone: boolean;
     
@@ -286,7 +320,22 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             // + 2 is for opening and closing brackets
             lineOffset += JSON.stringify(displayedTxn, null, 2).split('\n').length;
         }
-        let lineCount = JSON.stringify(this.txnInfos[this.txnIndex].get_obj_for_encoding().txn, null, 2).split('\n').length;
+        const currentTxnJson = JSON.stringify(this.txnInfos[this.txnIndex].get_obj_for_encoding().txn, null, 2).split("\n");
+        let lineCount = currentTxnJson.length;
+        if (this.preambleDone) {
+            if (!this.logicSigDone) {
+                // TODO
+            } else if (!this.appDone) {
+                for (let i = 0; i < currentTxnJson.length; i++) {
+                    const line = currentTxnJson[i];
+                    if (line.match(/^\s*"apid":\s*\d+,\s*$/)) {
+                        lineOffset += i;
+                        lineCount = 0;
+                        break;
+                    }
+                }
+            }
+        }
         return {
             line: lineOffset,
             endLine: lineOffset + lineCount + 1,
@@ -296,6 +345,10 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
     public forward(stack: TraceReplayStackFrame[]): void {
         const currentTxnTrace = this.txnTraces[this.txnIndex];
         const currentTxnInfo = this.txnInfos[this.txnIndex];
+        if (!this.preambleDone && (!this.logicSigDone || !this.appDone)) {
+            this.preambleDone = true;
+            return;
+        }
         if (!this.logicSigDone && currentTxnTrace) {
             const logicSigFrame = new ProgramStackFrame(
                 this.engine,
@@ -337,6 +390,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
         if (this.txnIndex + 1 < this.txnTraces.length) {
             this.txnIndex++;
             const nextTrace = this.txnTraces[this.txnIndex];
+            this.preambleDone = false;
             if (nextTrace) {
                 this.logicSigDone = nextTrace.logicSigTrace ? false : true;
                 this.appDone = nextTrace.approvalProgramTrace || nextTrace.clearStateProgramTrace ? false : true;
@@ -347,6 +401,33 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             return;
         }
         stack.pop();
+    }
+
+    public backward(stack: TraceReplayStackFrame[]): void {
+        const currentTrace = this.txnTraces[this.txnIndex];
+        if (currentTrace) {
+            if ((currentTrace.approvalProgramTrace || currentTrace.clearStateProgramTrace) && this.appDone) {
+                this.appDone = false;
+                return;
+            }
+            if (currentTrace.logicSigTrace && this.logicSigDone) {
+                this.logicSigDone = false;
+                return;
+            }
+        }
+        if (this.preambleDone) {
+            this.preambleDone = false;
+            return;
+        }
+        if (this.txnIndex === 0) {
+            stack.pop();
+            return;
+        }
+        this.txnIndex--;
+        this.preambleDone = true;
+        this.logicSigDone = true;
+        this.appDone = true;
+        this.backward(stack);
     }
 }
 
@@ -359,7 +440,9 @@ export interface ProgramState {
 export class ProgramStackFrame extends TraceReplayStackFrame {
 
     private index: number = 0;
-    private innerTxnGroups: number = 0;
+    private handledInnerTxns: boolean = false;
+    private innerTxnGroupCount: number = 0;
+    private initialAppState: AppState | undefined;
 
     public state: ProgramState = { pc: 0, stack: [], scratch: new Map() };
 
@@ -373,6 +456,11 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     ) {
         super(engine);
         this.state.pc = Number(programTrace[0].pc);
+
+        const appID = this.currentAppID();
+        if (typeof appID !== 'undefined') {
+            this.initialAppState = engine.currentAppState.get(appID)!.clone();
+        }
     }
 
     public currentAppID(): number | undefined {
@@ -427,12 +515,9 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     public forward(stack: TraceReplayStackFrame[]): void {
         const currentUnit = this.programTrace[this.index];
         this.processUnit(currentUnit);
-        if (this.index + 1 < this.programTrace.length) {
-            this.state.pc = Number(this.programTrace[this.index + 1].pc);
-        }
 
         const spawnedInners = currentUnit.spawnedInners;
-        if (spawnedInners && spawnedInners.length !== 0) {
+        if (!this.handledInnerTxns && spawnedInners && spawnedInners.length !== 0) {
             const innerGroupInfo: algosdk.modelsv2.PendingTransactionResponse[] = [];
             const innerTraces: algosdk.modelsv2.SimulationTransactionExecTrace[] = [];
             for (const innerIndex of spawnedInners) {
@@ -441,13 +526,17 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
                 innerGroupInfo.push(innerTxnInfo);
                 innerTraces.push(innerTrace);
             }
-            const innerGroupFrame = new TransactionStackFrame(this.engine, this.innerTxnGroups, true, innerGroupInfo, innerTraces);
+            const innerGroupFrame = new TransactionStackFrame(this.engine, this.innerTxnGroupCount, true, innerGroupInfo, innerTraces);
             stack.push(innerGroupFrame);
-            this.innerTxnGroups++;
+            this.handledInnerTxns = true;
+            this.innerTxnGroupCount++;
+            return;
         }
 
         if (this.index + 1 < this.programTrace.length) {
             this.index++;
+            this.state.pc = Number(this.programTrace[this.index].pc);
+            this.handledInnerTxns = false;
             return;
         }
         stack.pop();
@@ -524,6 +613,35 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
                     }
                 }
             }
+        }
+    }
+
+    public backward(stack: TraceReplayStackFrame[]): void {
+        if (this.handledInnerTxns) {
+            // We can roll this back without any other effects
+            this.handledInnerTxns = false;
+            return;
+        }
+        if (this.index === 0) {
+            stack.pop();
+            return;
+        }
+        const targetIndex = this.index - 1;
+        this.reset();
+        while (this.index < targetIndex) {
+            this.forward(stack);
+        }
+    }
+
+    private reset() {
+        this.index = 0;
+        this.handledInnerTxns = false;
+        this.innerTxnGroupCount = 0;
+        this.state.pc = Number(this.programTrace[0].pc);
+        this.state.stack = [];
+        this.state.scratch.clear();
+        if (typeof this.initialAppState !== 'undefined') {
+            this.engine.currentAppState.set(this.currentAppID()!, this.initialAppState);
         }
     }
 }

@@ -71,35 +71,6 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		});
 	}
 
-	/**
-	 * Continue execution to the end/beginning.
-	 */
-	public continue(reverse: boolean) {
-		this.nextTickWithErrorReporting(() => {
-			while (true) {
-				if (!this.updateCurrentLine(reverse)) {
-					break;
-				}
-				if (this.checkForBreakpoints()) {
-					break;
-				}
-			}
-		});
-	}
-
-	/**
-	 * Step to the next/previous non empty line.
-	 */
-	public step(reverse: boolean) {
-		this.nextTickWithErrorReporting(() => {
-			if (this.updateCurrentLine(reverse)) {
-				if (!this.checkForBreakpoints()) {
-					this.sendEvent(RuntimeEvents.stopOnStep);
-				}
-			}
-		});
-	}
-
 	private updateCurrentLine(reverse: boolean): boolean {
 		if (reverse) {
 			if (!this.engine.backward()) {
@@ -117,37 +88,71 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	}
 
 	/**
-	 * "Step into" for Mock debug means: go to next character
+	 * Continue execution to the end/beginning.
 	 */
-	public stepIn(targetId: number | undefined) {
-		// if (typeof targetId === 'number') {
-		// 	this.currentColumn = targetId;
-		// 	this.sendEvent(RuntimeEvents.stopOnStep);
-		// } else {
-		// 	if (typeof this.currentColumn === 'number') {
-		// 		if (this.currentColumn <= (<string>this.treeWalker.getLine()).length) {
-		// 			this.currentColumn += 1;
-		// 		}
-		// 	} else {
-		// 		this.currentColumn = 1;
-		// 	}
-		// 	this.sendEvent(RuntimeEvents.stopOnStep);
-		// }
-		this.step(false);
+	public continue(reverse: boolean) {
+		this.nextTickWithErrorReporting(() => {
+			while (true) {
+				if (!this.updateCurrentLine(reverse)) {
+					break;
+				}
+				if (this.checkForBreakpoints()) {
+					break;
+				}
+			}
+		});
 	}
 
 	/**
-	 * "Step out" for Mock debug means: go to previous character
+	 * "Step into"
+	 */
+	public stepIn(targetId: number | undefined) {
+		this.nextTickWithErrorReporting(() => {
+			if (this.updateCurrentLine(false)) {
+				if (!this.checkForBreakpoints()) {
+					this.sendEvent(RuntimeEvents.stopOnStep);
+				}
+			}
+		});
+	}
+
+	/**
+	 * "Step out"
 	 */
 	public stepOut() {
-		// if (typeof this.currentColumn === 'number') {
-		// 	this.currentColumn -= 1;
-		// 	if (this.currentColumn === 0) {
-		// 		this.currentColumn = undefined;
-		// 	}
-		// }
-		// this.sendEvent(RuntimeEvents.stopOnStep);
-		this.step(false);
+		const targetStackDepth = this.engine.stack.length - 1;
+		if (targetStackDepth <= 0) {
+			this.continue(false);
+		}
+		this.nextTickWithErrorReporting(() => {
+			while (targetStackDepth < this.engine.stack.length) {
+				if (!this.updateCurrentLine(false)) {
+					return;
+				}
+				if (this.checkForBreakpoints()) {
+					return;
+				}
+			}
+			this.sendEvent(RuntimeEvents.stopOnStep);
+		});
+	}
+
+	/**
+	 * "Step over"
+	 */
+	public step(reverse: boolean) {
+		const targetStackDepth = this.engine.stack.length;
+		this.nextTickWithErrorReporting(() => {
+			do {
+				if (!this.updateCurrentLine(reverse)) {
+					return;
+				}
+				if (this.checkForBreakpoints()) {
+					return;
+				}
+			} while (targetStackDepth < this.engine.stack.length);
+			this.sendEvent(RuntimeEvents.stopOnStep);
+		});
 	}
 
 	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
