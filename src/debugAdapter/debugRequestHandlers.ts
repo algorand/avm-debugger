@@ -312,8 +312,13 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		if (typeof frame !== 'undefined') {
 			if (frame instanceof ProgramStackFrame) {
 				const programScope = new ProgramStateScope(args.frameId);
+				let scopeName = 'Program State';
+				const appID = frame.currentAppID();
+				if (typeof appID !== 'undefined') {
+					scopeName += `: App ${appID}`;
+				}
 				scopes.push(
-					new Scope("Program State", this._variableHandles.create(programScope), false)
+					new Scope(scopeName, this._variableHandles.create(programScope), false)
 				);
 			}
 			scopes.push(

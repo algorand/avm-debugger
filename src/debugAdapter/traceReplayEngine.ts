@@ -37,6 +37,11 @@ export class TraceReplayEngine {
         this.stack = [
             new TopLevelTransactionGroupsFrame(this, simulateResponse)
         ];
+        if (simulateResponse.txnGroups.length === 1) {
+            // If only a single group, get rid of the top-level frame
+            this.forward();
+            this.stack.shift();
+        }
 	}
 
     private resetCurrentAppState() {

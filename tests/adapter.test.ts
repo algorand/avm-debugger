@@ -57,7 +57,7 @@ async function assertVariables(dc: DebugClient, {
 	assert.ok(scopesResponse.success);
 	const scopes = scopesResponse.body.scopes;
 
-	const executionScope = scopes.find(scope => scope.name === 'Program State');
+	const executionScope = scopes.find(scope => scope.name.startsWith('Program State'));
 	assert.ok(executionScope);
 
 	const executionScopeResponse = await dc.variablesRequest({ variablesReference: executionScope.variablesReference });
