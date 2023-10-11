@@ -10,17 +10,9 @@
 			"name": "Debug Transaction Group",
 			"debuggerPath": "stuff-to-deal",
 
-			// "simulationTraceFile": "${workspaceFolder}/recursive-resp.json",
-			// "appSourceDescriptionFile": "${workspaceFolder}/recursive-group-resources.json",
-			// "program": "${workspaceFolder}/recursive-inner-approval.teal",
-
-			"simulationTraceFile": "${workspaceFolder}/simulate-response.json",
-			"appSourceDescriptionFile": "${workspaceFolder}/txn-group-sources.json",
+			"simulationTraceFile": "${workspaceFolder}/slot-machine/simulate-response.json",
+			"appSourceDescriptionFile": "${workspaceFolder}/slot-machine/sources.json",
 			"program": "${workspaceFolder}/stack-scratch.teal",
-
-			// "simulationTraceFile": "${workspaceFolder}/box-state-changes-resp.json",
-			// "appSourceDescriptionFile": "${workspaceFolder}/state-changes-sources.json",
-			// "program": "${workspaceFolder}/state-changes.teal",
 
 			"stopOnEntry": true,
 			"trace": false

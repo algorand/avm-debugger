@@ -263,7 +263,7 @@ async function assertEvaluationEquals(dc: DebugClient, frameId: number, expressi
 
 const PROJECT_ROOT = path.join(__dirname, '../');
 const DEBUG_CLIENT_PATH = path.join(PROJECT_ROOT, 'out/debugAdapter/debugAdapter.js');
-const DATA_ROOT = path.join(PROJECT_ROOT, 'tests/data/');
+const DATA_ROOT = path.join(PROJECT_ROOT, 'sampleWorkspace/');
 
 describe('Debug Adapter Tests', () => {
 
@@ -274,8 +274,8 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'state-changes-local-resp.json'),
-				path.join(DATA_ROOT, 'state-changes-sources.json')
+				path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json'),
+				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
@@ -340,7 +340,7 @@ describe('Debug Adapter Tests', () => {
 		describe('launch', () => {
 
 			it('should run program to the end', async () => {
-				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+				const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json');
 
 				await Promise.all([
 					dc.configurationSequence(),
@@ -350,7 +350,7 @@ describe('Debug Adapter Tests', () => {
 			});
 
 			it('should stop on entry', async () => {
-				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+				const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json');
 				const ENTRY_LINE = 2;
 
 				await Promise.all([
@@ -365,7 +365,7 @@ describe('Debug Adapter Tests', () => {
 
 			it('should stop on a breakpoint', async () => {
 
-				const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+				const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 				const BREAKPOINT_LINE = 2;
 
 				await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
@@ -380,8 +380,8 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'stack-scratch-resp.json'),
-				path.join(DATA_ROOT, 'stack-scratch-sources.json')
+				path.join(DATA_ROOT, 'stack-scratch/simulate-response.json'),
+				path.join(DATA_ROOT, 'stack-scratch/sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
@@ -395,7 +395,7 @@ describe('Debug Adapter Tests', () => {
 		});
 
 		it('should return variables correctly', async () => {
-			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch.teal');
+			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch/stack-scratch.teal');
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
@@ -568,8 +568,8 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'state-changes-global-resp.json'),
-				path.join(DATA_ROOT, 'state-changes-sources.json')
+				path.join(DATA_ROOT, 'app-state-changes/global-simulate-response.json'),
+				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
@@ -583,7 +583,7 @@ describe('Debug Adapter Tests', () => {
 		});
 
 		it('should return variables correctly', async () => {
-			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+			const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
@@ -673,8 +673,8 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'state-changes-local-resp.json'),
-				path.join(DATA_ROOT, 'state-changes-sources.json')
+				path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json'),
+				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
@@ -688,7 +688,7 @@ describe('Debug Adapter Tests', () => {
 		});
 
 		it('should return variables correctly', async () => {
-			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+			const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
@@ -794,8 +794,8 @@ describe('Debug Adapter Tests', () => {
 		beforeEach(async () => {
 			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
 				testFileAccessor,
-				path.join(DATA_ROOT, 'state-changes-box-resp.json'),
-				path.join(DATA_ROOT, 'state-changes-sources.json')
+				path.join(DATA_ROOT, 'app-state-changes/box-simulate-response.json'),
+				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
 			server = new BasicServer(testFileAccessor, debugAssets);
 
@@ -809,7 +809,7 @@ describe('Debug Adapter Tests', () => {
 		});
 
 		it('should return variables correctly', async () => {
-			const PROGRAM = path.join(DATA_ROOT, 'state-changes.teal');
+			const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 
 			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
