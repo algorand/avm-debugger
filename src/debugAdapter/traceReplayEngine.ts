@@ -11,7 +11,7 @@ export class TraceReplayEngine {
     public initialAppState = new Map<number, AppState>();
     public currentAppState = new Map<number, AppState>();
 
-    public stack: TraceReplayStackFrame[];
+    public stack: TraceReplayStackFrame[] = [];
 
 	constructor(debugAssets: TEALDebuggingAssets) {
 		this.debugAssets = debugAssets;
@@ -33,7 +33,11 @@ export class TraceReplayEngine {
         }
 
         this.resetCurrentAppState();
+        this.setStartingStack();
+	}
 
+    private setStartingStack() {
+        const { simulateResponse } = this.debugAssets;
         this.stack = [
             new TopLevelTransactionGroupsFrame(this, simulateResponse)
         ];
@@ -42,7 +46,7 @@ export class TraceReplayEngine {
             this.forward();
             this.stack.shift();
         }
-	}
+    }
 
     private resetCurrentAppState() {
         this.currentAppState = new Map(
@@ -123,9 +127,7 @@ export class TraceReplayEngine {
            length = this.stack.length;
            this.currentFrame().backward(this.stack);
             if (this.stack.length === 0) {
-                this.stack = [
-                    new TopLevelTransactionGroupsFrame(this, this.debugAssets.simulateResponse)
-                ];
+                this.setStartingStack();
                 return false;
             }
         } while (this.stack.length < length);
@@ -257,7 +259,7 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
             txnInfos.push(txnResult);
             txnTraces.push(execTrace);
         }
-        const txnGroupFrame = new TransactionStackFrame(this.engine, index, false, txnInfos, txnTraces);
+        const txnGroupFrame = new TransactionStackFrame(this.engine, [index], txnInfos, txnTraces);
         return txnGroupFrame;
     }
 
@@ -275,17 +277,32 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
     }
 }
 
+interface TransactionSourceLocation {
+    line: number,
+    lineEnd?: number,
+    lsigLocation?: {
+        line: number,
+        lineEnd?: number,
+    },
+    appLocation?: {
+        line: number,
+        lineEnd?: number,
+    },
+}
+
 export class TransactionStackFrame extends TraceReplayStackFrame {
 
     private txnIndex: number = 0;
     private preambleDone: boolean = false;
     private logicSigDone: boolean;
     private appDone: boolean;
+
+    private sourceContent: string;
+    private sourceLocations: TransactionSourceLocation[] = [];
     
     constructor(
         engine: TraceReplayEngine,
-        private readonly groupIndex: number,
-        private readonly isInner: boolean,
+        private readonly txnPath: number[],
         private readonly txnInfos: algosdk.modelsv2.PendingTransactionResponse[],
         private readonly txnTraces: Array<algosdk.modelsv2.SimulationTransactionExecTrace | undefined>
     ) {
@@ -302,49 +319,87 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
                 this.appDone = false;
             }
         }
+
+        const individualTxns = this.txnInfos.map(txnInfo => txnInfo.get_obj_for_encoding().txn);
+        this.sourceContent = JSON.stringify(individualTxns, null, 2);
+        let lineOffset = 1; // For opening bracket
+        for (let i = 0; i < this.txnInfos.length; i++) {
+            const txnInfo = this.txnInfos[i];
+            const txnTrace = this.txnTraces[i];
+            const displayedTxn = txnInfo.get_obj_for_encoding().txn;
+            const displayTxnLines = JSON.stringify(displayedTxn, null, 2).split('\n');
+            const sourceLocation: TransactionSourceLocation = {
+                line: lineOffset,
+                lineEnd: lineOffset + displayTxnLines.length + 1,
+            };
+            if (txnTrace) {
+                if (txnTrace.logicSigTrace) {
+                    // TODO: lsigLocation
+                }
+                if (txnTrace.approvalProgramTrace || txnTrace.clearStateProgramTrace) {
+                    let appIdLine: number | undefined = undefined;
+                    let approvalProgramLine: number | undefined = undefined;
+                    for (let i = 0; i < displayTxnLines.length; i++) {
+                        const line = displayTxnLines[i];
+                        if (line.match(/^\s*"apid":\s*\d+,\s*$/)) {
+                            appIdLine = lineOffset + i;
+                            // Break here, this is the ideal result
+                            break;
+                        }
+                        if (line.match(/^\s*"apap":\s*"[A-Za-z0-9+\/=]*",\s*$/)) {
+                            // Show approval program if no app ID is present (during create)
+                            approvalProgramLine = lineOffset + i;
+                            // It's possible that this txn can have an approval program and an appID
+                            // (i.e. during an update), so don't break yet.
+                        }
+                    }
+                    sourceLocation.appLocation = {
+                        // Default to lineOffset + 1 if no appID or approval program is present
+                        line: appIdLine ?? approvalProgramLine ?? lineOffset + 1,
+                    };
+                }
+            }
+            this.sourceLocations.push(sourceLocation);
+            lineOffset += displayTxnLines.length;
+        }
     }
 
     public name(): string {
-        return `${this.isInner ? 'inner ' : ''}transaction ${this.txnIndex}`;
+        return `${this.txnPath.length > 1 ? 'inner ' : ''}transaction ${this.txnIndex}`;
     }
 
     public sourceFile(): FrameSource {
-        const individualTxns = this.txnInfos.map(txnInfo => txnInfo.get_obj_for_encoding().txn);
         return {
-            name: `${this.isInner ? 'inner-' : ''}transaction-group-${this.groupIndex}.json`,
-            content: JSON.stringify(individualTxns, null, 2),
-            contentMimeType: 'application/json'
+            name: `${this.txnPath.length > 1 ? 'inner-' : ''}transaction-group-${this.txnPath.join('-')}.json`,
+            content: this.sourceContent,
+            contentMimeType: 'application/json',
         };
     }
 
     public sourceLocation(): FrameSourceLocation {
-        let lineOffset = 1; // For opening bracket
-        for (let i = 0; i < this.txnIndex; i++) {
-            const txnInfo = this.txnInfos[i];
-            const displayedTxn = txnInfo.get_obj_for_encoding().txn;
-            // + 2 is for opening and closing brackets
-            lineOffset += JSON.stringify(displayedTxn, null, 2).split('\n').length;
-        }
-        const currentTxnJson = JSON.stringify(this.txnInfos[this.txnIndex].get_obj_for_encoding().txn, null, 2).split("\n");
-        let lineCount = currentTxnJson.length;
+        const sourceLocation = this.sourceLocations[this.txnIndex];
+        let frameSourceLocation: FrameSourceLocation = {
+            line: sourceLocation.line,
+            endLine: sourceLocation.lineEnd,
+        };
         if (this.preambleDone) {
             if (!this.logicSigDone) {
-                // TODO
+                if (sourceLocation.lsigLocation) {
+                    frameSourceLocation = {
+                        line: sourceLocation.lsigLocation.line,
+                        endLine: sourceLocation.lsigLocation.lineEnd,
+                    };
+                }
             } else if (!this.appDone) {
-                for (let i = 0; i < currentTxnJson.length; i++) {
-                    const line = currentTxnJson[i];
-                    if (line.match(/^\s*"apid":\s*\d+,\s*$/)) {
-                        lineOffset += i;
-                        lineCount = 0;
-                        break;
-                    }
+                if (sourceLocation.appLocation) {
+                    frameSourceLocation = {
+                        line: sourceLocation.appLocation.line,
+                        endLine: sourceLocation.appLocation.lineEnd,
+                    };
                 }
             }
         }
-        return {
-            line: lineOffset,
-            endLine: lineOffset + lineCount + 1,
-        };
+        return frameSourceLocation;
     }
 
     public forward(stack: TraceReplayStackFrame[]): void {
@@ -357,6 +412,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
         if (!this.logicSigDone && currentTxnTrace) {
             const logicSigFrame = new ProgramStackFrame(
                 this.engine,
+                this.txnPath,
                 'logic sig',
                 currentTxnTrace.logicSigHash!,
                 currentTxnTrace.logicSigTrace!,
@@ -372,6 +428,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             if (currentTxnTrace.approvalProgramTrace) {
                 appFrame = new ProgramStackFrame(
                     this.engine,
+                    this.txnPath,
                     'approval',
                     currentTxnTrace.approvalProgramHash!,
                     currentTxnTrace.approvalProgramTrace!,
@@ -381,6 +438,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             } else {
                 appFrame = new ProgramStackFrame(
                     this.engine,
+                    this.txnPath,
                     'clear state',
                     currentTxnTrace.clearStateProgramHash!,
                     currentTxnTrace.clearStateProgramTrace!,
@@ -453,6 +511,7 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
 
     constructor(
         engine: TraceReplayEngine,
+        private readonly txnPath: number[],
         private readonly programType: 'logic sig' | 'approval' | 'clear state',
         private readonly programHash: Uint8Array,
         private readonly programTrace: algosdk.modelsv2.SimulationOpcodeTraceUnit[],
@@ -512,8 +571,13 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
         if (!sourceInfo) {
             return { line: 0 };
         }
+        const location = sourceInfo.sourcemap.getLocationForPc(this.state.pc);
+        if (!location) {
+            return { line: 0 };
+        }
         return {
-            line: sourceInfo.sourcemap.getLineForPc(this.state.pc) || 0,
+            line: location.line,
+            column: location.column,
         };
     }
 
@@ -531,7 +595,9 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
                 innerGroupInfo.push(innerTxnInfo);
                 innerTraces.push(innerTrace);
             }
-            const innerGroupFrame = new TransactionStackFrame(this.engine, this.innerTxnGroupCount, true, innerGroupInfo, innerTraces);
+            const expandedPath = this.txnPath.slice();
+            expandedPath.push(this.innerTxnGroupCount);
+            const innerGroupFrame = new TransactionStackFrame(this.engine, expandedPath, innerGroupInfo, innerTraces);
             stack.push(innerGroupFrame);
             this.handledInnerTxns = true;
             this.innerTxnGroupCount++;

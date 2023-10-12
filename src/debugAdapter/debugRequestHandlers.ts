@@ -17,6 +17,7 @@ export enum RuntimeEvents {
 	stopOnStep = 'stopOnStep',
 	stopOnBreakpoint = 'stopOnBreakpoint',
 	breakpointValidated = 'breakpointValidated',
+	breakpointLocationChanged = 'breakpointLocationChanged',
 	end = 'end',
 	error = 'error',
 }
@@ -87,6 +88,9 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		this._runtime.on(RuntimeEvents.breakpointValidated, (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
 		});
+		this._runtime.on(RuntimeEvents.breakpointLocationChanged, (bp: IRuntimeBreakpoint) => {
+			this.sendEvent(new BreakpointEvent('changed', { line: bp.location.line, column: bp.location.column, id: bp.id } as DebugProtocol.Breakpoint));
+		});
 		this._runtime.on(RuntimeEvents.end, () => {
 			this.sendEvent(new TerminatedEvent());
 		});
@@ -107,7 +111,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		response.body.supportsConfigurationDoneRequest = true;
 
 		// make VS Code use 'evaluate' when hovering over source
-		response.body.supportsEvaluateForHovers = true;
+		response.body.supportsEvaluateForHovers = false;
 
 		// make VS Code show a 'step back' button
 		response.body.supportsStepBack = true;
@@ -127,7 +131,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 		// the adapter defines two exceptions filters, one with support for conditions.
 		response.body.supportsExceptionFilterOptions = true;
-		response.body.exceptionBreakpointFilters = [
+		response.body.exceptionBreakpointFilters = [ // TODO: make filter inner txn only
 			{
 				filter: 'namedException',
 				label: "Named Exception",
@@ -211,39 +215,57 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
+	protected setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): void {
+		const { path } = args.source;
+		if (typeof path !== 'undefined') {
+			const clientBreakpoints = args.breakpoints || [];
 
-		const path = args.source.path as string;
-		const clientBreakpoints = args.breakpoints || [];
+			// clear all breakpoints for this file
+			this._runtime.clearBreakpoints(path);
 
-		// clear all breakpoints for this file
-		this._runtime.clearBreakpoints(path);
+			// set and verify breakpoint locations
+			const actualBreakpoints = clientBreakpoints.map(clientBp => {
+				const line = this.convertClientLineToDebugger(clientBp.line);
+				const column = typeof clientBp.column === 'number' ? this.convertClientColumnToDebugger(clientBp.column) : undefined;
+				const runtimeBreakpoint = this._runtime.setBreakPoint(path, line, column);
+				const bp = new Breakpoint(
+					runtimeBreakpoint.verified,
+					this.convertDebuggerLineToClient(runtimeBreakpoint.location.line),
+					typeof runtimeBreakpoint.location.column !== 'undefined' ? this.convertDebuggerColumnToClient(runtimeBreakpoint.location.column) : undefined
+				) as DebugProtocol.Breakpoint;
+				bp.id = runtimeBreakpoint.id;
+				return bp;
+			});
 
-		// set and verify breakpoint locations
-		const actualBreakpoints0 = clientBreakpoints.map(async clientBp => {
-			const { verified, line, id } = await this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(clientBp.line));
-			const bp = new Breakpoint(verified, this.convertDebuggerLineToClient(line)) as DebugProtocol.Breakpoint;
-			bp.id = id;
-			return bp;
-		});
-		const actualBreakpoints = await Promise.all(actualBreakpoints0);
-
-		// send back the actual breakpoint positions
-		response.body = {
-			breakpoints: actualBreakpoints
-		};
+			// send back the actual breakpoint positions
+			response.body = {
+				breakpoints: actualBreakpoints
+			};
+		}
+		
 		this.sendResponse(response);
 	}
 
 	protected breakpointLocationsRequest(response: DebugProtocol.BreakpointLocationsResponse, args: DebugProtocol.BreakpointLocationsArguments, request?: DebugProtocol.Request): void {
-		// TODO: shouldn't this get the breakpoints from this._runtime?
-		if (args.source.path) {
+		const { path } = args.source;
+		if (typeof path !== 'undefined') {
+			const startLine = this.convertClientLineToDebugger(args.line);
+			const endLine = typeof args.endLine === 'number' ? this.convertClientLineToDebugger(args.endLine) : startLine;
+			const startColumn = typeof args.column === 'number' ? this.convertClientColumnToDebugger(args.column) : 0;
+			const endColumn = typeof args.endColumn === 'number' ? this.convertClientColumnToDebugger(args.endColumn) : Number.MAX_SAFE_INTEGER;
+
+			const locations = this._runtime.breakpointLocations(path)
+				.filter(({ line, column }) => line >= startLine && line <= endLine && (typeof column !== 'undefined' ? column >= startColumn && column <= endColumn : true));
+
+			const responseBreakpoints: DebugProtocol.BreakpointLocation[] = [];
+			for (const location of locations) {
+				responseBreakpoints.push({
+					line: this.convertDebuggerLineToClient(location.line),
+					column: typeof location.column !== 'undefined' ? this.convertDebuggerColumnToClient(location.column) : undefined,
+				});
+			}
 			response.body = {
-				breakpoints: [{ line: args.line, }]
-			};
-		} else {
-			response.body = {
-				breakpoints: []
+				breakpoints: responseBreakpoints
 			};
 		}
 		this.sendResponse(response);

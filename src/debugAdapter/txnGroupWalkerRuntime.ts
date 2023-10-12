@@ -1,13 +1,18 @@
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './debugRequestHandlers';
 import { AppState } from './appState';
-import { TraceReplayEngine, TraceReplayStackFrame } from './traceReplayEngine';
+import { FrameSourceLocation, TraceReplayEngine, TraceReplayStackFrame } from './traceReplayEngine';
 import { FileAccessor, TEALDebuggingAssets, TxnGroupSourceDescriptor } from './utils';
 
 export interface IRuntimeBreakpoint {
 	id: number;
-	line: number;
 	verified: boolean;
+	location: IRuntimeBreakpointLocation;
+}
+
+export interface IRuntimeBreakpointLocation {
+	line: number;
+	column?: number;
 }
 
 interface IRuntimeStepInTargets {
@@ -56,7 +61,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 					if (!fsPath) {
 						continue;
 					}
-					this.verifyBreakpoints(fsPath.fileLocation);
+					this.verifyBreakpoints(fsPath.fileLocation, false);
 				}
 	
 				if (stopOnEntry) {
@@ -96,7 +101,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 				if (!this.updateCurrentLine(reverse)) {
 					break;
 				}
-				if (this.checkForBreakpoints()) {
+				if (this.hitBreakpoint()) {
 					break;
 				}
 			}
@@ -109,7 +114,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	public stepIn(targetId: number | undefined) {
 		this.nextTickWithErrorReporting(() => {
 			if (this.updateCurrentLine(false)) {
-				if (!this.checkForBreakpoints()) {
+				if (!this.hitBreakpoint()) {
 					this.sendEvent(RuntimeEvents.stopOnStep);
 				}
 			}
@@ -129,7 +134,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 				if (!this.updateCurrentLine(false)) {
 					return;
 				}
-				if (this.checkForBreakpoints()) {
+				if (this.hitBreakpoint()) {
 					return;
 				}
 			}
@@ -147,7 +152,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 				if (!this.updateCurrentLine(reverse)) {
 					return;
 				}
-				if (this.checkForBreakpoints()) {
+				if (this.hitBreakpoint()) {
 					return;
 				}
 			} while (targetStackDepth < this.engine.stack.length);
@@ -188,20 +193,45 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	}
 
 	/*
-	 * Set breakpoint in file with given line.
+	 * Return all possible breakpoint locations for the file with given path.
 	 */
-	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {
+	public breakpointLocations(path: string): IRuntimeBreakpointLocation[] {
 		path = this.normalizePathAndCasing(path);
 
-		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
+		let sourceDescriptor: TxnGroupSourceDescriptor | undefined = undefined;
+		for (const [_, entrySourceInfo] of this.engine.programHashToSource.entriesHex()) {
+			if (entrySourceInfo && entrySourceInfo.fileLocation === path) {
+				sourceDescriptor = entrySourceInfo;
+				break;
+			}
+		}
+		if (sourceDescriptor) {
+			const locations: IRuntimeBreakpointLocation[] = [];
+			for (const pc of sourceDescriptor.sourcemap.getPcs()) {
+				const location = sourceDescriptor.sourcemap.getLocationForPc(pc)!;
+				locations.push(location);
+			}
+			return locations;
+		}
+
+		return [];
+	}
+
+	/*
+	 * Set breakpoint in file with given line.
+	 */
+	public setBreakPoint(path: string, line: number, column?: number): IRuntimeBreakpoint {
+		path = this.normalizePathAndCasing(path);
+
+		const bp: IRuntimeBreakpoint = { verified: false, location: { line, column }, id: this.breakpointId++ };
 		let bps = this.breakPoints.get(path);
 		if (!bps) {
-			bps = new Array<IRuntimeBreakpoint>();
+			bps = [];
 			this.breakPoints.set(path, bps);
 		}
 		bps.push(bp);
 
-		this.verifyBreakpoints(path);
+		this.verifyBreakpoints(path, true);
 
 		return bp;
 	}
@@ -228,13 +258,13 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		return this.engine.currentAppState.get(appID) || new AppState();
 	}
 
-	private checkForBreakpoints(): boolean {
+	private hitBreakpoint(): boolean {
 		const frame = this.engine.currentFrame();
 		const sourceInfo = frame.sourceFile();
 		const sourceLocation = frame.sourceLocation();
 		if (sourceInfo.path) {
 			const breakpoints = this.breakPoints.get(sourceInfo.path) || [];
-			const bps = breakpoints.filter(bp => bp.line === sourceLocation.line);
+			const bps = breakpoints.filter(bp => this.isFrameLocationOnBreakpoint(sourceLocation, bp.location));
 			if (bps.length !== 0) {
 				// send 'stopped' event
 				this.sendEvent(RuntimeEvents.stopOnBreakpoint);
@@ -254,7 +284,7 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 
 	// Helper functions
 
-	private verifyBreakpoints(path: string) {
+	private verifyBreakpoints(path: string, silent: boolean) {
 		const bps = this.breakPoints.get(path);
 		if (typeof bps === 'undefined') {
 			return;
@@ -267,16 +297,26 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 				break;
 			}
 		}
-		if (!sourceDescriptor) {
-			return;
-		}
+		if (sourceDescriptor) {
+			for (const bp of bps) {
+				if (!bp.verified) {
+					let location = bp.location;
 
-		for (const bp of bps) {
-			if (!bp.verified) {
-				const pcs = sourceDescriptor.sourcemap.getPcsForLine(bp.line);
-				if (pcs && pcs.length !== 0) {
-					bp.verified = true;
-					this.sendEvent(RuntimeEvents.breakpointValidated, bp);
+					const pcs = sourceDescriptor.sourcemap.getPcsForLine(location.line);
+					if (typeof location.column === 'undefined' && pcs.length !== 0) {
+						const sortedPcs = pcs.slice().sort((a, b) => a.column - b.column);
+						location.column = sortedPcs[0].column;
+						if (!silent) {
+							this.sendEvent(RuntimeEvents.breakpointLocationChanged, bp);
+						}
+					}
+
+					if (typeof location.column !== 'undefined' && pcs.some(({ column }) => column === location.column)) {
+						bp.verified = true;
+						if (!silent) {
+							this.sendEvent(RuntimeEvents.breakpointValidated, bp);
+						}
+					}
 				}
 			}
 		}
@@ -294,5 +334,15 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		} else {
 			return path.replace(/\\/g, '/');
 		}
+	}
+
+	private isFrameLocationOnBreakpoint(location: FrameSourceLocation, bp: IRuntimeBreakpointLocation): boolean {
+		if (location.line !== bp.line) {
+			return false;
+		}
+		if (typeof bp.column === 'undefined' || typeof location.column === 'undefined') {
+			return true;
+		}
+		return bp.column === location.column;
 	}
 }
