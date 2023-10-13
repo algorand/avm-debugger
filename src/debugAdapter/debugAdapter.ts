@@ -1,6 +1,7 @@
 import { TxnGroupDebugSession } from './debugRequestHandlers';
 
 import { promises as fs } from 'fs';
+import * as path from 'path';
 import * as Net from 'net';
 import { FileAccessor, TEALDebuggingAssets } from './utils';
 
@@ -53,7 +54,7 @@ async function run() {
 		throw new Error('missing ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH');
 	}
 
-	const assets = await TEALDebuggingAssets.loadFromFiles(fsAccessor, simulateResponsePath, txnGroupSourcesDescriptionPath);
+	const assets = await TEALDebuggingAssets.loadFromFiles(fsAccessor, path.resolve(simulateResponsePath), path.resolve(txnGroupSourcesDescriptionPath));
 
 	if (port > 0) {
 		// start a server that creates a new session for every connection request

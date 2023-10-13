@@ -17,7 +17,6 @@ export enum RuntimeEvents {
 	stopOnStep = 'stopOnStep',
 	stopOnBreakpoint = 'stopOnBreakpoint',
 	breakpointValidated = 'breakpointValidated',
-	breakpointLocationChanged = 'breakpointLocationChanged',
 	end = 'end',
 	error = 'error',
 }
@@ -86,10 +85,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 			this.sendEvent(new StoppedEvent('breakpoint', TxnGroupDebugSession.threadID));
 		});
 		this._runtime.on(RuntimeEvents.breakpointValidated, (bp: IRuntimeBreakpoint) => {
-			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
-		});
-		this._runtime.on(RuntimeEvents.breakpointLocationChanged, (bp: IRuntimeBreakpoint) => {
-			this.sendEvent(new BreakpointEvent('changed', { line: bp.location.line, column: bp.location.column, id: bp.id } as DebugProtocol.Breakpoint));
+			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, column: bp.location.column, id: bp.id } as DebugProtocol.Breakpoint));
 		});
 		this._runtime.on(RuntimeEvents.end, () => {
 			this.sendEvent(new TerminatedEvent());

@@ -57,11 +57,13 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	public start(stopOnEntry: boolean, debug: boolean) {
 		this.nextTickWithErrorReporting(() => {
 			if (debug) {
-				for (let [_, fsPath] of this.engine.programHashToSource.entriesHex()) {
-					if (!fsPath) {
+				for (let [_, sourceDescriptor] of this.engine.programHashToSource.entriesHex()) {
+					if (!sourceDescriptor) {
 						continue;
 					}
-					this.verifyBreakpoints(fsPath.fileLocation, false);
+					for (const sourcePath of sourceDescriptor.sourcePaths()) {
+						this.verifyBreakpoints(sourcePath, false);
+					}
 				}
 	
 				if (stopOnEntry) {
@@ -195,26 +197,23 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 	/*
 	 * Return all possible breakpoint locations for the file with given path.
 	 */
-	public breakpointLocations(path: string): IRuntimeBreakpointLocation[] {
-		path = this.normalizePathAndCasing(path);
+	public breakpointLocations(filePath: string): IRuntimeBreakpointLocation[] {
+		const locations: IRuntimeBreakpointLocation[] = [];
 
-		let sourceDescriptor: TxnGroupSourceDescriptor | undefined = undefined;
-		for (const [_, entrySourceInfo] of this.engine.programHashToSource.entriesHex()) {
-			if (entrySourceInfo && entrySourceInfo.fileLocation === path) {
-				sourceDescriptor = entrySourceInfo;
-				break;
+		const sourceDescriptors = this.findSourceDescriptorsForPath(filePath);
+		for (const { descriptor, sourceIndex } of sourceDescriptors) {
+			for (const pc of descriptor.sourcemap.getPcs()) {
+				const location = descriptor.sourcemap.getLocationForPc(pc)!;
+				if (location.sourceIndex === sourceIndex) {
+					locations.push({
+						line: location.line,
+						column: location.column
+					});
+				}
 			}
 		}
-		if (sourceDescriptor) {
-			const locations: IRuntimeBreakpointLocation[] = [];
-			for (const pc of sourceDescriptor.sourcemap.getPcs()) {
-				const location = sourceDescriptor.sourcemap.getLocationForPc(pc)!;
-				locations.push(location);
-			}
-			return locations;
-		}
 
-		return [];
+		return locations;
 	}
 
 	/*
@@ -290,32 +289,23 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 			return;
 		}
 
-		let sourceDescriptor: TxnGroupSourceDescriptor | undefined = undefined;
-		for (const [_, entrySourceInfo] of this.engine.programHashToSource.entriesHex()) {
-			if (entrySourceInfo && entrySourceInfo.fileLocation === path) {
-				sourceDescriptor = entrySourceInfo;
-				break;
+		const sourceDescriptors = this.findSourceDescriptorsForPath(path);
+		for (const bp of bps) {
+			if (bp.verified) {
+				continue;
 			}
-		}
-		if (sourceDescriptor) {
-			for (const bp of bps) {
-				if (!bp.verified) {
-					let location = bp.location;
+			const location = bp.location;
+			for (const { descriptor, sourceIndex } of sourceDescriptors) {
+				const pcs = descriptor.sourcemap.getPcsOnSourceLine(sourceIndex, location.line);
+				if (typeof location.column === 'undefined' && pcs.length !== 0) {
+					const sortedPcs = pcs.slice().sort((a, b) => a.column - b.column);
+					location.column = sortedPcs[0].column;
+				}
 
-					const pcs = sourceDescriptor.sourcemap.getPcsForLine(location.line);
-					if (typeof location.column === 'undefined' && pcs.length !== 0) {
-						const sortedPcs = pcs.slice().sort((a, b) => a.column - b.column);
-						location.column = sortedPcs[0].column;
-						if (!silent) {
-							this.sendEvent(RuntimeEvents.breakpointLocationChanged, bp);
-						}
-					}
-
-					if (typeof location.column !== 'undefined' && pcs.some(({ column }) => column === location.column)) {
-						bp.verified = true;
-						if (!silent) {
-							this.sendEvent(RuntimeEvents.breakpointValidated, bp);
-						}
+				if (typeof location.column !== 'undefined' && pcs.some(({ column }) => column === location.column)) {
+					bp.verified = true;
+					if (!silent) {
+						this.sendEvent(RuntimeEvents.breakpointValidated, bp);
 					}
 				}
 			}
@@ -328,11 +318,11 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 		}, 0);
 	}
 
-	private normalizePathAndCasing(path: string) {
+	private normalizePathAndCasing(filePath: string) {
 		if (this.fileAccessor.isWindows) {
-			return path.replace(/\//g, '\\').toLowerCase();
+			return filePath.replace(/\//g, '\\').toLowerCase();
 		} else {
-			return path.replace(/\\/g, '/');
+			return filePath.replace(/\\/g, '/');
 		}
 	}
 
@@ -344,5 +334,23 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 			return true;
 		}
 		return bp.column === location.column;
+	}
+
+	private findSourceDescriptorsForPath(filePath: string): Array<{ descriptor: TxnGroupSourceDescriptor, sourceIndex: number }> {
+		filePath = this.normalizePathAndCasing(filePath);
+
+		const sourceDescriptors: Array<{ descriptor: TxnGroupSourceDescriptor, sourceIndex: number }> = [];
+
+		for (const [_, entrySourceInfo] of this.engine.programHashToSource.entriesHex()) {
+			if (!entrySourceInfo) {
+				continue;
+			}
+			const entrySourceIndex = entrySourceInfo.sourcePaths().indexOf(filePath);
+			if (entrySourceIndex !== -1) {
+				sourceDescriptors.push({ descriptor: entrySourceInfo, sourceIndex: entrySourceIndex });
+			}
+		}
+
+		return sourceDescriptors;
 	}
 }

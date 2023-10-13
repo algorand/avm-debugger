@@ -560,9 +560,13 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
                 content: '// source not available',
             };
         }
+        const location = sourceInfo.sourcemap.getLocationForPc(this.state.pc);
+        // If we can't find a location for this PC, just return the first source.
+        const sourceIndex = location ? location.sourceIndex : 0;
+        const source = sourceInfo.getFullSourcePath(sourceIndex);
         return {
-            name: sourceInfo.fileLocation,
-            path: sourceInfo.fileLocation,
+            name: source,
+            path: source,
         };
     }
 

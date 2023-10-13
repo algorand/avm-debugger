@@ -128,43 +128,39 @@ function filePathRelativeTo(base: string, filePath: string): string {
 }
 
 export class TxnGroupSourceDescriptor {
-    private _fileLocation: string;
-    private _sourcemap: algosdk.SourceMap;
-    private _hash: string;
+    public readonly sourcemapFileLocation: string;
+    public readonly sourcemap: algosdk.SourceMap;
+    public readonly hash: string;
 
     constructor({
-        fileLocation,
+        sourcemapFileLocation,
         sourcemap,
         hash,
     }: {
-        fileLocation: string,
+        sourcemapFileLocation: string,
         sourcemap: algosdk.SourceMap,
         hash: string,
     }) {
-        this._fileLocation = fileLocation;
-        this._sourcemap = sourcemap;
-        this._hash = hash;
+        this.sourcemapFileLocation = sourcemapFileLocation;
+        this.sourcemap = sourcemap;
+        this.hash = hash;
     }
 
-    public get fileLocation(): string {
-        return this._fileLocation;
+    public sourcePaths(): string[] {
+        return this.sourcemap.sources.map((_, index) => this.getFullSourcePath(index));
     }
 
-    public get sourcemap(): algosdk.SourceMap {
-        return this._sourcemap;
-    }
-
-    public get hash(): string {
-        return this._hash;
+    public getFullSourcePath(index: number): string {
+        return filePathRelativeTo(this.sourcemapFileLocation, this.sourcemap.sources[index]);
     }
 
     static async fromJSONObj(fileAccessor: FileAccessor, originFile: string, data: Record<string, any>): Promise<TxnGroupSourceDescriptor> {
-        const sourcemapLocation = filePathRelativeTo(originFile, data['sourcemap-location']);
-        const rawSourcemap = Buffer.from(await fileAccessor.readFile(sourcemapLocation));
+        const sourcemapFileLocation = filePathRelativeTo(originFile, data['sourcemap-location']);
+        const rawSourcemap = Buffer.from(await fileAccessor.readFile(sourcemapFileLocation));
         const sourcemap = new algosdk.SourceMap(JSON.parse(rawSourcemap.toString('utf-8')));
 
         return new TxnGroupSourceDescriptor({
-            fileLocation: filePathRelativeTo(originFile, data['file-location']),
+            sourcemapFileLocation,
             sourcemap,
             hash: data['hash'],
         });
