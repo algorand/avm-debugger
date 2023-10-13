@@ -56,4 +56,8 @@ export class DebugClient extends DebugClientBase {
         }
         return stackTraceResponse;
     }
+
+    breakpointLocationsRequest(args: DebugProtocol.BreakpointLocationsArguments): Promise<DebugProtocol.BreakpointLocationsResponse> {
+        return this.send('breakpointLocations', args) as Promise<DebugProtocol.BreakpointLocationsResponse>;
+    }
 }

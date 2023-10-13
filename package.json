@@ -36,7 +36,7 @@
     "publish": "vsce publish",
     "publish-pre-release": "vsce publish --pre-release",
     "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify",
-    "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s"
+    "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false"
   },
   "devDependencies": {
     "@types/glob": "^7.2.0",
@@ -219,7 +219,7 @@
     ]
   },
   "dependencies": {
-    "algosdk": "^2.6.0",
+    "algosdk": "github:jasonpaulos/js-algorand-sdk#teal-source-map-improvements",
     "json-bigint": "^1.0.0",
     "lodash": "^4.17.21"
   }
