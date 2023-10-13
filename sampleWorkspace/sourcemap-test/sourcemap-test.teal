@@ -1,5 +1,5 @@
 #pragma version 9
-#define assertEquals ==; assert
+// While this is not legal, for the sake of this example the program imports the "assertEquals" definition from lib.teal
 
 txn ApplicationID; int 0; ==; bz create
 

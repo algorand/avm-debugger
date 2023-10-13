@@ -302,7 +302,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
 			const sourceLocation = frame.sourceLocation();
 			const line = this.convertDebuggerLineToClient(sourceLocation.line);
-			const column = sourceLocation.column ? this.convertDebuggerColumnToClient(sourceLocation.column) : undefined;
+			const column = typeof sourceLocation.column !== 'undefined' ? this.convertDebuggerColumnToClient(sourceLocation.column) : undefined;
 
 			const protocolFrame = new StackFrame(id, frame.name(), source, line, column);
 			protocolFrame.endLine = sourceLocation.endLine;

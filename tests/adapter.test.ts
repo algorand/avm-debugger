@@ -1,269 +1,17 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import * as fs from 'fs/promises';
 import * as algosdk from 'algosdk';
+import { DebugProtocol } from '@vscode/debugprotocol';
 import { DebugClient } from './client';
-import { FileAccessor, TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
+import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
 import { BasicServer } from '../src/debugAdapter/basicServer';
-
-export const testFileAccessor: FileAccessor = {
-	isWindows: typeof process !== 'undefined' && process.platform === 'win32',
-	async readFile(path: string): Promise<Uint8Array> {
-		return await fs.readFile(path);
-	},
-	async writeFile(path: string, contents: Uint8Array) {
-		return await fs.writeFile(path, contents);
-	}
-};
-
-function assertAvmValuesEqual(actual: { value: string, type?: string }, expectedValue: number | bigint | Uint8Array) {
-	if (expectedValue instanceof Uint8Array) {
-		assert.strictEqual(actual.type, 'byte[]');
-		assert.ok(actual.value.startsWith('0x'));
-		const actualBytes = Buffer.from(actual.value.slice(2), 'hex');
-		assert.deepStrictEqual(new Uint8Array(actualBytes), new Uint8Array(expectedValue));
-	} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-		assert.strictEqual(actual.type, 'uint64');
-		assert.strictEqual(BigInt(actual.value), BigInt(expectedValue));
-	} else {
-		throw new Error(`Improper expected value: ${expectedValue}`);
-	}
-}
-
-async function assertVariables(dc: DebugClient, {
-	pc,
-	stack,
-	scratch,
-	apps,
-}: {
-	pc?: number,
-	stack?: Array<number | bigint | Uint8Array>,
-	scratch?: Map<number, number | bigint | Uint8Array>,
-	apps?: Array<{
-		appID: number,
-		globalState?: ByteArrayMap<number | bigint | Uint8Array>,
-		localState?: Array<{
-			account: string,
-			state: ByteArrayMap<number | bigint | Uint8Array>,
-		}>,
-		boxState?: ByteArrayMap<number | bigint | Uint8Array>,
-	}>,
-}) {
-	const stackResponse = await dc.stackTraceRequest({ threadId: 1 });
-	assert.ok(stackResponse.success);
-	const latestFrame = stackResponse.body.stackFrames[0].id;
-
-	const scopesResponse = await dc.scopesRequest({ frameId: latestFrame });
-	assert.ok(scopesResponse.success);
-	const scopes = scopesResponse.body.scopes;
-
-	const executionScope = scopes.find(scope => scope.name.startsWith('Program State'));
-	assert.ok(executionScope);
-
-	const executionScopeResponse = await dc.variablesRequest({ variablesReference: executionScope.variablesReference });
-	assert.ok(executionScopeResponse.success);
-	const executionScopeVariables = executionScopeResponse.body.variables;
-
-	const onChainScope = scopes.find(scope => scope.name === 'On-chain State');
-	assert.ok(onChainScope);
-
-	const onChainScopeResponse = await dc.variablesRequest({ variablesReference: onChainScope.variablesReference });
-	assert.ok(onChainScopeResponse.success);
-	const onChainScopeVariables = onChainScopeResponse.body.variables;
-
-	const appStateVariable = onChainScopeVariables.find(variable => variable.name === 'app');
-	assert.ok(appStateVariable);
-
-	const appStateVariableResponse = await dc.variablesRequest({ variablesReference: appStateVariable.variablesReference });
-	assert.ok(appStateVariableResponse.success);
-	const appStates = appStateVariableResponse.body.variables;
-
-	if (typeof pc !== 'undefined') {
-		const pcVariable = executionScopeVariables.find(variable => variable.name === 'pc');
-		assert.ok(pcVariable);
-		assert.strictEqual(pcVariable.type, 'uint64');
-		assert.strictEqual(pcVariable.value, pc.toString());
-
-		await assertEvaluationEquals(dc, latestFrame, 'pc', { value: pc.toString(), type: 'uint64' });
-	}
-
-	if (typeof stack !== 'undefined') {
-		const stackParentVariable = executionScopeVariables.find(variable => variable.name === 'stack');
-		assert.ok(stackParentVariable);
-
-		const stackVariableResponse = await dc.variablesRequest({ variablesReference: stackParentVariable.variablesReference });
-		assert.ok(stackVariableResponse.success);
-		const stackVariables = stackVariableResponse.body.variables;
-
-		assert.strictEqual(stackVariables.length, stack.length);
-
-		for (let i = 0; i < stack.length; i++) {
-			assert.strictEqual(stackVariables[i].name, i.toString());
-			assertAvmValuesEqual(stackVariables[i], stack[i]);
-		}
-
-		await Promise.all(stack.map(async (expectedValue, i) => {
-			if (expectedValue instanceof Uint8Array) {
-				await assertEvaluationEquals(dc, latestFrame, `stack[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
-			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				await assertEvaluationEquals(dc, latestFrame, `stack[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
-			} else {
-				throw new Error(`Improper expected stack value: ${expectedValue}`);
-			}
-		}));
-	}
-
-	if (typeof scratch !== 'undefined') {
-		for (const key of scratch.keys()) {
-			if (key < 0 || key > 255) {
-				assert.fail(`Invalid scratch key: ${key}`);
-			}
-		}
-
-		const scratchParentVariable = executionScopeVariables.find(variable => variable.name === 'scratch');
-		assert.ok(scratchParentVariable);
-
-		const scratchVariableResponse = await dc.variablesRequest({ variablesReference: scratchParentVariable.variablesReference });
-		assert.ok(scratchVariableResponse.success);
-		const scratchVariables = scratchVariableResponse.body.variables;
-
-		assert.strictEqual(scratchVariables.length, 256);
-
-		for (let i = 0; i < 256; i++) {
-			assert.strictEqual(scratchVariables[i].name, i.toString());
-			let expectedValue = scratch.get(i);
-			if (typeof expectedValue === 'undefined') {
-				expectedValue = 0;
-			}
-			assertAvmValuesEqual(scratchVariables[i], expectedValue);
-		}
-
-		await Promise.all(scratchVariables.map(async (actual, i) => {
-			let expectedValue = scratch.get(i);
-			if (typeof expectedValue === 'undefined') {
-				expectedValue = 0;
-			}
-
-			if (expectedValue instanceof Uint8Array) {
-				await assertEvaluationEquals(dc, latestFrame, `scratch[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
-			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				await assertEvaluationEquals(dc, latestFrame, `scratch[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
-			} else {
-				throw new Error(`Improper expected scratch value: ${expectedValue}`);
-			}
-		}));
-	}
-
-	if (typeof apps !== 'undefined') {
-		for (const expectedAppState of apps) {
-			const { appID, globalState, localState, boxState } = expectedAppState;
-			const appState = appStates.find(variable => variable.name === appID.toString());
-			assert.ok(appState, `Expected app state for app ID ${appID} not found`);
-
-			const appStateResponse = await dc.variablesRequest({ variablesReference: appState.variablesReference });
-			assert.ok(appStateResponse.success);
-			const appStateVariables = appStateResponse.body.variables;
-
-			if (typeof globalState !== 'undefined') {
-				const globalStateVariable = appStateVariables.find(variable => variable.name === 'global');
-				assert.ok(globalStateVariable);
-
-				const globalStateResponse = await dc.variablesRequest({ variablesReference: globalStateVariable.variablesReference });
-				assert.ok(globalStateResponse.success);
-				const globalStateVariables = globalStateResponse.body.variables;
-
-				for (const [key, expectedValue] of globalState.entries()) {
-					const keyStr = '0x' + Buffer.from(key).toString('hex');
-					const actual = globalStateVariables.find(variable => variable.name === keyStr);
-					assert.ok(actual, `Expected global state key "${keyStr}" not found`);
-					assertAvmValuesEqual(actual, expectedValue);
-				}
-
-				assert.strictEqual(globalStateVariables.length, globalState.size);
-			}
-
-			if (typeof localState !== 'undefined') {
-				const localStateVariable = appStateVariables.find(variable => variable.name === 'local');
-				assert.ok(localStateVariable);
-
-				const localStateResponse = await dc.variablesRequest({ variablesReference: localStateVariable.variablesReference });
-				assert.ok(localStateResponse.success);
-				const localStateAccounts = localStateResponse.body.variables;
-
-				for (const expectedAccountState of localState) {
-					const accountLocalState = localStateAccounts.find(variable => variable.name === expectedAccountState.account);
-					assert.ok(accountLocalState, `Expected local state for account ${expectedAccountState.account} not found`);
-
-					const accountLocalStateResponse = await dc.variablesRequest({ variablesReference: accountLocalState.variablesReference });
-					assert.ok(accountLocalStateResponse.success);
-					const accountLocalStateVariables = accountLocalStateResponse.body.variables;
-
-					for (const [key, expectedValue] of expectedAccountState.state.entries()) {
-						const keyStr = '0x' + Buffer.from(key).toString('hex');
-						const actual = accountLocalStateVariables.find(variable => variable.name === keyStr);
-						assert.ok(actual, `Expected local state key "${keyStr}" not found`);
-						assertAvmValuesEqual(actual, expectedValue);
-					}
-
-					assert.strictEqual(accountLocalStateVariables.length, expectedAccountState.state.size);
-				}
-
-				assert.strictEqual(localStateAccounts.length, localState.length);
-			}
-
-			if (typeof boxState !== 'undefined') {
-				const boxStateVariable = appStateVariables.find(variable => variable.name === 'box');
-				assert.ok(boxStateVariable);
-
-				const boxStateResponse = await dc.variablesRequest({ variablesReference: boxStateVariable.variablesReference });
-				assert.ok(boxStateResponse.success);
-				const boxStateVariables = boxStateResponse.body.variables;
-
-				for (const [key, expectedValue] of boxState.entries()) {
-					const keyStr = '0x' + Buffer.from(key).toString('hex');
-					const actual = boxStateVariables.find(variable => variable.name === keyStr);
-					assert.ok(actual, `Expected box state key "${keyStr}" not found`);
-					assertAvmValuesEqual(actual, expectedValue);
-				}
-
-				assert.strictEqual(boxStateVariables.length, boxState.size);
-			}
-		}
-	}
-}
-
-async function advanceTo(dc: DebugClient, args: { program: string, line: number, column?: number} ) {
-	const breakpointResponse = await dc.setBreakpointsRequest({
-		source: { path: args.program },
-		breakpoints: [{
-			line: args.line,
-			column: args.column
-		}],
-	});
-
-	assert.ok(breakpointResponse.success);
-	assert.strictEqual(breakpointResponse.body.breakpoints.length, 1);
-	const bp = breakpointResponse.body.breakpoints[0];
-	assert.ok(bp.verified);
-
-	const continueResponse = await dc.continueRequest({ threadId: 0 });
-	assert.ok(continueResponse.success);
-
-	await dc.assertStoppedLocation('breakpoint', { path: args.program, line: args.line, column: args.column });
-}
-
-async function assertEvaluationEquals(dc: DebugClient, frameId: number, expression: string, expected: { value: string, type?: string }) {
-	const response = await dc.evaluateRequest({ expression, frameId });
-	assert.ok(response.success);
-	assert.strictEqual(response.body.result, expected.value, `Expected "${expression}" to evaluate to "${expected.value}", but got "${response.body.result}"`);
-	if (expected.type) {
-		assert.strictEqual(response.body.type, expected.type, `Expected "${expression}" to have type "${expected.type}", but got "${response.body.type}"`);
-	}
-}
-
-const PROJECT_ROOT = path.join(__dirname, '../');
-const DEBUG_CLIENT_PATH = path.join(PROJECT_ROOT, 'out/debugAdapter/debugAdapter.js');
-const DATA_ROOT = path.join(PROJECT_ROOT, 'sampleWorkspace/');
+import {
+	assertVariables,
+	advanceTo,
+	testFileAccessor,
+	DATA_ROOT,
+	DEBUG_CLIENT_PATH,
+} from './testing';
 
 describe('Debug Adapter Tests', () => {
 
@@ -889,6 +637,164 @@ describe('Debug Adapter Tests', () => {
 					])
 				}],
 			});
+		});
+	});
+
+	describe('Source mapping', () => {
+		let server: BasicServer;
+		let dc: DebugClient;
+
+		beforeEach(async () => {
+			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+				testFileAccessor,
+				path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
+				path.join(DATA_ROOT, 'sourcemap-test/sources.json')
+			);
+			server = new BasicServer(testFileAccessor, debugAssets);
+
+			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
+			await dc.start(server.port());
+		});
+
+		afterEach(async () => {
+			await dc.stop();
+			server.dispose();
+		});
+
+		interface SourceInfo {
+			path: string,
+			validBreakpoints: DebugProtocol.BreakpointLocation[],
+		}
+
+		const testSources: SourceInfo[] = [
+			{
+				path: path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal'),
+				validBreakpoints: [
+					{ line: 4, column: 1 },
+					{ line: 4, column: 20 },
+					{ line: 4, column: 27 },
+					{ line: 4, column: 31 },
+					{ line: 7, column: 5 },
+					{ line: 7, column: 12 },
+					{ line: 7, column: 19 },
+					{ line: 8, column: 5 },
+					{ line: 8, column: 12 },
+					{ line: 8, column: 19 },
+					{ line: 12, column: 5 },
+					{ line: 13, column: 5 },
+				]
+			},
+			{
+				path: path.join(DATA_ROOT, 'sourcemap-test/lib.teal'),
+				validBreakpoints: [
+					{ line: 2, column: 22 },
+					{ line: 2, column: 26 },
+				]
+			},
+		];
+
+		it('should return correct breakpoint locations', async () => {
+			for (const source of testSources) {
+				const response = await dc.breakpointLocationsRequest({
+					source: {
+						path: source.path,
+					},
+					line: 0,
+					endLine: 100,
+				});
+				assert.ok(response.success);
+				
+				const actualBreakpointLocations = response.body.breakpoints.slice();
+				// Sort the response so that it's easier to compare
+				actualBreakpointLocations.sort((a, b) => {
+					if (a.line === b.line) {
+						return (a.column ?? 0) - (b.column ?? 0);
+					}
+					return a.line - b.line;
+				});
+	
+				assert.deepStrictEqual(actualBreakpointLocations, source.validBreakpoints);
+			}
+		});
+
+		it('should correctly set and stop at valid breakpoints', async () => {
+			await Promise.all([
+				dc.configurationSequence(),
+				dc.launch({
+					program: path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
+					stopOnEntry: true
+				}),
+				dc.assertStoppedLocation('entry', {})
+			]);
+
+			for (const source of testSources) {
+				const result = await dc.setBreakpointsRequest({
+					source: { path: source.path },
+					breakpoints: source.validBreakpoints, 
+				});
+				assert.ok(result.success);
+
+				assert.ok(result.body.breakpoints.every(bp => bp.verified));
+				const actualBreakpointLocations = result.body.breakpoints
+					.map(bp => ({ line: bp.line, column: bp.column }));
+				assert.deepStrictEqual(actualBreakpointLocations, source.validBreakpoints);
+			}
+
+			// The breakpoints will not necessarily be hit in order, since PCs map to different
+			// places in the source file, so we will keep track of which breakpoints have been hit.
+			const seenBreakpointLocation: boolean[][] = testSources.map(source => source.validBreakpoints.map(() => false));
+
+			while (seenBreakpointLocation.some(sourceBreakpoints => sourceBreakpoints.some(seen => !seen))) {
+				await dc.continueRequest({ threadId: 1 });
+				const stoppedResponse = await dc.assertStoppedLocation('breakpoint', {});
+				const stoppedFrame = stoppedResponse.body.stackFrames[0];
+				let found = false;
+				for (let sourceIndex = 0; sourceIndex < testSources.length; sourceIndex++) {
+					const source = testSources[sourceIndex];
+					if (source.path !== stoppedFrame.source?.path) {
+						continue;
+					}
+					for (let i = 0; i < source.validBreakpoints.length; i++) {
+						if (source.validBreakpoints[i].line === stoppedFrame.line &&
+							source.validBreakpoints[i].column === stoppedFrame.column) {
+							assert.strictEqual(seenBreakpointLocation[sourceIndex][i], false, `Breakpoint ${i} was hit twice. Line: ${stoppedFrame.line}, Column: ${stoppedFrame.column}, Path: ${source.path}`);
+							seenBreakpointLocation[sourceIndex][i] = true;
+							found = true;
+							break;
+						}
+					}
+				}
+				assert.ok(found, `Breakpoint at path ${stoppedFrame.source?.path}, line ${stoppedFrame.line}, column ${stoppedFrame.column} was not expected`);
+			}
+		});
+
+		it('should correctly handle invalid breakpoints and not stop at them', async () => {
+			await Promise.all([
+				dc.configurationSequence(),
+				dc.launch({
+					program: path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
+					stopOnEntry: true
+				}),
+				dc.assertStoppedLocation('entry', {})
+			]);
+
+			const result = await dc.setBreakpointsRequest({
+				source: { path: path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal') },
+				breakpoints: [
+					{ line: 0, column: 0 },
+					{ line: 100, column: 0 },
+					{ line: 0, column: 100 },
+					{ line: 100, column: 100 },
+				],
+			});
+			assert.ok(result.success);
+
+			assert.ok(result.body.breakpoints.every(bp => !bp.verified));
+
+			await Promise.all([
+				dc.continueRequest({ threadId: 1 }),
+				dc.waitForEvent('terminated')
+			]);
 		});
 	});
 });
