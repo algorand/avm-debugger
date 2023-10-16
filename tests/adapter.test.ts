@@ -6,6 +6,7 @@ import { DebugClient } from './client';
 import { TEALDebuggingAssets, ByteArrayMap } from '../src/debugAdapter/utils';
 import { BasicServer } from '../src/debugAdapter/basicServer';
 import {
+	TestFixture,
 	assertVariables,
 	advanceTo,
 	testFileAccessor,
@@ -14,43 +15,26 @@ import {
 } from './testing';
 
 describe('Debug Adapter Tests', () => {
+	const fixture = new TestFixture();
+
+	afterEach(async () => {
+		await fixture.reset();
+	});
 
 	describe('general', () => {
-		let server: BasicServer;
-		let dc: DebugClient;
 
 		beforeEach(async () => {
-			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-				testFileAccessor,
+			await fixture.init(
 				path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json'),
 				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
-			server = new BasicServer(testFileAccessor, debugAssets);
-
-			// dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal', {
-			// 	env: {
-			// 		...process.env,
-			// 		/* eslint-disable @typescript-eslint/naming-convention */
-			// 		ALGORAND_SIMULATION_RESPONSE_PATH: path.join(DATA_ROOT, 'state-changes-local-resp.json'),
-			// 		ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH: path.join(DATA_ROOT, 'state-changes-sources.json'),
-			// 		/* eslint-enable @typescript-eslint/naming-convention */
-			// 	}
-			// }, true);
-			// await dc.start();
-			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
-			await dc.start(server.port());
-		});
-
-		afterEach(async () => {
-			await dc.stop();
-			server.dispose();
 		});
 
 		describe('basic', () => {
 			it('should produce error for unknown request', async () => {
 				let success: boolean;
 				try {
-					await dc.send('illegal_request');
+					await fixture.client.send('illegal_request');
 					success = true;
 				} catch (err) {
 					success = false;
@@ -62,7 +46,7 @@ describe('Debug Adapter Tests', () => {
 		describe('initialize', () => {
 
 			it('should return supported features', () => {
-				return dc.initializeRequest().then(response => {
+				return fixture.client.initializeRequest().then(response => {
 					response.body = response.body || {};
 					assert.strictEqual(response.body.supportsConfigurationDoneRequest, true);
 				});
@@ -71,7 +55,7 @@ describe('Debug Adapter Tests', () => {
 			it('should produce error for invalid \'pathFormat\'', async () => {
 				let success: boolean;
 				try {
-					await dc.initializeRequest({
+					await fixture.client.initializeRequest({
 						adapterID: 'teal',
 						linesStartAt1: true,
 						columnsStartAt1: true,
@@ -91,9 +75,9 @@ describe('Debug Adapter Tests', () => {
 				const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json');
 
 				await Promise.all([
-					dc.configurationSequence(),
-					dc.launch({ program: PROGRAM }),
-					dc.waitForEvent('terminated')
+					fixture.client.configurationSequence(),
+					fixture.client.launch({ program: PROGRAM }),
+					fixture.client.waitForEvent('terminated')
 				]);
 			});
 
@@ -102,9 +86,9 @@ describe('Debug Adapter Tests', () => {
 				const ENTRY_LINE = 2;
 
 				await Promise.all([
-					dc.configurationSequence(),
-					dc.launch({ program: PROGRAM, stopOnEntry: true }),
-					dc.assertStoppedLocation('entry', { line: ENTRY_LINE } )
+					fixture.client.configurationSequence(),
+					fixture.client.launch({ program: PROGRAM, stopOnEntry: true }),
+					fixture.client.assertStoppedLocation('entry', { line: ENTRY_LINE } )
 				]);
 			});
 		});
@@ -116,38 +100,43 @@ describe('Debug Adapter Tests', () => {
 				const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 				const BREAKPOINT_LINE = 2;
 
-				await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
+				await fixture.client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: BREAKPOINT_LINE });
 			});
 		});
 	});
 
-	describe('Stack and scratch changes', () => {
-		let server: BasicServer;
-		let dc: DebugClient;
+	describe('Stepping', () => {
+		it('should return variables correctly', async () => {
+			const simulateTracePath = path.join(DATA_ROOT, 'stack-scratch/simulate-response.json')
+			await fixture.init(
+				simulateTracePath,
+				path.join(DATA_ROOT, 'stack-scratch/sources.json')
+			);
+			const { client } = fixture;
 
-		beforeEach(async () => {
-			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-				testFileAccessor,
+			await Promise.all([
+				client.configurationSequence(),
+				client.launch({ program: simulateTracePath, stopOnEntry: true }),
+				client.assertStoppedLocation('entry', {})
+			]);
+
+			// TODO
+		});
+	});
+
+	describe('Stack and scratch changes', () => {
+		it('should return variables correctly', async () => {
+			await fixture.init(
 				path.join(DATA_ROOT, 'stack-scratch/simulate-response.json'),
 				path.join(DATA_ROOT, 'stack-scratch/sources.json')
 			);
-			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
-			await dc.start(server.port());
-		});
-
-		afterEach(async () => {
-			await dc.stop();
-			server.dispose();
-		});
-
-		it('should return variables correctly', async () => {
+			const { client } = fixture;
 			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch/stack-scratch.teal');
 
-			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+			await client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 6,
 				stack: [
 					1005
@@ -155,9 +144,9 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 12 });
+			await advanceTo(client, { program: PROGRAM, line: 12 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 18,
 				stack: [
 					10
@@ -165,9 +154,9 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 22 });
+			await advanceTo(client, { program: PROGRAM, line: 22 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 34,
 				stack: [
 					10,
@@ -181,9 +170,9 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 35 });
+			await advanceTo(client, { program: PROGRAM, line: 35 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 63,
 				stack: [
 					10,
@@ -194,9 +183,9 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 36 });
+			await advanceTo(client, { program: PROGRAM, line: 36 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 80,
 				stack: [
 					10,
@@ -213,9 +202,9 @@ describe('Debug Adapter Tests', () => {
 				scratch: new Map(),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 37 });
+			await advanceTo(client, { program: PROGRAM, line: 37 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 82,
 				stack: [
 					10,
@@ -236,9 +225,9 @@ describe('Debug Adapter Tests', () => {
 				]),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 39 });
+			await advanceTo(client, { program: PROGRAM, line: 39 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 85,
 				stack: [
 					10,
@@ -262,9 +251,9 @@ describe('Debug Adapter Tests', () => {
 				]),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 41 });
+			await advanceTo(client, { program: PROGRAM, line: 41 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 89,
 				stack: [
 					10,
@@ -288,9 +277,9 @@ describe('Debug Adapter Tests', () => {
 				]),
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 13 });
+			await advanceTo(client, { program: PROGRAM, line: 13 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 21,
 				stack: [
 					30,
@@ -310,32 +299,18 @@ describe('Debug Adapter Tests', () => {
 	});
 
 	describe('Global state changes', () => {
-		let server: BasicServer;
-		let dc: DebugClient;
-
-		beforeEach(async () => {
-			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-				testFileAccessor,
+		it('should return variables correctly', async () => {
+			await fixture.init(
 				path.join(DATA_ROOT, 'app-state-changes/global-simulate-response.json'),
 				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
-			server = new BasicServer(testFileAccessor, debugAssets);
-
-			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
-			await dc.start(server.port());
-		});
-
-		afterEach(async () => {
-			await dc.stop();
-			server.dispose();
-		});
-
-		it('should return variables correctly', async () => {
+			
+			const { client } = fixture;
 			const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 
-			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+			await client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 6,
 				stack: [
 					1050
@@ -346,9 +321,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 14 });
+			await advanceTo(client, { program: PROGRAM, line: 14 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 37,
 				stack: [
 					Buffer.from('8e169311', 'hex'),
@@ -362,9 +337,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 31 });
+			await advanceTo(client, { program: PROGRAM, line: 31 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 121,
 				stack: [
 					Buffer.from('global-int-key'),
@@ -376,9 +351,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 32 });
+			await advanceTo(client, { program: PROGRAM, line: 32 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 122,
 				stack: [],
 				apps: [{
@@ -392,9 +367,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 35 });
+			await advanceTo(client, { program: PROGRAM, line: 35 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 156,
 				stack: [],
 				apps: [{
@@ -415,32 +390,18 @@ describe('Debug Adapter Tests', () => {
 	});
 
 	describe('Local state changes', () => {
-		let server: BasicServer;
-		let dc: DebugClient;
-
-		beforeEach(async () => {
-			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-				testFileAccessor,
+		it('should return variables correctly', async () => {
+			await fixture.init(
 				path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json'),
 				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
-			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
-			await dc.start(server.port());
-		});
-
-		afterEach(async () => {
-			await dc.stop();
-			server.dispose();
-		});
-
-		it('should return variables correctly', async () => {
+			const { client } = fixture;
 			const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 
-			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+			await client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 6,
 				stack: [
 					1054
@@ -454,9 +415,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 14 });
+			await advanceTo(client, { program: PROGRAM, line: 14 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 37,
 				stack: [
 					Buffer.from('8e169311', 'hex'),
@@ -473,9 +434,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 21 });
+			await advanceTo(client, { program: PROGRAM, line: 21 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 69,
 				stack: [
 					algosdk.decodeAddress('YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4').publicKey,
@@ -491,9 +452,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 22 });
+			await advanceTo(client, { program: PROGRAM, line: 22 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 70,
 				stack: [],
 				apps: [{
@@ -510,9 +471,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 26 });
+			await advanceTo(client, { program: PROGRAM, line: 26 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 96,
 				stack: [],
 				apps: [{
@@ -536,32 +497,18 @@ describe('Debug Adapter Tests', () => {
 	});
 
 	describe('Box state changes', () => {
-		let server: BasicServer;
-		let dc: DebugClient;
-
-		beforeEach(async () => {
-			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-				testFileAccessor,
+		it('should return variables correctly', async () => {
+			await fixture.init(
 				path.join(DATA_ROOT, 'app-state-changes/box-simulate-response.json'),
 				path.join(DATA_ROOT, 'app-state-changes/sources.json')
 			);
-			server = new BasicServer(testFileAccessor, debugAssets);
 
-			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
-			await dc.start(server.port());
-		});
-
-		afterEach(async () => {
-			await dc.stop();
-			server.dispose();
-		});
-
-		it('should return variables correctly', async () => {
+			const { client } = fixture;
 			const PROGRAM = path.join(DATA_ROOT, 'app-state-changes/state-changes.teal');
 
-			await dc.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+			await client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 6,
 				stack: [
 					1058
@@ -572,9 +519,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 14 });
+			await advanceTo(client, { program: PROGRAM, line: 14 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 37,
 				stack: [
 					Buffer.from('8e169311', 'hex'),
@@ -588,9 +535,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 40 });
+			await advanceTo(client, { program: PROGRAM, line: 40 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 183,
 				stack: [
 					Buffer.from('box-key-1'),
@@ -602,9 +549,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 41 });
+			await advanceTo(client, { program: PROGRAM, line: 41 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 184,
 				stack: [],
 				apps: [{
@@ -618,9 +565,9 @@ describe('Debug Adapter Tests', () => {
 				}],
 			});
 
-			await advanceTo(dc, { program: PROGRAM, line: 46 });
+			await advanceTo(client, { program: PROGRAM, line: 46 });
 
-			await assertVariables(dc, {
+			await assertVariables(client, {
 				pc: 198,
 				stack: [],
 				apps: [{
@@ -641,26 +588,6 @@ describe('Debug Adapter Tests', () => {
 	});
 
 	describe('Source mapping', () => {
-		let server: BasicServer;
-		let dc: DebugClient;
-
-		beforeEach(async () => {
-			const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
-				testFileAccessor,
-				path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
-				path.join(DATA_ROOT, 'sourcemap-test/sources.json')
-			);
-			server = new BasicServer(testFileAccessor, debugAssets);
-
-			dc = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
-			await dc.start(server.port());
-		});
-
-		afterEach(async () => {
-			await dc.stop();
-			server.dispose();
-		});
-
 		interface SourceInfo {
 			path: string,
 			validBreakpoints: DebugProtocol.BreakpointLocation[],
@@ -694,8 +621,15 @@ describe('Debug Adapter Tests', () => {
 		];
 
 		it('should return correct breakpoint locations', async () => {
+			await fixture.init(
+				path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
+				path.join(DATA_ROOT, 'sourcemap-test/sources.json')
+			);
+
+			const { client } = fixture;
+
 			for (const source of testSources) {
-				const response = await dc.breakpointLocationsRequest({
+				const response = await client.breakpointLocationsRequest({
 					source: {
 						path: source.path,
 					},
@@ -718,17 +652,24 @@ describe('Debug Adapter Tests', () => {
 		});
 
 		it('should correctly set and stop at valid breakpoints', async () => {
+			await fixture.init(
+				path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
+				path.join(DATA_ROOT, 'sourcemap-test/sources.json')
+			);
+
+			const { client } = fixture;
+
 			await Promise.all([
-				dc.configurationSequence(),
-				dc.launch({
+				client.configurationSequence(),
+				client.launch({
 					program: path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
 					stopOnEntry: true
 				}),
-				dc.assertStoppedLocation('entry', {})
+				client.assertStoppedLocation('entry', {})
 			]);
 
 			for (const source of testSources) {
-				const result = await dc.setBreakpointsRequest({
+				const result = await client.setBreakpointsRequest({
 					source: { path: source.path },
 					breakpoints: source.validBreakpoints, 
 				});
@@ -745,8 +686,8 @@ describe('Debug Adapter Tests', () => {
 			const seenBreakpointLocation: boolean[][] = testSources.map(source => source.validBreakpoints.map(() => false));
 
 			while (seenBreakpointLocation.some(sourceBreakpoints => sourceBreakpoints.some(seen => !seen))) {
-				await dc.continueRequest({ threadId: 1 });
-				const stoppedResponse = await dc.assertStoppedLocation('breakpoint', {});
+				await client.continueRequest({ threadId: 1 });
+				const stoppedResponse = await client.assertStoppedLocation('breakpoint', {});
 				const stoppedFrame = stoppedResponse.body.stackFrames[0];
 				let found = false;
 				for (let sourceIndex = 0; sourceIndex < testSources.length; sourceIndex++) {
@@ -769,16 +710,23 @@ describe('Debug Adapter Tests', () => {
 		});
 
 		it('should correctly handle invalid breakpoints and not stop at them', async () => {
+			await fixture.init(
+				path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
+				path.join(DATA_ROOT, 'sourcemap-test/sources.json')
+			);
+
+			const { client } = fixture;
+
 			await Promise.all([
-				dc.configurationSequence(),
-				dc.launch({
+				client.configurationSequence(),
+				client.launch({
 					program: path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
 					stopOnEntry: true
 				}),
-				dc.assertStoppedLocation('entry', {})
+				client.assertStoppedLocation('entry', {})
 			]);
 
-			const result = await dc.setBreakpointsRequest({
+			const result = await client.setBreakpointsRequest({
 				source: { path: path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal') },
 				breakpoints: [
 					{ line: 0, column: 0 },
@@ -792,8 +740,8 @@ describe('Debug Adapter Tests', () => {
 			assert.ok(result.body.breakpoints.every(bp => !bp.verified));
 
 			await Promise.all([
-				dc.continueRequest({ threadId: 1 }),
-				dc.waitForEvent('terminated')
+				client.continueRequest({ threadId: 1 }),
+				client.waitForEvent('terminated')
 			]);
 		});
 	});

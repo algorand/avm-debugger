@@ -2,7 +2,8 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { DebugClient } from './client';
-import { FileAccessor, ByteArrayMap } from '../src/debugAdapter/utils';
+import { BasicServer } from '../src/debugAdapter/basicServer';
+import { FileAccessor, ByteArrayMap, TEALDebuggingAssets } from '../src/debugAdapter/utils';
 
 export const PROJECT_ROOT = path.join(__dirname, '../');
 export const DEBUG_CLIENT_PATH = path.join(PROJECT_ROOT, 'out/debugAdapter/debugAdapter.js');
@@ -17,6 +18,56 @@ export const testFileAccessor: FileAccessor = {
 		return await fs.writeFile(path, contents);
 	}
 };
+
+export class TestFixture {
+
+	private _client: DebugClient | undefined;
+	private _server: BasicServer | undefined;
+
+	public get client(): DebugClient {
+		if (!this._client) {
+			throw new Error("Not initialized");
+		}
+		return this._client;
+	}
+
+	private get server(): BasicServer {
+		if (!this._server) {
+			throw new Error("Not initialized");
+		}
+		return this._server;
+	}
+
+	public async init(simulateResponsePath: string, txnGroupSourcesDescriptionPath: string) {
+		const debugAssets: TEALDebuggingAssets = await TEALDebuggingAssets.loadFromFiles(
+			testFileAccessor,
+			simulateResponsePath,
+			txnGroupSourcesDescriptionPath
+		);
+		this._server = new BasicServer(testFileAccessor, debugAssets);
+
+		this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
+		await this._client.start(this._server.port());
+
+		// this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal', {
+		// 	env: {
+		// 		...process.env,
+		// 		/* eslint-disable @typescript-eslint/naming-convention */
+		// 		ALGORAND_SIMULATION_RESPONSE_PATH: simulateResponsePath,
+		// 		ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH: txnGroupSourcesDescriptionPath,
+		// 		/* eslint-enable @typescript-eslint/naming-convention */
+		// 	}
+		// }, true);
+		// await this._client.start();
+	}
+
+	public async reset() {
+		await this.client.stop();
+		this.server.dispose();
+		this._client = undefined;
+		this._server = undefined;
+	}
+}
 
 export function assertAvmValuesEqual(actual: { value: string, type?: string }, expectedValue: number | bigint | Uint8Array) {
 	if (expectedValue instanceof Uint8Array) {
