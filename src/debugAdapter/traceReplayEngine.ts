@@ -290,12 +290,19 @@ interface TransactionSourceLocation {
     },
 }
 
+enum ProgramStatus {
+    /* eslint-disable @typescript-eslint/naming-convention */
+    NOT_STARTED,
+    STARTING,
+    DONE
+    /* eslint-enable @typescript-eslint/naming-convention */
+}
+
 export class TransactionStackFrame extends TraceReplayStackFrame {
 
     private txnIndex: number = 0;
-    private preambleDone: boolean = false;
-    private logicSigDone: boolean;
-    private appDone: boolean;
+    private logicSigStatus: ProgramStatus = ProgramStatus.DONE;
+    private appStatus: ProgramStatus = ProgramStatus.DONE;
 
     private sourceContent: string;
     private sourceLocations: TransactionSourceLocation[] = [];
@@ -307,16 +314,14 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
         private readonly txnTraces: Array<algosdk.modelsv2.SimulationTransactionExecTrace | undefined>
     ) {
         super(engine);
-        this.logicSigDone = true;
-        this.appDone = true;
-
+        
         const firstTrace = txnTraces[0];
         if (firstTrace) {
             if (firstTrace.logicSigTrace) {
-                this.logicSigDone = false;
+                this.logicSigStatus = ProgramStatus.NOT_STARTED;
             }
             if (firstTrace.approvalProgramTrace || firstTrace.clearStateProgramTrace) {
-                this.appDone = false;
+                this.appStatus = ProgramStatus.NOT_STARTED;
             }
         }
 
@@ -334,7 +339,18 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             };
             if (txnTrace) {
                 if (txnTrace.logicSigTrace) {
-                    // TODO: lsigLocation
+                    let lsigLine: number | undefined = undefined;
+                    for (let i = 0; i < displayTxnLines.length; i++) {
+                        const line = displayTxnLines[i];
+                        if (typeof lsigLine === 'undefined' && line.match(/^\s*"lsig":\s*{\s*$/)) {
+                            lsigLine = lineOffset + i;
+                            continue;
+                        }
+                    }
+                    sourceLocation.lsigLocation = {
+                        // Default to lineOffset + 1 if no lsig is present
+                        line: lsigLine ?? lineOffset + 1,
+                    };
                 }
                 if (txnTrace.approvalProgramTrace || txnTrace.clearStateProgramTrace) {
                     let appIdLine: number | undefined = undefined;
@@ -382,21 +398,19 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             line: sourceLocation.line,
             endLine: sourceLocation.lineEnd,
         };
-        if (this.preambleDone) {
-            if (!this.logicSigDone) {
-                if (sourceLocation.lsigLocation) {
-                    frameSourceLocation = {
-                        line: sourceLocation.lsigLocation.line,
-                        endLine: sourceLocation.lsigLocation.lineEnd,
-                    };
-                }
-            } else if (!this.appDone) {
-                if (sourceLocation.appLocation) {
-                    frameSourceLocation = {
-                        line: sourceLocation.appLocation.line,
-                        endLine: sourceLocation.appLocation.lineEnd,
-                    };
-                }
+        if (this.logicSigStatus === ProgramStatus.STARTING) {
+            if (sourceLocation.lsigLocation) {
+                frameSourceLocation = {
+                    line: sourceLocation.lsigLocation.line,
+                    endLine: sourceLocation.lsigLocation.lineEnd,
+                };
+            }
+        } else if (this.appStatus === ProgramStatus.STARTING) {
+            if (sourceLocation.appLocation) {
+                frameSourceLocation = {
+                    line: sourceLocation.appLocation.line,
+                    endLine: sourceLocation.appLocation.lineEnd,
+                };
             }
         }
         return frameSourceLocation;
@@ -405,11 +419,11 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
     public forward(stack: TraceReplayStackFrame[]): void {
         const currentTxnTrace = this.txnTraces[this.txnIndex];
         const currentTxnInfo = this.txnInfos[this.txnIndex];
-        if (!this.preambleDone && (!this.logicSigDone || !this.appDone)) {
-            this.preambleDone = true;
+        if (this.logicSigStatus === ProgramStatus.NOT_STARTED) {
+            this.logicSigStatus = ProgramStatus.STARTING;
             return;
         }
-        if (!this.logicSigDone && currentTxnTrace) {
+        if (this.logicSigStatus === ProgramStatus.STARTING && currentTxnTrace) {
             const logicSigFrame = new ProgramStackFrame(
                 this.engine,
                 this.txnPath,
@@ -419,11 +433,15 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
                 currentTxnTrace,
                 currentTxnInfo,
             );
-            this.logicSigDone = true;
+            this.logicSigStatus = ProgramStatus.DONE;
             stack.push(logicSigFrame);
             return;
         }
-        if (!this.appDone && currentTxnTrace) {
+        if (this.appStatus === ProgramStatus.NOT_STARTED) {
+            this.appStatus = ProgramStatus.STARTING;
+            return;
+        }
+        if (this.appStatus === ProgramStatus.STARTING && currentTxnTrace) {
             let appFrame: ProgramStackFrame;
             if (currentTxnTrace.approvalProgramTrace) {
                 appFrame = new ProgramStackFrame(
@@ -446,20 +464,19 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
                     currentTxnInfo,
                 );
             }
-            this.appDone = true;
+            this.appStatus = ProgramStatus.DONE;
             stack.push(appFrame);
             return;
         }
         if (this.txnIndex + 1 < this.txnTraces.length) {
             this.txnIndex++;
             const nextTrace = this.txnTraces[this.txnIndex];
-            this.preambleDone = false;
             if (nextTrace) {
-                this.logicSigDone = nextTrace.logicSigTrace ? false : true;
-                this.appDone = nextTrace.approvalProgramTrace || nextTrace.clearStateProgramTrace ? false : true;
+                this.logicSigStatus = nextTrace.logicSigTrace ? ProgramStatus.NOT_STARTED : ProgramStatus.DONE;
+                this.appStatus = nextTrace.approvalProgramTrace || nextTrace.clearStateProgramTrace ? ProgramStatus.NOT_STARTED : ProgramStatus.DONE;
             } else {
-                this.logicSigDone = true;
-                this.appDone = true;
+                this.logicSigStatus = ProgramStatus.DONE;
+                this.appStatus = ProgramStatus.DONE;
             }
             return;
         }
@@ -469,28 +486,42 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
     public backward(stack: TraceReplayStackFrame[]): void {
         const currentTrace = this.txnTraces[this.txnIndex];
         if (currentTrace) {
-            if ((currentTrace.approvalProgramTrace || currentTrace.clearStateProgramTrace) && this.appDone) {
-                this.appDone = false;
-                return;
+            if (currentTrace.approvalProgramTrace || currentTrace.clearStateProgramTrace) {
+                if (this.appStatus === ProgramStatus.DONE) {
+                    this.appStatus = ProgramStatus.STARTING;
+                    return;
+                }
+                if (this.appStatus === ProgramStatus.STARTING) {
+                    this.appStatus = ProgramStatus.NOT_STARTED;
+                    // Need to unwind the forward call that is implicit when the app program frame
+                    // is popped
+                    this.backward(stack);
+                    return;
+                }
             }
-            if (currentTrace.logicSigTrace && this.logicSigDone) {
-                this.logicSigDone = false;
-                return;
+            if (currentTrace.logicSigTrace) {
+                if (this.logicSigStatus === ProgramStatus.DONE) {
+                    this.logicSigStatus = ProgramStatus.STARTING;
+                    return;
+                }
+                if (this.logicSigStatus === ProgramStatus.STARTING) {
+                    this.logicSigStatus = ProgramStatus.NOT_STARTED;
+                    return;
+                }
             }
-        }
-        if (this.preambleDone) {
-            this.preambleDone = false;
-            return;
         }
         if (this.txnIndex === 0) {
             stack.pop();
             return;
         }
         this.txnIndex--;
-        this.preambleDone = true;
-        this.logicSigDone = true;
-        this.appDone = true;
-        this.backward(stack);
+        this.logicSigStatus = ProgramStatus.DONE;
+        this.appStatus = ProgramStatus.DONE;
+        const previousTrace = this.txnTraces[this.txnIndex];
+        if (previousTrace?.approvalProgramHash || previousTrace?.clearStateProgramHash || previousTrace?.logicSigHash) {
+            // Need to step back on the app or lsig status
+            this.backward(stack);
+        }
     }
 }
 
@@ -506,6 +537,7 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     private handledInnerTxns: boolean = false;
     private innerTxnGroupCount: number = 0;
     private initialAppState: AppState | undefined;
+    private logicSigAddress: string | undefined;
 
     public state: ProgramState = { pc: 0, stack: [], scratch: new Map() };
 
@@ -525,9 +557,21 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
         if (typeof appID !== 'undefined') {
             this.initialAppState = engine.currentAppState.get(appID)!.clone();
         }
+
+        if (this.programType === 'logic sig' && typeof this.txnInfo.txn.lsig !== 'undefined') {
+            let lsigBytes = this.txnInfo.txn.lsig.l;
+            if (typeof lsigBytes === 'string') {
+                lsigBytes = Buffer.from(lsigBytes, 'base64');
+            }
+            const lsigAccount = new algosdk.LogicSigAccount(lsigBytes);
+            this.logicSigAddress = lsigAccount.address();
+        }
     }
 
     public currentAppID(): number | undefined {
+        if (this.programType === 'logic sig') {
+            return undefined;
+        }
         if (typeof this.txnInfo.txn.txn.apid !== 'undefined') {
             return Number(this.txnInfo.txn.txn.apid);
         }
@@ -539,8 +583,11 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
 
     public name(): string {
         const appID = this.currentAppID();
-        if (appID) {
+        if (typeof appID !== 'undefined') {
             return `app ${appID} ${this.programType} program`;
+        }
+        if (typeof this.logicSigAddress !== 'undefined') {
+            return `logic sig ${this.logicSigAddress} program`;
         }
         return `${this.programType} program`;
     }
@@ -552,6 +599,8 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
             const appID = this.currentAppID();
             if (typeof appID !== 'undefined') {
                 name = `app ${appID} ${this.programType}.teal`;
+            } else if (typeof this.logicSigAddress !== 'undefined') {
+                name = `logic sig ${this.logicSigAddress}.teal`;
             } else {
                 name = `program ${Buffer.from(this.programHash).toString('base64url')}.teal`;
             }

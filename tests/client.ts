@@ -18,12 +18,46 @@ export class DebugClient extends DebugClientBase {
         });
     }
 
-    async continueRequest(args: DebugProtocol.ContinueArguments): Promise<DebugProtocol.ContinueResponse> {
+    continueRequest(args: DebugProtocol.ContinueArguments): Promise<DebugProtocol.ContinueResponse> {
         // Optimistically clear the last stopped event. It's important to do this before we send the
-        // continue request, otherwise we might miss a stopped event that happens immediately after.
+        // request, otherwise we might miss a stopped event that happens immediately after.
         this.lastStoppedEvent = undefined;
-        const response = await super.continueRequest(args);
-        return response;
+        return super.continueRequest(args);
+    }
+
+    nextRequest(args: DebugProtocol.NextArguments): Promise<DebugProtocol.NextResponse> {
+        // Optimistically clear the last stopped event. It's important to do this before we send the
+        // request, otherwise we might miss a stopped event that happens immediately after.
+        this.lastStoppedEvent = undefined;
+        return super.nextRequest(args);
+    }
+
+    stepInRequest(args: DebugProtocol.StepInArguments): Promise<DebugProtocol.StepInResponse> {
+        // Optimistically clear the last stopped event. It's important to do this before we send the
+        // request, otherwise we might miss a stopped event that happens immediately after.
+        this.lastStoppedEvent = undefined;
+        return super.stepInRequest(args);
+    }
+
+    stepOutRequest(args: DebugProtocol.StepOutArguments): Promise<DebugProtocol.StepOutResponse> {
+        // Optimistically clear the last stopped event. It's important to do this before we send the
+        // request, otherwise we might miss a stopped event that happens immediately after.
+        this.lastStoppedEvent = undefined;
+        return super.stepOutRequest(args);
+    }
+
+    stepBackRequest(args: DebugProtocol.StepBackArguments): Promise<DebugProtocol.StepBackResponse> {
+        // Optimistically clear the last stopped event. It's important to do this before we send the
+        // request, otherwise we might miss a stopped event that happens immediately after.
+        this.lastStoppedEvent = undefined;
+        return super.stepBackRequest(args);
+    }
+
+    reverseContinueRequest(args: DebugProtocol.ReverseContinueArguments): Promise<DebugProtocol.ReverseContinueResponse> {
+        // Optimistically clear the last stopped event. It's important to do this before we send the
+        // request, otherwise we might miss a stopped event that happens immediately after.
+        this.lastStoppedEvent = undefined;
+        return super.reverseContinueRequest(args);
     }
 
     async waitForStop(): Promise<DebugProtocol.StoppedEvent> {

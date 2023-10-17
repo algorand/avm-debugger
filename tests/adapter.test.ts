@@ -105,22 +105,208 @@ describe('Debug Adapter Tests', () => {
 		});
 	});
 
-	describe('Stepping', () => {
-		it('should return variables correctly', async () => {
-			const simulateTracePath = path.join(DATA_ROOT, 'stack-scratch/simulate-response.json')
-			await fixture.init(
-				simulateTracePath,
-				path.join(DATA_ROOT, 'stack-scratch/sources.json')
-			);
-			const { client } = fixture;
+	describe('Controls', () => {
+		interface Location {
+			program?: string,
+			name: string,
+			line: number,
+			column: number,
+		}
 
-			await Promise.all([
-				client.configurationSequence(),
-				client.launch({ program: simulateTracePath, stopOnEntry: true }),
-				client.assertStoppedLocation('entry', {})
-			]);
+		describe('Step in', () => {
+			it('should pause at the correct locations', async () => {
+				const simulateTracePath = path.join(DATA_ROOT, 'stepping-test/simulate-response.json');
+				await fixture.init(
+					simulateTracePath,
+					path.join(DATA_ROOT, 'stepping-test/sources.json')
+				);
+				const { client } = fixture;
 
-			// TODO
+				await Promise.all([
+					client.configurationSequence(),
+					client.launch({ program: simulateTracePath, stopOnEntry: true }),
+					client.assertStoppedLocation('entry', {})
+				]);
+
+				const lsigPath = path.join(DATA_ROOT, 'stepping-test/lsig.teal');
+				const appPath = path.join(DATA_ROOT, 'stepping-test/app.teal');
+				const expectedLocations: Location[] = [
+					{
+						name: "transaction-group-0.json",
+						line: 2,
+						column: 0
+					},
+					{
+						name: "transaction-group-0.json",
+						line: 18,
+						column: 0
+					},
+					{
+						name: "transaction-group-0.json",
+						line: 19,
+						column: 0
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 2,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 3,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 4,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 5,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 6,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 7,
+						column: 1
+					},
+					{
+						name: "transaction-group-0.json",
+						line: 23,
+						column: 0
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 2,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 3,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 5,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 12,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 13,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 14,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 8,
+						column: 1
+					},
+					{
+						program: appPath,
+						name: "app.teal",
+						line: 9,
+						column: 1
+					},
+					{
+						name: "transaction-group-0.json",
+						line: 33,
+						column: 0
+					},
+					{
+						name: "transaction-group-0.json",
+						line: 34,
+						column: 0
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 2,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 3,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 4,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 5,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 6,
+						column: 1
+					},
+					{
+						program: lsigPath,
+						name: "lsig.teal",
+						line: 7,
+						column: 1
+					}
+				];
+
+				for (let i = 0; i < expectedLocations.length; i++) {
+					const expectedLocation = expectedLocations[i];
+					const stackTraceResponse = await client.stackTraceRequest({ threadId: 1 });
+					const currentFrame = stackTraceResponse.body.stackFrames[0];
+					const actualLocation: Location = {
+						name: currentFrame.source?.name!,
+						line: currentFrame.line,
+						column: currentFrame.column,
+					};
+					if (currentFrame.source?.path) {
+						actualLocation.program = currentFrame.source.path;
+					}
+					assert.deepStrictEqual(actualLocation, expectedLocation);
+
+					// Move to next location
+					await client.stepInRequest({ threadId: 1 });
+					if (i + 1 < expectedLocations.length) {
+						const stoppedEvent = await client.waitForStop();
+						assert.strictEqual(stoppedEvent.body.reason, 'step');
+					} else {
+						await client.waitForEvent('terminated');
+					}
+				}
+			});
 		});
 	});
 
