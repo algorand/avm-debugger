@@ -388,7 +388,7 @@ describe('Debug Adapter Tests', () => {
 
 				const programPath = path.join(DATA_ROOT, 'slot-machine/slot-machine.teal');
 
-				await client.hitBreakpoint({ program: programPath }, { path: programPath, line: 2 });
+				await client.hitBreakpoint({ program: simulateTracePath }, { path: programPath, line: 2 });
 
 				const label5Callsub = [
 					{ line: 97, column: 1 },
@@ -591,6 +591,170 @@ describe('Debug Adapter Tests', () => {
 				const currentFrame = stackTraceResponse.body.stackFrames[0];
 				assert.notStrictEqual(currentFrame.source?.path, programPath, "Program has step locations beyond expected");
 				assert.notStrictEqual(currentFrame.source?.name, "slot-machine.teal", "Program has step locations beyond expected");
+			});
+		});
+
+		describe('Step out', () => {
+			it('should pause at the correct locations', async () => {
+				const simulateTracePath = path.join(DATA_ROOT, 'slot-machine/simulate-response.json');
+				await fixture.init(
+					simulateTracePath,
+					path.join(DATA_ROOT, 'slot-machine/sources.json')
+				);
+				const { client } = fixture;
+
+				const fakeRandomPath = path.join(DATA_ROOT, 'slot-machine/fake-random.teal');
+				const randomBytePath = path.join(DATA_ROOT, 'slot-machine/random-byte.teal');
+				const slotMachinePath = path.join(DATA_ROOT, 'slot-machine/slot-machine.teal');
+
+				await client.hitBreakpoint({ program: simulateTracePath }, { path: fakeRandomPath, line: 13 });
+				
+				// clear breakpoint
+				await client.setBreakpointsRequest({
+					source: { path: fakeRandomPath },
+					breakpoints: []
+				});
+
+				interface LocationAndFrameState {
+					location: Location,
+					frameStates: Array<{
+						pc: number,
+						stack: Array<number | bigint | Uint8Array>,
+					} | null>,
+				}
+
+				const expectedLocations: LocationAndFrameState[] = [
+					{
+						location: {
+							program: fakeRandomPath,
+							name: "fake-random.teal",
+							line: 13,
+							column: 1
+						},
+						frameStates: [
+							{
+								pc: 33,
+								stack: [
+									Buffer.from('0000000001fa5f5d23', 'hex'),
+									Buffer.from('counter'),
+								],
+							},
+							null,
+							{
+								pc: 45,
+								stack: [],
+							},
+							null,
+							{
+								pc: 108,
+								stack: [],
+							},
+							null
+						],
+					},
+					{
+						location: {
+							program: randomBytePath,
+							name: "random-byte.teal",
+							line: 22,
+							column: 1
+						},
+						frameStates: [
+							{
+								pc: 46,
+								stack: [],
+							},
+							null,
+							{
+								pc: 108,
+								stack: [],
+							},
+							null
+						],
+					},
+					{
+						location: {
+							name: "inner-transaction-group-0-0.json",
+							line: 20,
+							column: 0
+						},
+						frameStates: [
+							null,
+							{
+								pc: 108,
+								stack: [],
+							},
+							null
+						],
+					},
+					{
+						location: {
+							program: slotMachinePath,
+							name: "slot-machine.teal",
+							line: 52,
+							column: 1
+						},
+						frameStates: [
+							{
+								pc: 109,
+								stack: [],
+							},
+							null
+						],
+					},
+					{
+						location: {
+							name: "transaction-group-0.json",
+							line: 40,
+							column: 0
+						},
+						frameStates: [
+							null
+						],
+					},
+				];
+
+				for (let i = 0; i < expectedLocations.length; i++) {
+					const expectedLocation = expectedLocations[i];
+					const stackTraceResponse = await client.stackTraceRequest({ threadId: 1 });
+					const currentFrame = stackTraceResponse.body.stackFrames[0];
+					const actualLocation: Location = {
+						name: currentFrame.source?.name!,
+						line: currentFrame.line,
+						column: currentFrame.column,
+					};
+					if (currentFrame.source?.path) {
+						actualLocation.program = currentFrame.source.path;
+					}
+					assert.deepStrictEqual(actualLocation, expectedLocation.location);
+
+					assert.strictEqual(stackTraceResponse.body.stackFrames.length, expectedLocation.frameStates.length);
+
+					for (let frameIndex = 0; frameIndex < expectedLocation.frameStates.length; frameIndex++) {
+						const expectedFrameState = expectedLocation.frameStates[frameIndex];
+						const frameId = stackTraceResponse.body.stackFrames[frameIndex].id;
+
+						if (expectedFrameState) {
+							await assertVariables(client, expectedFrameState, frameId);
+						} else {
+							const scopesResponse = await client.scopesRequest({ frameId });
+							assert.ok(scopesResponse.success);
+							const scopes = scopesResponse.body.scopes;
+	
+							const executionScope = scopes.find(scope => scope.name.startsWith('Program State'));
+							assert.strictEqual(executionScope, undefined);
+						}
+					}
+
+					// Move to next location
+					await client.stepOutRequest({ threadId: 1 });
+					if (i + 1 < expectedLocations.length) {
+						const stoppedEvent = await client.waitForStop();
+						assert.strictEqual(stoppedEvent.body.reason, 'step');
+					} else {
+						await client.waitForEvent('terminated');
+					}
+				}
 			});
 		});
 	});

@@ -101,12 +101,14 @@ export async function assertVariables(dc: DebugClient, {
 		}>,
 		boxState?: ByteArrayMap<number | bigint | Uint8Array>,
 	}>,
-}) {
-	const stackResponse = await dc.stackTraceRequest({ threadId: 1 });
-	assert.ok(stackResponse.success);
-	const latestFrame = stackResponse.body.stackFrames[0].id;
+}, frameId?: number) {
+	if (typeof frameId === 'undefined') {
+		const stackResponse = await dc.stackTraceRequest({ threadId: 1 });
+		assert.ok(stackResponse.success);
+		frameId = stackResponse.body.stackFrames[0].id;
+	}
 
-	const scopesResponse = await dc.scopesRequest({ frameId: latestFrame });
+	const scopesResponse = await dc.scopesRequest({ frameId });
 	assert.ok(scopesResponse.success);
 	const scopes = scopesResponse.body.scopes;
 
@@ -137,7 +139,7 @@ export async function assertVariables(dc: DebugClient, {
 		assert.strictEqual(pcVariable.type, 'uint64');
 		assert.strictEqual(pcVariable.value, pc.toString());
 
-		await assertEvaluationEquals(dc, latestFrame, 'pc', { value: pc.toString(), type: 'uint64' });
+		await assertEvaluationEquals(dc, frameId, 'pc', { value: pc.toString(), type: 'uint64' });
 	}
 
 	if (typeof stack !== 'undefined') {
@@ -157,9 +159,9 @@ export async function assertVariables(dc: DebugClient, {
 
 		await Promise.all(stack.map(async (expectedValue, i) => {
 			if (expectedValue instanceof Uint8Array) {
-				await assertEvaluationEquals(dc, latestFrame, `stack[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
+				await assertEvaluationEquals(dc, frameId!, `stack[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
 			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				await assertEvaluationEquals(dc, latestFrame, `stack[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
+				await assertEvaluationEquals(dc, frameId!, `stack[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
 			} else {
 				throw new Error(`Improper expected stack value: ${expectedValue}`);
 			}
@@ -198,9 +200,9 @@ export async function assertVariables(dc: DebugClient, {
 			}
 
 			if (expectedValue instanceof Uint8Array) {
-				await assertEvaluationEquals(dc, latestFrame, `scratch[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
+				await assertEvaluationEquals(dc, frameId!, `scratch[${i}]`, { value: '0x' + Buffer.from(expectedValue).toString('hex'), type: 'byte[]' });
 			} else if (typeof expectedValue === 'number' || typeof expectedValue === 'bigint') {
-				await assertEvaluationEquals(dc, latestFrame, `scratch[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
+				await assertEvaluationEquals(dc, frameId!, `scratch[${i}]`, { value: expectedValue.toString(), type: 'uint64' });
 			} else {
 				throw new Error(`Improper expected scratch value: ${expectedValue}`);
 			}
