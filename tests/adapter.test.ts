@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as algosdk from 'algosdk';
 import { DebugProtocol } from '@vscode/debugprotocol';
+import { ByteArrayMap } from '../src/debugAdapter/utils';
 import {
 	TestFixture,
 	assertVariables,
