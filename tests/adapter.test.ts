@@ -767,7 +767,7 @@ describe('Debug Adapter Tests', () => {
 			});
 		});
 
-		describe.only('Step back', () => {
+		describe('Step back', () => {
 			it('should pause at the correct locations in a transaction group', async () => {
 				const simulateTracePath = path.join(DATA_ROOT, 'stepping-test/simulate-response.json');
 				await fixture.init(
