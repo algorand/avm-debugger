@@ -305,8 +305,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 			const column = typeof sourceLocation.column !== 'undefined' ? this.convertDebuggerColumnToClient(sourceLocation.column) : undefined;
 
 			const protocolFrame = new StackFrame(id, frame.name(), source, line, column);
-			protocolFrame.endLine = sourceLocation.endLine;
-			protocolFrame.endColumn = sourceLocation.endColumn;
+			protocolFrame.endLine = typeof sourceLocation.endLine !== 'undefined' ? this.convertDebuggerLineToClient(sourceLocation.endLine) : undefined;
+			protocolFrame.endColumn = typeof sourceLocation.endColumn !== 'undefined' ? this.convertDebuggerColumnToClient(sourceLocation.endColumn) : undefined;
 			return protocolFrame;
 		});
 		stackFramesForResponse.reverse();

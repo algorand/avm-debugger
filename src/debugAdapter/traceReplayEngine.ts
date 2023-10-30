@@ -221,7 +221,6 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
         for (let i = 0; i < this.index; i++) {
             for (const txnResult of this.response.txnGroups[i].txnResults) {
                 const displayedTxn = txnResult.txnResult.get_obj_for_encoding().txn;
-                // + 2 is for opening and closing brackets
                 lineOffset += JSON.stringify(displayedTxn, null, 2).split('\n').length;
             }
             lineOffset += 2; // For opening and closing brackets
@@ -229,12 +228,11 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
         let lineCount = 2; // For opening and closing brackets
         for (const txnResult of this.response.txnGroups[this.index].txnResults) {
             const displayedTxn = txnResult.txnResult.get_obj_for_encoding().txn;
-            // + 2 is for opening and closing brackets
             lineCount += JSON.stringify(displayedTxn, null, 2).split('\n').length;
         }
         return {
             line: lineOffset,
-            endLine: lineOffset + lineCount + 1,
+            endLine: lineOffset + lineCount,
         };
     }
 
@@ -335,7 +333,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
             const displayTxnLines = JSON.stringify(displayedTxn, null, 2).split('\n');
             const sourceLocation: TransactionSourceLocation = {
                 line: lineOffset,
-                lineEnd: lineOffset + displayTxnLines.length + 1,
+                lineEnd: lineOffset + displayTxnLines.length,
             };
             if (txnTrace) {
                 if (txnTrace.logicSigTrace) {
@@ -753,7 +751,7 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
         const targetIndex = this.index - 1;
         this.reset();
         while (this.index < targetIndex) {
-            this.forward(stack);
+            this.engine.forward();
         }
     }
 

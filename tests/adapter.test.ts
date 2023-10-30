@@ -109,6 +109,220 @@ describe('Debug Adapter Tests', () => {
 			column: number,
 		}
 
+		const expectedStepOverLocationsSteppingTest: Location[] = [
+			{
+				name: "transaction-group-0.json",
+				line: 2,
+				column: 0
+			},
+			{
+				name: "transaction-group-0.json",
+				line: 18,
+				column: 0
+			},
+			{
+				name: "transaction-group-0.json",
+				line: 19,
+				column: 0
+			},
+			{
+				name: "transaction-group-0.json",
+				line: 23,
+				column: 0
+			},
+			{
+				name: "transaction-group-0.json",
+				line: 33,
+				column: 0
+			},
+			{
+				name: "transaction-group-0.json",
+				line: 34,
+				column: 0
+			},
+		];
+
+		let expectedStepOverLocationsSlotMachine: Location[];
+		{
+			const slotMachinePath = path.join(DATA_ROOT, 'slot-machine/slot-machine.teal');
+
+			const label5Callsub = [
+				{ line: 97, column: 1 },
+				{ line: 98, column: 1 },
+				{ line: 99, column: 1 },
+				{ line: 100, column: 1 },
+				{ line: 101, column: 1 },
+			];
+
+			const label6Callsub = [
+				{ line: 103, column: 1 },
+				{ line: 104, column: 1 },
+				{ line: 105, column: 1 },
+				{ line: 106, column: 1 },
+				{ line: 107, column: 1 },
+				{ line: 108, column: 1 },
+				{ line: 109, column: 1 },
+				{ line: 110, column: 1 },
+				{ line: 111, column: 1 },
+			];
+
+			expectedStepOverLocationsSlotMachine = [
+				{ line: 2, column: 1 },
+				{ line: 3, column: 1 },
+				{ line: 4, column: 1 },
+				{ line: 5, column: 1 },
+				{ line: 6, column: 1 },
+				{ line: 7, column: 1 },
+				{ line: 8, column: 1 },
+				{ line: 9, column: 1 },
+				{ line: 10, column: 1 },
+				{ line: 11, column: 1 },
+				{ line: 12, column: 1 },
+				{ line: 13, column: 1 },
+				{ line: 14, column: 1 },
+				{ line: 15, column: 1 },
+				{ line: 16, column: 1 },
+				{ line: 17, column: 1 },
+				{ line: 18, column: 1 },
+				{ line: 20, column: 1 },
+				{ line: 21, column: 1 },
+				{ line: 22, column: 1 },
+				{ line: 23, column: 1 },
+				{ line: 24, column: 1 },
+				{ line: 25, column: 1 },
+				{ line: 26, column: 1 },
+				{ line: 27, column: 1 },
+				{ line: 28, column: 1 },
+				{ line: 29, column: 1 },
+				{ line: 30, column: 1 },
+				{ line: 31, column: 1 },
+				{ line: 32, column: 1 },
+				{ line: 33, column: 1 },
+				{ line: 34, column: 1 },
+				{ line: 35, column: 1 },
+				{ line: 36, column: 1 },
+				{ line: 37, column: 1 },
+				{ line: 38, column: 1 },
+				{ line: 39, column: 1 },
+				{ line: 40, column: 1 },
+				{ line: 41, column: 1 },
+				{ line: 42, column: 1 },
+				{ line: 43, column: 1 },
+				{ line: 44, column: 1 },
+				{ line: 45, column: 1 },
+				{ line: 46, column: 1 },
+				{ line: 20, column: 1 },
+				{ line: 21, column: 1 },
+				{ line: 22, column: 1 },
+				{ line: 23, column: 1 },
+				{ line: 24, column: 1 },
+				{ line: 25, column: 1 },
+				{ line: 26, column: 1 },
+				{ line: 27, column: 1 },
+				{ line: 28, column: 1 },
+				{ line: 29, column: 1 },
+				{ line: 30, column: 1 },
+				{ line: 31, column: 1 },
+				{ line: 32, column: 1 },
+				{ line: 33, column: 1 },
+				{ line: 34, column: 1 },
+				{ line: 35, column: 1 },
+				{ line: 36, column: 1 },
+				{ line: 37, column: 1 },
+				{ line: 38, column: 1 },
+				{ line: 39, column: 1 },
+				{ line: 40, column: 1 },
+				{ line: 41, column: 1 },
+				{ line: 42, column: 1 },
+				{ line: 43, column: 1 },
+				{ line: 44, column: 1 },
+				{ line: 45, column: 1 },
+				{ line: 46, column: 1 },
+				{ line: 20, column: 1 },
+				{ line: 21, column: 1 },
+				{ line: 22, column: 1 },
+				{ line: 23, column: 1 },
+				{ line: 24, column: 1 },
+				{ line: 25, column: 1 },
+				{ line: 26, column: 1 },
+				{ line: 27, column: 1 },
+				{ line: 28, column: 1 },
+				{ line: 29, column: 1 },
+				{ line: 30, column: 1 },
+				{ line: 31, column: 1 },
+				{ line: 32, column: 1 },
+				{ line: 33, column: 1 },
+				{ line: 34, column: 1 },
+				{ line: 35, column: 1 },
+				{ line: 36, column: 1 },
+				{ line: 37, column: 1 },
+				{ line: 38, column: 1 },
+				{ line: 39, column: 1 },
+				{ line: 40, column: 1 },
+				{ line: 41, column: 1 },
+				{ line: 42, column: 1 },
+				{ line: 43, column: 1 },
+				{ line: 44, column: 1 },
+				{ line: 48, column: 1 },
+				{ line: 49, column: 1 },
+				{ line: 50, column: 1 },
+				{ line: 51, column: 1 },
+				{ line: 52, column: 1 },
+				{ line: 53, column: 1 },
+				...label5Callsub,
+				{ line: 54, column: 1 },
+				{ line: 55, column: 1 },
+				{ line: 56, column: 1 },
+				...label6Callsub,
+				{ line: 57, column: 1 },
+				{ line: 58, column: 1 },
+				{ line: 59, column: 1 },
+				...label6Callsub,
+				{ line: 60, column: 1 },
+				{ line: 61, column: 1 },
+				{ line: 62, column: 1 },
+				...label5Callsub,
+				{ line: 63, column: 1 },
+				{ line: 64, column: 1 },
+				{ line: 65, column: 1 },
+				...label6Callsub,
+				{ line: 66, column: 1 },
+				{ line: 67, column: 1 },
+				{ line: 68, column: 1 },
+				...label6Callsub,
+				{ line: 69, column: 1 },
+				{ line: 70, column: 1 },
+				{ line: 71, column: 1 },
+				...label5Callsub,
+				{ line: 72, column: 1 },
+				{ line: 73, column: 1 },
+				{ line: 74, column: 1 },
+				...label6Callsub,
+				{ line: 75, column: 1 },
+				{ line: 76, column: 1 },
+				{ line: 77, column: 1 },
+				...label6Callsub,
+				{ line: 78, column: 1 },
+				{ line: 79, column: 1 },
+				{ line: 80, column: 1 },
+				{ line: 81, column: 1 },
+				{ line: 82, column: 1 },
+				{ line: 83, column: 1 },
+				{ line: 84, column: 1 },
+				{ line: 85, column: 1 },
+				{ line: 86, column: 1 },
+				{ line: 87, column: 1 },
+				{ line: 88, column: 1 },
+				{ line: 89, column: 1 },
+				{ line: 90, column: 1 },
+				{ line: 91, column: 1 },
+				{ line: 92, column: 1 },
+				{ line: 93, column: 1 },
+				{ line: 94, column: 1 },
+				{ line: 95, column: 1 },
+			].map(partial => ({ ...partial, name: "slot-machine.teal", program: slotMachinePath }));
+		}
+
 		describe('Step in', () => {
 			it('should pause at the correct locations', async () => {
 				const simulateTracePath = path.join(DATA_ROOT, 'stepping-test/simulate-response.json');
@@ -320,38 +534,7 @@ describe('Debug Adapter Tests', () => {
 					client.assertStoppedLocation('entry', {})
 				]);
 
-				const expectedLocations: Location[] = [
-					{
-						name: "transaction-group-0.json",
-						line: 2,
-						column: 0
-					},
-					{
-						name: "transaction-group-0.json",
-						line: 18,
-						column: 0
-					},
-					{
-						name: "transaction-group-0.json",
-						line: 19,
-						column: 0
-					},
-					{
-						name: "transaction-group-0.json",
-						line: 23,
-						column: 0
-					},
-					{
-						name: "transaction-group-0.json",
-						line: 33,
-						column: 0
-					},
-					{
-						name: "transaction-group-0.json",
-						line: 34,
-						column: 0
-					},
-				];
+				const expectedLocations = expectedStepOverLocationsSteppingTest;
 
 				for (let i = 0; i < expectedLocations.length; i++) {
 					const expectedLocation = expectedLocations[i];
@@ -390,181 +573,7 @@ describe('Debug Adapter Tests', () => {
 
 				await client.hitBreakpoint({ program: simulateTracePath }, { path: programPath, line: 2 });
 
-				const label5Callsub = [
-					{ line: 97, column: 1 },
-					{ line: 98, column: 1 },
-					{ line: 99, column: 1 },
-					{ line: 100, column: 1 },
-					{ line: 101, column: 1 },
-				];
-
-				const label6Callsub = [
-					{ line: 103, column: 1 },
-					{ line: 104, column: 1 },
-					{ line: 105, column: 1 },
-					{ line: 106, column: 1 },
-					{ line: 107, column: 1 },
-					{ line: 108, column: 1 },
-					{ line: 109, column: 1 },
-					{ line: 110, column: 1 },
-					{ line: 111, column: 1 },
-				];
-
-				const expectedLocations: Location[] = [
-					{ line: 2, column: 1 },
-					{ line: 3, column: 1 },
-					{ line: 4, column: 1 },
-					{ line: 5, column: 1 },
-					{ line: 6, column: 1 },
-					{ line: 7, column: 1 },
-					{ line: 8, column: 1 },
-					{ line: 9, column: 1 },
-					{ line: 10, column: 1 },
-					{ line: 11, column: 1 },
-					{ line: 12, column: 1 },
-					{ line: 13, column: 1 },
-					{ line: 14, column: 1 },
-					{ line: 15, column: 1 },
-					{ line: 16, column: 1 },
-					{ line: 17, column: 1 },
-					{ line: 18, column: 1 },
-					{ line: 20, column: 1 },
-					{ line: 21, column: 1 },
-					{ line: 22, column: 1 },
-					{ line: 23, column: 1 },
-					{ line: 24, column: 1 },
-					{ line: 25, column: 1 },
-					{ line: 26, column: 1 },
-					{ line: 27, column: 1 },
-					{ line: 28, column: 1 },
-					{ line: 29, column: 1 },
-					{ line: 30, column: 1 },
-					{ line: 31, column: 1 },
-					{ line: 32, column: 1 },
-					{ line: 33, column: 1 },
-					{ line: 34, column: 1 },
-					{ line: 35, column: 1 },
-					{ line: 36, column: 1 },
-					{ line: 37, column: 1 },
-					{ line: 38, column: 1 },
-					{ line: 39, column: 1 },
-					{ line: 40, column: 1 },
-					{ line: 41, column: 1 },
-					{ line: 42, column: 1 },
-					{ line: 43, column: 1 },
-					{ line: 44, column: 1 },
-					{ line: 45, column: 1 },
-					{ line: 46, column: 1 },
-					{ line: 20, column: 1 },
-					{ line: 21, column: 1 },
-					{ line: 22, column: 1 },
-					{ line: 23, column: 1 },
-					{ line: 24, column: 1 },
-					{ line: 25, column: 1 },
-					{ line: 26, column: 1 },
-					{ line: 27, column: 1 },
-					{ line: 28, column: 1 },
-					{ line: 29, column: 1 },
-					{ line: 30, column: 1 },
-					{ line: 31, column: 1 },
-					{ line: 32, column: 1 },
-					{ line: 33, column: 1 },
-					{ line: 34, column: 1 },
-					{ line: 35, column: 1 },
-					{ line: 36, column: 1 },
-					{ line: 37, column: 1 },
-					{ line: 38, column: 1 },
-					{ line: 39, column: 1 },
-					{ line: 40, column: 1 },
-					{ line: 41, column: 1 },
-					{ line: 42, column: 1 },
-					{ line: 43, column: 1 },
-					{ line: 44, column: 1 },
-					{ line: 45, column: 1 },
-					{ line: 46, column: 1 },
-					{ line: 20, column: 1 },
-					{ line: 21, column: 1 },
-					{ line: 22, column: 1 },
-					{ line: 23, column: 1 },
-					{ line: 24, column: 1 },
-					{ line: 25, column: 1 },
-					{ line: 26, column: 1 },
-					{ line: 27, column: 1 },
-					{ line: 28, column: 1 },
-					{ line: 29, column: 1 },
-					{ line: 30, column: 1 },
-					{ line: 31, column: 1 },
-					{ line: 32, column: 1 },
-					{ line: 33, column: 1 },
-					{ line: 34, column: 1 },
-					{ line: 35, column: 1 },
-					{ line: 36, column: 1 },
-					{ line: 37, column: 1 },
-					{ line: 38, column: 1 },
-					{ line: 39, column: 1 },
-					{ line: 40, column: 1 },
-					{ line: 41, column: 1 },
-					{ line: 42, column: 1 },
-					{ line: 43, column: 1 },
-					{ line: 44, column: 1 },
-					{ line: 48, column: 1 },
-					{ line: 49, column: 1 },
-					{ line: 50, column: 1 },
-					{ line: 51, column: 1 },
-					{ line: 52, column: 1 },
-					{ line: 53, column: 1 },
-					...label5Callsub,
-					{ line: 54, column: 1 },
-					{ line: 55, column: 1 },
-					{ line: 56, column: 1 },
-					...label6Callsub,
-					{ line: 57, column: 1 },
-					{ line: 58, column: 1 },
-					{ line: 59, column: 1 },
-					...label6Callsub,
-					{ line: 60, column: 1 },
-					{ line: 61, column: 1 },
-					{ line: 62, column: 1 },
-					...label5Callsub,
-					{ line: 63, column: 1 },
-					{ line: 64, column: 1 },
-					{ line: 65, column: 1 },
-					...label6Callsub,
-					{ line: 66, column: 1 },
-					{ line: 67, column: 1 },
-					{ line: 68, column: 1 },
-					...label6Callsub,
-					{ line: 69, column: 1 },
-					{ line: 70, column: 1 },
-					{ line: 71, column: 1 },
-					...label5Callsub,
-					{ line: 72, column: 1 },
-					{ line: 73, column: 1 },
-					{ line: 74, column: 1 },
-					...label6Callsub,
-					{ line: 75, column: 1 },
-					{ line: 76, column: 1 },
-					{ line: 77, column: 1 },
-					...label6Callsub,
-					{ line: 78, column: 1 },
-					{ line: 79, column: 1 },
-					{ line: 80, column: 1 },
-					{ line: 81, column: 1 },
-					{ line: 82, column: 1 },
-					{ line: 83, column: 1 },
-					{ line: 84, column: 1 },
-					{ line: 85, column: 1 },
-					{ line: 86, column: 1 },
-					{ line: 87, column: 1 },
-					{ line: 88, column: 1 },
-					{ line: 89, column: 1 },
-					{ line: 90, column: 1 },
-					{ line: 91, column: 1 },
-					{ line: 92, column: 1 },
-					{ line: 93, column: 1 },
-					{ line: 94, column: 1 },
-					{ line: 95, column: 1 },
-				].map(partial => ({ ...partial, name: "slot-machine.teal", program: programPath }));
+				const expectedLocations = expectedStepOverLocationsSlotMachine;
 
 				for (let i = 0; i < expectedLocations.length; i++) {
 					const expectedLocation = expectedLocations[i];
@@ -755,6 +764,104 @@ describe('Debug Adapter Tests', () => {
 						await client.waitForEvent('terminated');
 					}
 				}
+			});
+		});
+
+		describe.only('Step back', () => {
+			it('should pause at the correct locations in a transaction group', async () => {
+				const simulateTracePath = path.join(DATA_ROOT, 'stepping-test/simulate-response.json');
+				await fixture.init(
+					simulateTracePath,
+					path.join(DATA_ROOT, 'stepping-test/sources.json')
+				);
+				const { client } = fixture;
+
+				await Promise.all([
+					client.configurationSequence(),
+					client.launch({ program: simulateTracePath, stopOnEntry: true }),
+					client.assertStoppedLocation('entry', {})
+				]);
+
+				const expectedLocations = expectedStepOverLocationsSteppingTest.slice().reverse();
+
+				// Can't set breakpoints on the transaction-group-0.json pseudo file, so let's keep
+				// stepping until we reach our starting location.
+				const startLocation = expectedLocations[0];
+				while (true) {
+					const stackTraceResponse = await client.stackTraceRequest({ threadId: 1 });
+					const currentFrame = stackTraceResponse.body.stackFrames[0];
+					if (currentFrame.source?.name === startLocation.name && currentFrame.line === startLocation.line) {
+						break;
+					}
+					await client.nextRequest({ threadId: 1 });
+					const stoppedEvent = await client.waitForStop();
+					assert.strictEqual(stoppedEvent.body.reason, 'step');
+				}
+
+				for (let i = 0; i < expectedLocations.length; i++) {
+					const expectedLocation = expectedLocations[i];
+					const stackTraceResponse = await client.stackTraceRequest({ threadId: 1 });
+					const currentFrame = stackTraceResponse.body.stackFrames[0];
+					const actualLocation: Location = {
+						name: currentFrame.source?.name!,
+						line: currentFrame.line,
+						column: currentFrame.column,
+					};
+					if (currentFrame.source?.path) {
+						actualLocation.program = currentFrame.source.path;
+					}
+					assert.deepStrictEqual(actualLocation, expectedLocation);
+
+					// Move to next location, in this case backwards
+					await client.stepBackRequest({ threadId: 1 });
+					const stoppedEvent = await client.waitForStop();
+					const expectedStopReason = i + 1 === expectedLocations.length ? 'entry' : 'step';
+					assert.strictEqual(stoppedEvent.body.reason, expectedStopReason);
+				}
+			});
+
+			it('should pause at the correct locations in app execution', async () => {
+				const simulateTracePath = path.join(DATA_ROOT, 'slot-machine/simulate-response.json');
+				await fixture.init(
+					simulateTracePath,
+					path.join(DATA_ROOT, 'slot-machine/sources.json')
+				);
+				const { client } = fixture;
+				
+				const expectedLocations = expectedStepOverLocationsSlotMachine.slice().reverse();
+				
+				const startLocation = expectedLocations[0];
+				await client.hitBreakpoint({ program: simulateTracePath }, {
+					path: startLocation.program!,
+					line: startLocation.line,
+					column: startLocation.column
+				});
+
+				for (let i = 0; i < expectedLocations.length; i++) {
+					const expectedLocation = expectedLocations[i];
+					const stackTraceResponse = await client.stackTraceRequest({ threadId: 1 });
+					const currentFrame = stackTraceResponse.body.stackFrames[0];
+					const actualLocation: Location = {
+						name: currentFrame.source?.name!,
+						line: currentFrame.line,
+						column: currentFrame.column,
+					};
+					if (currentFrame.source?.path) {
+						actualLocation.program = currentFrame.source.path;
+					}
+					assert.deepStrictEqual(actualLocation, expectedLocation);
+
+					// Move to next location, in this case backwards
+					await client.stepBackRequest({ threadId: 1 });
+					const stoppedEvent = await client.waitForStop();
+					assert.strictEqual(stoppedEvent.body.reason, 'step');
+				}
+
+				// Finally, assert that the next step is not in the program
+				const stackTraceResponse = await client.stackTraceRequest({ threadId: 1 });
+				const currentFrame = stackTraceResponse.body.stackFrames[0];
+				assert.notStrictEqual(currentFrame.source?.path, path.join(DATA_ROOT, 'slot-machine/slot-machine.teal'), "Program has step locations beyond expected");
+				assert.notStrictEqual(currentFrame.source?.name, "slot-machine.teal", "Program has step locations beyond expected");
 			});
 		});
 	});
