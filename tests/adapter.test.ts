@@ -760,175 +760,221 @@ describe('Debug Adapter Tests', () => {
 	});
 
 	describe('Stack and scratch changes', () => {
-		it('should return variables correctly', async () => {
-			await fixture.init(
-				path.join(DATA_ROOT, 'stack-scratch/simulate-response.json'),
-				path.join(DATA_ROOT, 'stack-scratch/sources.json')
-			);
-
-			const { client } = fixture;
-			const PROGRAM = path.join(DATA_ROOT, 'stack-scratch/stack-scratch.teal');
-
-			await client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
-
-			await assertVariables(client, {
-				pc: 6,
-				stack: [
-					1005
-				],
-				scratch: new Map(),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 12 });
-
-			await assertVariables(client, {
-				pc: 18,
-				stack: [
-					10
-				],
-				scratch: new Map(),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 22 });
-
-			await assertVariables(client, {
-				pc: 34,
-				stack: [
-					10,
-					0,
-					0,
-					0,
-					0,
-					0,
-					0,
-				],
-				scratch: new Map(),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 35 });
-
-			await assertVariables(client, {
-				pc: 63,
-				stack: [
-					10,
-					30,
-					Buffer.from("1!"),
-					Buffer.from("5!"),
-				],
-				scratch: new Map(),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 36 });
-
-			await assertVariables(client, {
-				pc: 80,
-				stack: [
-					10,
-					30,
-					Buffer.from("1!"),
-					Buffer.from("5!"),
-					0,
-					2,
-					1,
-					1,
-					5,
-					BigInt('18446744073709551615')
-				],
-				scratch: new Map(),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 37 });
-
-			await assertVariables(client, {
-				pc: 82,
-				stack: [
-					10,
-					30,
-					Buffer.from("1!"),
-					Buffer.from("5!"),
-					0,
-					2,
-					1,
-					1,
-					5,
-				],
-				scratch: new Map([
-					[
-						1,
-						BigInt('18446744073709551615')
+		context('LogicSig', () => {
+			it('should return variables correctly', async () => {
+				const simulateResponse = path.join(DATA_ROOT, 'stepping-test/simulate-response.json')
+				await fixture.init(
+					simulateResponse,
+					path.join(DATA_ROOT, 'stepping-test/sources.json')
+				);
+	
+				const { client } = fixture;
+				const PROGRAM = path.join(DATA_ROOT, 'stepping-test/lsig.teal');
+	
+				await client.hitBreakpoint({ program: simulateResponse }, { path: PROGRAM, line: 3 });
+	
+				await assertVariables(client, {
+					pc: 3,
+					stack: [
+						0
 					],
-				]),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 39 });
-
-			await assertVariables(client, {
-				pc: 85,
-				stack: [
-					10,
-					30,
-					Buffer.from("1!"),
-					Buffer.from("5!"),
-					0,
-					2,
-					1,
-					1,
-				],
-				scratch: new Map([
-					[
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 5 });
+	
+				await assertVariables(client, {
+					pc: 6,
+					stack: [
 						1,
-						BigInt('18446744073709551615')
+						new Uint8Array(32),
 					],
-					[
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 7 });
+	
+				await assertVariables(client, {
+					pc: 9,
+					stack: [
+						1,
+						1,
+					],
+					scratch: new Map(),
+				});
+			});
+		});
+		context('App', () => {
+			it('should return variables correctly', async () => {
+				await fixture.init(
+					path.join(DATA_ROOT, 'stack-scratch/simulate-response.json'),
+					path.join(DATA_ROOT, 'stack-scratch/sources.json')
+				);
+	
+				const { client } = fixture;
+				const PROGRAM = path.join(DATA_ROOT, 'stack-scratch/stack-scratch.teal');
+	
+				await client.hitBreakpoint({ program: PROGRAM }, { path: PROGRAM, line: 3 });
+	
+				await assertVariables(client, {
+					pc: 6,
+					stack: [
+						1005
+					],
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 12 });
+	
+				await assertVariables(client, {
+					pc: 18,
+					stack: [
+						10
+					],
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 22 });
+	
+				await assertVariables(client, {
+					pc: 34,
+					stack: [
+						10,
+						0,
+						0,
+						0,
+						0,
+						0,
+						0,
+					],
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 35 });
+	
+				await assertVariables(client, {
+					pc: 63,
+					stack: [
+						10,
+						30,
+						Buffer.from("1!"),
+						Buffer.from("5!"),
+					],
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 36 });
+	
+				await assertVariables(client, {
+					pc: 80,
+					stack: [
+						10,
+						30,
+						Buffer.from("1!"),
+						Buffer.from("5!"),
+						0,
+						2,
+						1,
+						1,
 						5,
 						BigInt('18446744073709551615')
 					],
-				]),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 41 });
-
-			await assertVariables(client, {
-				pc: 89,
-				stack: [
-					10,
-					30,
-					Buffer.from("1!"),
-					Buffer.from("5!"),
-					0,
-					2,
-					1,
-					1,
-				],
-				scratch: new Map([
-					[
+					scratch: new Map(),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 37 });
+	
+				await assertVariables(client, {
+					pc: 82,
+					stack: [
+						10,
+						30,
+						Buffer.from("1!"),
+						Buffer.from("5!"),
+						0,
+						2,
 						1,
-						BigInt('18446744073709551615')
-					],
-					[
-						5,
-						BigInt('18446744073709551615')
-					],
-				]),
-			});
-
-			await advanceTo(client, { program: PROGRAM, line: 13 });
-
-			await assertVariables(client, {
-				pc: 21,
-				stack: [
-					30,
-				],
-				scratch: new Map([
-					[
 						1,
-						BigInt('18446744073709551615')
-					],
-					[
 						5,
-						BigInt('18446744073709551615')
 					],
-				]),
+					scratch: new Map([
+						[
+							1,
+							BigInt('18446744073709551615')
+						],
+					]),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 39 });
+	
+				await assertVariables(client, {
+					pc: 85,
+					stack: [
+						10,
+						30,
+						Buffer.from("1!"),
+						Buffer.from("5!"),
+						0,
+						2,
+						1,
+						1,
+					],
+					scratch: new Map([
+						[
+							1,
+							BigInt('18446744073709551615')
+						],
+						[
+							5,
+							BigInt('18446744073709551615')
+						],
+					]),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 41 });
+	
+				await assertVariables(client, {
+					pc: 89,
+					stack: [
+						10,
+						30,
+						Buffer.from("1!"),
+						Buffer.from("5!"),
+						0,
+						2,
+						1,
+						1,
+					],
+					scratch: new Map([
+						[
+							1,
+							BigInt('18446744073709551615')
+						],
+						[
+							5,
+							BigInt('18446744073709551615')
+						],
+					]),
+				});
+	
+				await advanceTo(client, { program: PROGRAM, line: 13 });
+	
+				await assertVariables(client, {
+					pc: 21,
+					stack: [
+						30,
+					],
+					scratch: new Map([
+						[
+							1,
+							BigInt('18446744073709551615')
+						],
+						[
+							5,
+							BigInt('18446744073709551615')
+						],
+					]),
+				});
 			});
 		});
 	});
