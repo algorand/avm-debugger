@@ -151,9 +151,7 @@
           },
           "logic-sig-budget-consumed": 6,
           "txn-result": {
-            "logs": [
-              "UIFDtcFjZUCtZnj2emSqN+VMKx9MhZ2qvrVfsrFEfB0="
-            ],
+            "logs": ["UIFDtcFjZUCtZnj2emSqN+VMKx9MhZ2qvrVfsrFEfB0="],
             "pool-error": "",
             "txn": {
               "lsig": {
