@@ -38,9 +38,29 @@
     "publish": "vsce publish",
     "publish-pre-release": "vsce publish --pre-release",
     "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify",
-    "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false"
+    "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false",
+    "test:coverage": "nyc npm run test"
+  },
+  "nyc": {
+    "extends": "@istanbuljs/nyc-config-typescript",
+    "check-coverage": true,
+    "all": true,
+    "include": [
+      "src/**/!(*.test.*).[tj]s?(x)"
+    ],
+    "exclude": [
+      "src/_tests_/**/*.*"
+    ],
+    "reporter": [
+      "html",
+      "lcov",
+      "text",
+      "text-summary"
+    ],
+    "report-dir": "coverage"
   },
   "devDependencies": {
+    "@istanbuljs/nyc-config-typescript": "^1.0.2",
     "@types/glob": "^7.2.0",
     "@types/lodash": "^4.14.196",
     "@types/mocha": "^9.1.0",
@@ -58,6 +78,7 @@
     "events": "^3.3.0",
     "glob": "^7.2.0",
     "mocha": "^10.2.0",
+    "nyc": "^15.1.0",
     "path-browserify": "^1.0.1",
     "prettier": "^3.0.3",
     "rimraf": "^3.0.2",
