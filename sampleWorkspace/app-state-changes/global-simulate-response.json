@@ -9,9 +9,7 @@
             "txn": {
               "sig": "9Sm0GLdwLZ8a8VWVZXFgdTnk4Bc8Gsoq5Zkc1BKUAKBMuoZRuiD91I3AP8poj8lg5/tdecZuXvaPuaSocXpiBQ==",
               "txn": {
-                "apaa": [
-                  "iRPB+A=="
-                ],
+                "apaa": ["iRPB+A=="],
                 "apbx": [
                   {
                     "n": "Ym94LWtleS0x"

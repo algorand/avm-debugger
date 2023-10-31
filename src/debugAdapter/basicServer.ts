@@ -3,30 +3,29 @@ import { TxnGroupDebugSession } from './debugRequestHandlers';
 import { FileAccessor, TEALDebuggingAssets } from './utils';
 
 export class BasicServer {
+  private server: Net.Server;
 
-    private server: Net.Server;
+  constructor(fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
+    this.server = Net.createServer((socket) => {
+      const session = new TxnGroupDebugSession(fileAccessor, debugAssets);
+      session.setRunAsServer(true);
+      session.start(socket as NodeJS.ReadableStream, socket);
+      socket.on('error', (err) => {
+        throw err;
+      });
+    }).listen(0);
+    this.server.on('error', (err) => {
+      throw err;
+    });
+  }
 
-    constructor(fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
-        this.server = Net.createServer(socket => {
-            const session = new TxnGroupDebugSession(fileAccessor, debugAssets);
-            session.setRunAsServer(true);
-            session.start(socket as NodeJS.ReadableStream, socket);
-            socket.on('error', (err) => {
-                throw err;
-            });
-        }).listen(0);
-        this.server.on('error', (err) => {
-            throw err;
-        });
+  port(): number {
+    return (this.server.address() as Net.AddressInfo).port;
+  }
+
+  dispose() {
+    if (this.server) {
+      this.server.close();
     }
-
-    port(): number {
-        return (this.server.address() as Net.AddressInfo).port;
-    }
-
-    dispose() {
-		if (this.server) {
-			this.server.close();
-		}
-	}
+  }
 }

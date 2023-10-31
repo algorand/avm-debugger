@@ -4,60 +4,141 @@ import { DebugClient as DebugClientBase } from '@vscode/debugadapter-testsupport
 import { DebugProtocol } from '@vscode/debugprotocol';
 
 export class DebugClient extends DebugClientBase {
+  private lastStoppedEvent: DebugProtocol.StoppedEvent | undefined;
 
-    private lastStoppedEvent: DebugProtocol.StoppedEvent | undefined;
+  constructor(
+    debugAdapterRuntime: string,
+    debugAdapterExecutable: string,
+    debugType: string,
+    spawnOptions?: SpawnOptions,
+    enableStderr?: boolean,
+  ) {
+    super(
+      debugAdapterRuntime,
+      debugAdapterExecutable,
+      debugType,
+      spawnOptions,
+      enableStderr,
+    );
 
-    constructor(debugAdapterRuntime: string, debugAdapterExecutable: string, debugType: string, spawnOptions?: SpawnOptions, enableStderr?: boolean) {
-        super(debugAdapterRuntime, debugAdapterExecutable, debugType, spawnOptions, enableStderr);
+    this.on('stopped', (event) => {
+      this.lastStoppedEvent = event;
+    });
+    this.on('continued', () => {
+      this.lastStoppedEvent = undefined;
+    });
+  }
 
-        this.on('stopped', event => {
-            this.lastStoppedEvent = event;
-        });
-        this.on('continued', () => {
-            this.lastStoppedEvent = undefined;
-        });
+  continueRequest(
+    args: DebugProtocol.ContinueArguments,
+  ): Promise<DebugProtocol.ContinueResponse> {
+    // Optimistically clear the last stopped event. It's important to do this before we send the
+    // request, otherwise we might miss a stopped event that happens immediately after.
+    this.lastStoppedEvent = undefined;
+    return super.continueRequest(args);
+  }
+
+  nextRequest(
+    args: DebugProtocol.NextArguments,
+  ): Promise<DebugProtocol.NextResponse> {
+    // Optimistically clear the last stopped event. It's important to do this before we send the
+    // request, otherwise we might miss a stopped event that happens immediately after.
+    this.lastStoppedEvent = undefined;
+    return super.nextRequest(args);
+  }
+
+  stepInRequest(
+    args: DebugProtocol.StepInArguments,
+  ): Promise<DebugProtocol.StepInResponse> {
+    // Optimistically clear the last stopped event. It's important to do this before we send the
+    // request, otherwise we might miss a stopped event that happens immediately after.
+    this.lastStoppedEvent = undefined;
+    return super.stepInRequest(args);
+  }
+
+  stepOutRequest(
+    args: DebugProtocol.StepOutArguments,
+  ): Promise<DebugProtocol.StepOutResponse> {
+    // Optimistically clear the last stopped event. It's important to do this before we send the
+    // request, otherwise we might miss a stopped event that happens immediately after.
+    this.lastStoppedEvent = undefined;
+    return super.stepOutRequest(args);
+  }
+
+  stepBackRequest(
+    args: DebugProtocol.StepBackArguments,
+  ): Promise<DebugProtocol.StepBackResponse> {
+    // Optimistically clear the last stopped event. It's important to do this before we send the
+    // request, otherwise we might miss a stopped event that happens immediately after.
+    this.lastStoppedEvent = undefined;
+    return super.stepBackRequest(args);
+  }
+
+  reverseContinueRequest(
+    args: DebugProtocol.ReverseContinueArguments,
+  ): Promise<DebugProtocol.ReverseContinueResponse> {
+    // Optimistically clear the last stopped event. It's important to do this before we send the
+    // request, otherwise we might miss a stopped event that happens immediately after.
+    this.lastStoppedEvent = undefined;
+    return super.reverseContinueRequest(args);
+  }
+
+  async waitForStop(): Promise<DebugProtocol.StoppedEvent> {
+    if (typeof this.lastStoppedEvent !== 'undefined') {
+      return Promise.resolve(this.lastStoppedEvent);
     }
+    const event = (await this.waitForEvent(
+      'stopped',
+    )) as DebugProtocol.StoppedEvent;
+    return event;
+  }
 
-    async continueRequest(args: DebugProtocol.ContinueArguments): Promise<DebugProtocol.ContinueResponse> {
-        // Optimistically clear the last stopped event. It's important to do this before we send the
-        // continue request, otherwise we might miss a stopped event that happens immediately after.
-        this.lastStoppedEvent = undefined;
-        const response = await super.continueRequest(args);
-        return response;
+  async assertStoppedLocation(
+    reason: string,
+    expected: {
+      path?: string | RegExp;
+      line?: number;
+      column?: number;
+    },
+  ): Promise<DebugProtocol.StackTraceResponse> {
+    const stoppedEvent = await this.waitForStop();
+    assert.strictEqual(stoppedEvent.body.reason, reason);
+
+    const stackTraceResponse = await this.stackTraceRequest({
+      threadId: stoppedEvent.body.threadId!,
+    });
+
+    const frame = stackTraceResponse.body.stackFrames[0];
+    if (typeof expected.path === 'string' || expected.path instanceof RegExp) {
+      this.assertPath(
+        frame.source?.path!,
+        expected.path,
+        `stopped location: path mismatch: ${frame.source?.path} vs ${expected.path}`,
+      );
     }
-
-    async waitForStop(): Promise<DebugProtocol.StoppedEvent> {
-        if (typeof this.lastStoppedEvent !== 'undefined') {
-            return Promise.resolve(this.lastStoppedEvent);
-        }
-        const event = (await this.waitForEvent('stopped')) as DebugProtocol.StoppedEvent;
-        return event;
+    if (typeof expected.line === 'number') {
+      assert.strictEqual(
+        frame.line,
+        expected.line,
+        `stopped location: line mismatch: ${frame.line} vs ${expected.line}`,
+      );
     }
-
-    async assertStoppedLocation(reason: string, expected: {
-        path?: string | RegExp;
-        line?: number;
-        column?: number;
-    }): Promise<DebugProtocol.StackTraceResponse> {
-        const stoppedEvent = await this.waitForStop();
-        assert.strictEqual(stoppedEvent.body.reason, reason);
-
-        const stackTraceResponse = await this.stackTraceRequest({ threadId: stoppedEvent.body.threadId! });
-
-        const frame = stackTraceResponse.body.stackFrames[0];
-        if (typeof expected.path === 'string' || expected.path instanceof RegExp) {
-            this.assertPath(frame.source?.path!, expected.path, `stopped location: path mismatch: ${frame.source?.path} vs ${expected.path}`);
-        }
-        if (typeof expected.line === 'number') {
-            assert.strictEqual(frame.line, expected.line, `stopped location: line mismatch: ${frame.line} vs ${expected.line}`);
-        }
-        if (typeof expected.column === 'number') {
-            assert.strictEqual(frame.column, expected.column, `stopped location: column mismatch: ${frame.column} vs ${expected.column}`);
-        }
-        return stackTraceResponse;
+    if (typeof expected.column === 'number') {
+      assert.strictEqual(
+        frame.column,
+        expected.column,
+        `stopped location: column mismatch: ${frame.column} vs ${expected.column}`,
+      );
     }
+    return stackTraceResponse;
+  }
 
-    breakpointLocationsRequest(args: DebugProtocol.BreakpointLocationsArguments): Promise<DebugProtocol.BreakpointLocationsResponse> {
-        return this.send('breakpointLocations', args) as Promise<DebugProtocol.BreakpointLocationsResponse>;
-    }
+  breakpointLocationsRequest(
+    args: DebugProtocol.BreakpointLocationsArguments,
+  ): Promise<DebugProtocol.BreakpointLocationsResponse> {
+    return this.send(
+      'breakpointLocations',
+      args,
+    ) as Promise<DebugProtocol.BreakpointLocationsResponse>;
+  }
 }

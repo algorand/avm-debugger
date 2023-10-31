@@ -435,9 +435,7 @@
               },
               {
                 "pc": 89,
-                "spawned-inners": [
-                  0
-                ]
+                "spawned-inners": [0]
               },
               {
                 "pc": 90
@@ -659,10 +657,7 @@
               },
               {
                 "pc": 145,
-                "spawned-inners": [
-                  1,
-                  2
-                ]
+                "spawned-inners": [1, 2]
               },
               {
                 "pc": 146
@@ -1149,9 +1144,7 @@
                   },
                   {
                     "pc": 89,
-                    "spawned-inners": [
-                      0
-                    ]
+                    "spawned-inners": [0]
                   },
                   {
                     "pc": 90
@@ -1372,10 +1365,7 @@
                   },
                   {
                     "pc": 145,
-                    "spawned-inners": [
-                      1,
-                      2
-                    ]
+                    "spawned-inners": [1, 2]
                   },
                   {
                     "pc": 146
@@ -1889,15 +1879,11 @@
                     }
                   },
                   {
-                    "logs": [
-                      "AAAAAAAAAAE="
-                    ],
+                    "logs": ["AAAAAAAAAAE="],
                     "pool-error": "",
                     "txn": {
                       "txn": {
-                        "apaa": [
-                          "AAAAAAAAAAA="
-                        ],
+                        "apaa": ["AAAAAAAAAAA="],
                         "apan": 5,
                         "apid": 1007,
                         "fv": 4,
@@ -1909,15 +1895,11 @@
                     }
                   }
                 ],
-                "logs": [
-                  "AAAAAAAAAAI="
-                ],
+                "logs": ["AAAAAAAAAAI="],
                 "pool-error": "",
                 "txn": {
                   "txn": {
-                    "apaa": [
-                      "AAAAAAAAAAE="
-                    ],
+                    "apaa": ["AAAAAAAAAAE="],
                     "apan": 5,
                     "apid": 1004,
                     "fv": 4,
@@ -1929,16 +1911,12 @@
                 }
               }
             ],
-            "logs": [
-              "AAAAAAAAAAQ="
-            ],
+            "logs": ["AAAAAAAAAAQ="],
             "pool-error": "",
             "txn": {
               "sig": "UxR2wgq7x1XCxPoO3cqXDw9X9xV3CNC3FWziAbN+m8QKNxG+XwLUyDrwQ5VGgporwLsqsTTVAQvsa0WAPKcrBg==",
               "txn": {
-                "apaa": [
-                  "AAAAAAAAAAI="
-                ],
+                "apaa": ["AAAAAAAAAAI="],
                 "apid": 1001,
                 "fee": 8000,
                 "fv": 4,

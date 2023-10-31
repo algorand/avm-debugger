@@ -927,11 +927,7 @@
               },
               {
                 "pc": 108,
-                "spawned-inners": [
-                  0,
-                  1,
-                  2
-                ]
+                "spawned-inners": [0, 1, 2]
               },
               {
                 "pc": 109,
@@ -2110,9 +2106,7 @@
                   },
                   {
                     "pc": 45,
-                    "spawned-inners": [
-                      0
-                    ]
+                    "spawned-inners": [0]
                   },
                   {
                     "pc": 46,
@@ -2847,9 +2841,7 @@
                   },
                   {
                     "pc": 45,
-                    "spawned-inners": [
-                      0
-                    ]
+                    "spawned-inners": [0]
                   },
                   {
                     "pc": 46,
@@ -3590,9 +3582,7 @@
                   },
                   {
                     "pc": 45,
-                    "spawned-inners": [
-                      0
-                    ]
+                    "spawned-inners": [0]
                   },
                   {
                     "pc": 46,
@@ -4205,16 +4195,11 @@
                         }
                       }
                     ],
-                    "logs": [
-                      "FR98dQAAAAAAAAAAAAAAAAH6X10jAAAAAAAAAAA="
-                    ],
+                    "logs": ["FR98dQAAAAAAAAAAAAAAAAH6X10jAAAAAAAAAAA="],
                     "pool-error": "",
                     "txn": {
                       "txn": {
-                        "apaa": [
-                          "v4rK7g==",
-                          "AAAAAAAAAAg="
-                        ],
+                        "apaa": ["v4rK7g==", "AAAAAAAAAAg="],
                         "apid": 82873991,
                         "fee": 1000,
                         "fv": 33185554,
@@ -4225,19 +4210,12 @@
                     }
                   }
                 ],
-                "logs": [
-                  "FR98dUAAAAAAAfpfXSMAAAAAAAAAAA=="
-                ],
+                "logs": ["FR98dUAAAAAAAfpfXSMAAAAAAAAAAA=="],
                 "pool-error": "",
                 "txn": {
                   "txn": {
-                    "apaa": [
-                      "JCa9/A==",
-                      "AAhAIS0tLS0tLQ=="
-                    ],
-                    "apfa": [
-                      82873991
-                    ],
+                    "apaa": ["JCa9/A==", "AAhAIS0tLS0tLQ=="],
+                    "apfa": [82873991],
                     "apid": 82874344,
                     "fee": 1000,
                     "fv": 33185554,
@@ -4260,16 +4238,11 @@
                         }
                       }
                     ],
-                    "logs": [
-                      "FR98dQAAAAAAAAABAAAAAAH6X10jAAAAAAAAAAE="
-                    ],
+                    "logs": ["FR98dQAAAAAAAAABAAAAAAH6X10jAAAAAAAAAAE="],
                     "pool-error": "",
                     "txn": {
                       "txn": {
-                        "apaa": [
-                          "v4rK7g==",
-                          "AAAAAAAAAAY="
-                        ],
+                        "apaa": ["v4rK7g==", "AAAAAAAAAAY="],
                         "apid": 82873991,
                         "fee": 1000,
                         "fv": 33185554,
@@ -4280,19 +4253,12 @@
                     }
                   }
                 ],
-                "logs": [
-                  "FR98dUAAAAAAAfpfXSMAAAAAAAAAAQ=="
-                ],
+                "logs": ["FR98dUAAAAAAAfpfXSMAAAAAAAAAAQ=="],
                 "pool-error": "",
                 "txn": {
                   "txn": {
-                    "apaa": [
-                      "JCa9/A==",
-                      "AAZAQCEtLS0="
-                    ],
-                    "apfa": [
-                      82873991
-                    ],
+                    "apaa": ["JCa9/A==", "AAZAQCEtLS0="],
+                    "apfa": [82873991],
                     "apid": 82874344,
                     "fee": 1000,
                     "fv": 33185554,
@@ -4315,16 +4281,11 @@
                         }
                       }
                     ],
-                    "logs": [
-                      "FR98dQAAAAAAAAACAAAAAAH6X10jAAAAAAAAAAI="
-                    ],
+                    "logs": ["FR98dQAAAAAAAAACAAAAAAH6X10jAAAAAAAAAAI="],
                     "pool-error": "",
                     "txn": {
                       "txn": {
-                        "apaa": [
-                          "v4rK7g==",
-                          "AAAAAAAAAAM="
-                        ],
+                        "apaa": ["v4rK7g==", "AAAAAAAAAAM="],
                         "apid": 82873991,
                         "fee": 1000,
                         "fv": 33185554,
@@ -4335,19 +4296,12 @@
                     }
                   }
                 ],
-                "logs": [
-                  "FR98dS0AAAAAAfpfXSMAAAAAAAAAAg=="
-                ],
+                "logs": ["FR98dS0AAAAAAfpfXSMAAAAAAAAAAg=="],
                 "pool-error": "",
                 "txn": {
                   "txn": {
-                    "apaa": [
-                      "JCa9/A==",
-                      "AANAIS0="
-                    ],
-                    "apfa": [
-                      82873991
-                    ],
+                    "apaa": ["JCa9/A==", "AANAIS0="],
+                    "apfa": [82873991],
                     "apid": 82874344,
                     "fee": 1000,
                     "fv": 33185554,
@@ -4378,15 +4332,8 @@
             "txn": {
               "sig": "JzNmfWIVrRO1QfPyJoKVA1Ovq+IaZRbp9wSVAdVUgviyrxgzjuSQqSngz2j/DoFpxD+nUjSIK8olIiFs0YQFCA==",
               "txn": {
-                "apaa": [
-                  "aXydOw==",
-                  "AQ==",
-                  "Ag=="
-                ],
-                "apfa": [
-                  82873991,
-                  82874344
-                ],
+                "apaa": ["aXydOw==", "AQ==", "Ag=="],
+                "apfa": [82873991, 82874344],
                 "apid": 82874798,
                 "fee": 1000,
                 "fv": 33185554,

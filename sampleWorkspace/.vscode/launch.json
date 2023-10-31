@@ -1,21 +1,25 @@
 {
-	// Use IntelliSense to learn about possible attributes.
-	// Hover to view descriptions of existing attributes.
-	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-	"version": "0.2.0",
-	"configurations": [
-		{
-			"type": "teal",
-			"request": "launch",
-			"name": "Debug Transaction Group",
-			"debuggerPath": "stuff-to-deal",
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "teal",
+      "request": "launch",
+      "name": "Debug Transaction Group",
+      "debuggerPath": "stuff-to-deal",
 
-			"simulationTraceFile": "${workspaceFolder}/slot-machine/simulate-response.json",
-			"appSourceDescriptionFile": "${workspaceFolder}/slot-machine/sources.json",
-			"program": "${workspaceFolder}/stack-scratch.teal",
+      // "program": "${workspaceFolder}/stepping-test/simulate-response.json",
+      // "simulationTraceFile": "${workspaceFolder}/stepping-test/simulate-response.json",
+      // "appSourceDescriptionFile": "${workspaceFolder}/stepping-test/sources.json",
 
-			"stopOnEntry": true,
-			"trace": false
-		}
-	]
+      "program": "${workspaceFolder}/slot-machine/simulate-response.json",
+      "simulationTraceFile": "${workspaceFolder}/slot-machine/simulate-response.json",
+      "appSourceDescriptionFile": "${workspaceFolder}/slot-machine/sources.json",
+
+      "stopOnEntry": true,
+      "trace": false
+    }
+  ]
 }
