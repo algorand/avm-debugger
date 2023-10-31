@@ -26,7 +26,7 @@ import * as algosdk from 'algosdk';
 import {
   FileAccessor,
   TEALDebuggingAssets,
-  isAsciiPrintable,
+  isValidUtf8,
   limitArray,
 } from './utils';
 
@@ -991,7 +991,7 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
       // byte array
       const bytes = avmValue.bytes || new Uint8Array();
       namedVariables = 2;
-      if (isAsciiPrintable(bytes)) {
+      if (isValidUtf8(bytes)) {
         namedVariables++;
       }
       indexedVariables = bytes.length;
@@ -1032,9 +1032,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
     if (filter !== 'indexed') {
       let formats: BufferEncoding[] = ['hex', 'base64'];
-      if (isAsciiPrintable(bytes)) {
-        // TODO: perhaps do this with UTF-8 instead, see https://stackoverflow.com/questions/75108373/how-to-check-if-a-node-js-buffer-contains-valid-utf-8
-        formats.push('ascii');
+      if (isValidUtf8(bytes)) {
+        formats.push('utf-8');
       }
       if (bytes.length === 0) {
         formats = [];

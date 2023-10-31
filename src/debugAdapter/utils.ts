@@ -8,13 +8,10 @@ export interface FileAccessor {
   writeFile(path: string, contents: Uint8Array): Promise<void>;
 }
 
-export function isAsciiPrintable(data: Uint8Array): boolean {
-  for (let i = 0; i < data.length; i++) {
-    if (data[i] < 32 || data[i] > 126) {
-      return false;
-    }
-  }
-  return true;
+export function isValidUtf8(data: Uint8Array): boolean {
+  const dataBuffer = Buffer.from(data);
+  const decoded = dataBuffer.toString('utf-8');
+  return Buffer.from(decoded).equals(dataBuffer);
 }
 
 export function limitArray<T>(
