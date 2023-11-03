@@ -61,6 +61,114 @@ describe('Debug Adapter Tests', () => {
     });
 
     describe('launch', () => {
+      it('should return error when simulate trace file does not exist', async () => {
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'does-not-exist/simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes('Could not read simulate trace file'),
+          caughtError.message,
+        );
+      });
+
+      it('should return error when program sources description files does not exist', async () => {
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'does-not-exist/sources.json',
+            ),
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes(
+            'Could not read program sources description file',
+          ),
+          caughtError.message,
+        );
+      });
+
+      it('should return error when simulate trace file is invalid', async () => {
+        const simulateTraceFile = path.join(
+          DATA_ROOT,
+          'slot-machine/sources.json', // not a valid simulate trace file
+        );
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile,
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes(
+            `Could not parse simulate trace file from '${simulateTraceFile}'`,
+          ),
+          caughtError.message,
+        );
+      });
+
+      it('should return error when program sources description files is invalid', async () => {
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'slot-machine/simulate-response.json', // not a valid program sources description file
+        );
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile,
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes(
+            `Could not parse program sources description file from '${programSourcesDescriptionFile}': Invalid program sources description file`,
+          ),
+          caughtError.message,
+        );
+      });
+
       it('should run program to the end', async () => {
         await Promise.all([
           fixture.client.configurationSequence(),

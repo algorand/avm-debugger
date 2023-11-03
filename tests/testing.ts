@@ -3,16 +3,12 @@ import * as path from 'path';
 import * as fs from 'fs/promises';
 import { DebugClient } from './client';
 import { BasicServer } from '../src/debugAdapter/basicServer';
-import {
-  FileAccessor,
-  ByteArrayMap,
-  TEALDebuggingAssets,
-} from '../src/debugAdapter/utils';
+import { FileAccessor, ByteArrayMap } from '../src/debugAdapter/utils';
 
 export const PROJECT_ROOT = path.join(__dirname, '../');
-export const DEBUG_CLIENT_PATH = path.join(
+const DEBUG_CLIENT_PATH = path.join(
   PROJECT_ROOT,
-  'out/debugAdapter/debugAdapter.js',
+  'out/src/debugAdapter/debugAdapter.js',
 );
 export const DATA_ROOT = path.join(PROJECT_ROOT, 'sampleWorkspace/');
 
@@ -50,6 +46,8 @@ export class TestFixture {
     this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
     await this._client.start(this._server.port());
 
+    // If you want to invoke the debug adapter separately in a child process and
+    // communicate through stdin/stdout, use this instead:
     // this._client = new DebugClient(
     //   'node',
     //   DEBUG_CLIENT_PATH,
