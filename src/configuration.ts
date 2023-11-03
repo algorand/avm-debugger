@@ -20,28 +20,19 @@ export class TealDebugConfigProvider
     config: DebugConfiguration,
     _token?: CancellationToken,
   ): ProviderResult<DebugConfiguration> {
-    // NOTE: log the overloaded config to window
-    vscode.window.showInformationMessage(JSON.stringify(config));
-
     // Check necessary part, we do need these 2 files for debug
-    if (!config.simulationTraceFile) {
-      return vscode.window
-        .showInformationMessage(
-          'missing critical part: simulationTraceFile in launch.json',
-        )
-        .then((_) => {
-          return undefined;
-        });
+    if (!config.simulateTraceFile) {
+      vscode.window.showErrorMessage(
+        'Missing property "simulateTraceFile" in debug config',
+      );
+      return null;
     }
 
-    if (!config.appSourceDescriptionFile) {
-      return vscode.window
-        .showInformationMessage(
-          'missing critical part: appSourceDescriptionFile in launch.json',
-        )
-        .then((_) => {
-          return undefined;
-        });
+    if (!config.programSourcesDescriptionFile) {
+      vscode.window.showErrorMessage(
+        'Missing property "programSourcesDescriptionFile" in debug config',
+      );
+      return null;
     }
 
     return config;

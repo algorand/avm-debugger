@@ -1,9 +1,7 @@
-import { TxnGroupDebugSession } from './debugRequestHandlers';
-
 import { promises as fs } from 'fs';
-import * as path from 'path';
 import * as Net from 'net';
-import { FileAccessor, TEALDebuggingAssets } from './utils';
+import { FileAccessor } from './utils';
+import { AvmDebugSession } from './debugRequestHandlers';
 
 /*
  * debugAdapter.js is the entrypoint of the debug adapter when it runs as a separate process.
@@ -36,9 +34,6 @@ async function run() {
 
   // first parse command line arguments to see whether the debug adapter should run as a server
   let port = 0;
-  const simulateResponsePath = process.env.ALGORAND_SIMULATION_RESPONSE_PATH;
-  const txnGroupSourcesDescriptionPath =
-    process.env.ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH;
 
   const args = process.argv.slice(2);
   args.forEach(function (val, index, array) {
@@ -47,19 +42,6 @@ async function run() {
       port = parseInt(portMatch[1], 10);
     }
   });
-
-  if (typeof simulateResponsePath === 'undefined') {
-    throw new Error('missing ALGORAND_SIMULATION_RESPONSE_PATH');
-  }
-  if (typeof txnGroupSourcesDescriptionPath === 'undefined') {
-    throw new Error('missing ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH');
-  }
-
-  const assets = await TEALDebuggingAssets.loadFromFiles(
-    fsAccessor,
-    path.resolve(simulateResponsePath),
-    path.resolve(txnGroupSourcesDescriptionPath),
-  );
 
   if (port > 0) {
     // start a server that creates a new session for every connection request
@@ -72,7 +54,7 @@ async function run() {
       socket.on('end', () => {
         console.error('>> client connection closed\n');
       });
-      const session = new TxnGroupDebugSession(fsAccessor, assets);
+      const session = new AvmDebugSession(fsAccessor);
       session.setRunAsServer(true);
       session.start(socket, socket);
     }).listen(port);
@@ -81,7 +63,7 @@ async function run() {
     });
   } else {
     // start a single session that communicates via stdin/stdout
-    const session = new TxnGroupDebugSession(fsAccessor, assets);
+    const session = new AvmDebugSession(fsAccessor);
     process.on('SIGTERM', () => {
       session.shutdown();
     });

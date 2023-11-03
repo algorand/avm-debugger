@@ -3,25 +3,33 @@ import { AppState } from './appState';
 import {
   ByteArrayMap,
   TEALDebuggingAssets,
-  TxnGroupSourceDescriptor,
+  ProgramSourceDescriptor,
+  ProgramSourceDescriptorRegistry,
 } from './utils';
 
 export class TraceReplayEngine {
-  public debugAssets: TEALDebuggingAssets;
+  public simulateResponse: algosdk.modelsv2.SimulateResponse | undefined;
+
   public programHashToSource: ByteArrayMap<
-    TxnGroupSourceDescriptor | undefined
+    ProgramSourceDescriptor | undefined
   > = new ByteArrayMap();
-  public framePaths: number[][] = [];
 
   public initialAppState = new Map<number, AppState>();
   public currentAppState = new Map<number, AppState>();
 
   public stack: TraceReplayStackFrame[] = [];
 
-  constructor(debugAssets: TEALDebuggingAssets) {
-    this.debugAssets = debugAssets;
+  public reset() {
+    this.simulateResponse = undefined;
+    this.programHashToSource.clear();
+    this.initialAppState.clear();
+    this.currentAppState.clear();
+    this.stack = [];
+  }
 
-    const { simulateResponse } = this.debugAssets;
+  public async loadResources(debugAssets: TEALDebuggingAssets) {
+    const { simulateResponse, programSourceDescriptorRegistry } = debugAssets;
+    this.simulateResponse = simulateResponse;
 
     for (const initialAppState of simulateResponse.initialStates
       ?.appInitialStates || []) {
@@ -38,19 +46,23 @@ export class TraceReplayEngine {
     ) {
       const group = simulateResponse.txnGroups[groupIndex];
 
-      this.framePaths.push([groupIndex]);
-
       for (let txnIndex = 0; txnIndex < group.txnResults.length; txnIndex++) {
-        this.setupTxnTrace(groupIndex, txnIndex);
+        this.setupTxnTrace(
+          simulateResponse,
+          programSourceDescriptorRegistry,
+          groupIndex,
+          txnIndex,
+        );
       }
     }
 
     this.resetCurrentAppState();
-    this.setStartingStack();
+    this.setStartingStack(simulateResponse);
   }
 
-  private setStartingStack() {
-    const { simulateResponse } = this.debugAssets;
+  private setStartingStack(
+    simulateResponse: algosdk.modelsv2.SimulateResponse,
+  ) {
     this.stack = [new TopLevelTransactionGroupsFrame(this, simulateResponse)];
     if (simulateResponse.txnGroups.length === 1) {
       // If only a single group, get rid of the top-level frame
@@ -68,29 +80,35 @@ export class TraceReplayEngine {
     );
   }
 
-  private setupTxnTrace(groupIndex: number, txnIndex: number) {
+  private setupTxnTrace(
+    simulateResponse: algosdk.modelsv2.SimulateResponse,
+    programSourceDescriptorRegistry: ProgramSourceDescriptorRegistry,
+    groupIndex: number,
+    txnIndex: number,
+  ) {
     const txnPath = [groupIndex, txnIndex];
-    this.framePaths.push(txnPath);
 
-    const txn =
-      this.debugAssets.simulateResponse.txnGroups[groupIndex].txnResults[
-        txnIndex
-      ];
+    const txn = simulateResponse.txnGroups[groupIndex].txnResults[txnIndex];
     const trace = txn.execTrace;
     if (!trace) {
       // Probably not an app call txn
       return;
     }
     if (trace.logicSigTrace) {
-      this.fetchProgramSourceInfo(trace.logicSigHash!);
+      this.fetchProgramSourceInfo(
+        programSourceDescriptorRegistry,
+        trace.logicSigHash!,
+      );
     }
     visitAppTrace(
       txnPath,
       txn.txnResult,
       trace,
       (path, programHash, txnInfo, opcodes) => {
-        this.framePaths.push(path);
-        this.fetchProgramSourceInfo(programHash);
+        this.fetchProgramSourceInfo(
+          programSourceDescriptorRegistry,
+          programHash,
+        );
 
         let appID = txnInfo.applicationIndex || txnInfo.txn.txn.apid;
         if (typeof appID === 'undefined') {
@@ -119,12 +137,15 @@ export class TraceReplayEngine {
     );
   }
 
-  private fetchProgramSourceInfo(programHash: Uint8Array) {
+  private fetchProgramSourceInfo(
+    programSourceDescriptorRegistry: ProgramSourceDescriptorRegistry,
+    programHash: Uint8Array,
+  ) {
     if (this.programHashToSource.has(programHash)) {
       return;
     }
     const sourceDescriptor =
-      this.debugAssets.txnGroupDescriptorList.findByHash(programHash);
+      programSourceDescriptorRegistry.findByHash(programHash);
     this.programHashToSource.set(programHash, sourceDescriptor);
   }
 
@@ -150,7 +171,7 @@ export class TraceReplayEngine {
       length = this.stack.length;
       this.currentFrame().backward(this.stack);
       if (this.stack.length === 0) {
-        this.setStartingStack();
+        this.setStartingStack(this.simulateResponse!);
         return false;
       }
     } while (this.stack.length < length);

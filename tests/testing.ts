@@ -44,34 +44,27 @@ export class TestFixture {
     return this._server;
   }
 
-  public async init(
-    simulateResponsePath: string,
-    txnGroupSourcesDescriptionPath: string,
-  ) {
-    const debugAssets: TEALDebuggingAssets =
-      await TEALDebuggingAssets.loadFromFiles(
-        testFileAccessor,
-        simulateResponsePath,
-        txnGroupSourcesDescriptionPath,
-      );
-    this._server = new BasicServer(testFileAccessor, debugAssets);
+  public async init() {
+    this._server = new BasicServer(testFileAccessor);
 
     this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
     await this._client.start(this._server.port());
 
-    // this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal', {
-    // 	env: {
-    // 		...process.env,
-    // 		/* eslint-disable @typescript-eslint/naming-convention */
-    // 		ALGORAND_SIMULATION_RESPONSE_PATH: simulateResponsePath,
-    // 		ALGORAND_TXN_GROUP_SOURCES_DESCRIPTION_PATH: txnGroupSourcesDescriptionPath,
-    // 		/* eslint-enable @typescript-eslint/naming-convention */
-    // 	}
-    // }, true);
+    // this._client = new DebugClient(
+    //   'node',
+    //   DEBUG_CLIENT_PATH,
+    //   'teal',
+    //   undefined,
+    //   true,
+    // );
     // await this._client.start();
   }
 
   public async reset() {
+    await this.client.disconnectRequest();
+  }
+
+  public async stop() {
     await this.client.stop();
     this.server.dispose();
     this._client = undefined;

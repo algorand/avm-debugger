@@ -1,13 +1,13 @@
 import * as Net from 'net';
-import { TxnGroupDebugSession } from './debugRequestHandlers';
-import { FileAccessor, TEALDebuggingAssets } from './utils';
+import { AvmDebugSession } from './debugRequestHandlers';
+import { FileAccessor } from './utils';
 
 export class BasicServer {
   private server: Net.Server;
 
-  constructor(fileAccessor: FileAccessor, debugAssets: TEALDebuggingAssets) {
+  constructor(fileAccessor: FileAccessor) {
     this.server = Net.createServer((socket) => {
-      const session = new TxnGroupDebugSession(fileAccessor, debugAssets);
+      const session = new AvmDebugSession(fileAccessor);
       session.setRunAsServer(true);
       session.start(socket as NodeJS.ReadableStream, socket);
       socket.on('error', (err) => {
