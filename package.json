@@ -108,50 +108,7 @@
         "configuration": "./teal-language-configuration.json"
       }
     ],
-    "menus": {
-      "editor/title/run": [
-        {
-          "command": "extension.teal-debug.runEditorContents",
-          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'",
-          "group": "navigation@1"
-        },
-        {
-          "command": "extension.teal-debug.debugEditorContents",
-          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'",
-          "group": "navigation@2"
-        }
-      ],
-      "commandPalette": [
-        {
-          "command": "extension.teal-debug.debugEditorContents",
-          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'"
-        },
-        {
-          "command": "extension.teal-debug.runEditorContents",
-          "when": "resourceLangId == 'markdown' || resourceLangId == 'teal'"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "extension.teal-debug.debugEditorContents",
-        "title": "Debug File",
-        "category": "TEAL Debug",
-        "enablement": "!inDebugMode",
-        "icon": "$(debug-alt)"
-      },
-      {
-        "command": "extension.teal-debug.runEditorContents",
-        "title": "Run File",
-        "category": "TEAL Debug",
-        "enablement": "!inDebugMode",
-        "icon": "$(play)"
-      }
-    ],
     "breakpoints": [
-      {
-        "language": "markdown"
-      },
       {
         "language": "teal"
       }
@@ -160,7 +117,6 @@
       {
         "type": "teal",
         "languages": [
-          "markdown",
           "teal"
         ],
         "label": "TEAL Debug",
@@ -169,48 +125,20 @@
         "configurationAttributes": {
           "launch": {
             "properties": {
-              "debuggerPath": {
-                "type": "string",
-                "description": "Path to Algorand txn-group debugger that take in both simulate trace file and txn-group app source description file."
-              },
-              "simulationTraceFile": {
+              "simulateTraceFile": {
                 "type": "string",
                 "description": "Transaction group simulation response with execution trace.",
-                "default": ""
+                "default": "${workspaceFolder}/path/to/simulateTraceFile.json"
               },
-              "appSourceDescriptionFile": {
+              "programSourcesDescriptionFile": {
                 "type": "string",
-                "description": "Description file for TEAL sources of apps appearing in transaction group.",
-                "default": ""
-              },
-              "program": {
-                "type": "string",
-                "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForProgramName}"
+                "description": "Description file for sources of programs appearing in transaction group.",
+                "default": "${workspaceFolder}/path/to/programSourcesDescriptionFile.json"
               },
               "stopOnEntry": {
                 "type": "boolean",
                 "description": "Automatically stop after launch.",
                 "default": true
-              },
-              "trace": {
-                "type": "boolean",
-                "description": "Enable logging of the Debug Adapter Protocol.",
-                "default": true
-              },
-              "compileError": {
-                "type": "string",
-                "description": "Simulates a compile error in 'launch' request.",
-                "enum": [
-                  "default",
-                  "show",
-                  "hide"
-                ],
-                "enumDescriptions": [
-                  "default: show fake compile error to user",
-                  "show fake compile error to user",
-                  "do not show fake compile error to user"
-                ]
               }
             }
           }
@@ -219,23 +147,22 @@
           {
             "type": "teal",
             "request": "launch",
-            "appSourceDescriptionFile": "launch.json",
-            "simulationTraceFile": "launch.json",
-            "debuggerPath": "yo-a-path-for-deal",
-            "name": "Ask for file name",
-            "program": "${workspaceFolder}/${command:AskForProgramName}",
+            "name": "Debug AVM Transactions",
+            "simulateTraceFile": "${workspaceFolder}/path/to/simulateTraceFile.json",
+            "programSourcesDescriptionFile": "${workspaceFolder}/path/to/programSourcesDescriptionFile.json",
             "stopOnEntry": true
           }
         ],
         "configurationSnippets": [
           {
-            "label": "TEAL Debug: Launch",
-            "description": "A new configuration for 'debugging' a user selected markdown file.",
+            "label": "AVM Debug",
+            "description": "A new configuration for replaying and debugging a Algorand transactions.",
             "body": {
               "type": "teal",
               "request": "launch",
-              "name": "Ask for file name",
-              "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
+              "name": "Debug AVM Transactions",
+              "simulateTraceFile": "^\"\\${workspaceFolder}/path/to/simulateTraceFile.json\"",
+              "programSourcesDescriptionFile": "^\"\\${workspaceFolder}/path/to/programSourcesDescriptionFile.json\"",
               "stopOnEntry": true
             }
           }
@@ -245,7 +172,6 @@
   },
   "dependencies": {
     "algosdk": "github:jasonpaulos/js-algorand-sdk#teal-source-map-improvements",
-    "json-bigint": "^1.0.0",
-    "lodash": "^4.17.21"
+    "json-bigint": "^1.0.0"
   }
 }

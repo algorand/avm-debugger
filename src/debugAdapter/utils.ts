@@ -127,10 +127,19 @@ function filePathRelativeTo(base: string, filePath: string): string {
   return path.join(path.dirname(base), filePath);
 }
 
-export class TxnGroupSourceDescriptor {
+interface ProgramSourceEntryFile {
+  'txn-group-sources': ProgramSourceEntry[];
+}
+
+interface ProgramSourceEntry {
+  hash: string;
+  'sourcemap-location': string;
+}
+
+export class ProgramSourceDescriptor {
   public readonly sourcemapFileLocation: string;
   public readonly sourcemap: algosdk.SourceMap;
-  public readonly hash: string;
+  public readonly hash: Uint8Array;
 
   constructor({
     sourcemapFileLocation,
@@ -139,7 +148,7 @@ export class TxnGroupSourceDescriptor {
   }: {
     sourcemapFileLocation: string;
     sourcemap: algosdk.SourceMap;
-    hash: string;
+    hash: Uint8Array;
   }) {
     this.sourcemapFileLocation = sourcemapFileLocation;
     this.sourcemap = sourcemap;
@@ -162,123 +171,134 @@ export class TxnGroupSourceDescriptor {
   static async fromJSONObj(
     fileAccessor: FileAccessor,
     originFile: string,
-    data: Record<string, any>,
-  ): Promise<TxnGroupSourceDescriptor> {
+    data: ProgramSourceEntry,
+  ): Promise<ProgramSourceDescriptor> {
     const sourcemapFileLocation = filePathRelativeTo(
       originFile,
       data['sourcemap-location'],
     );
     const rawSourcemap = Buffer.from(
-      await fileAccessor.readFile(sourcemapFileLocation),
+      await prefixPotentialError(
+        fileAccessor.readFile(sourcemapFileLocation),
+        'Could not read source map file',
+      ),
     );
     const sourcemap = new algosdk.SourceMap(
       JSON.parse(rawSourcemap.toString('utf-8')),
     );
 
-    return new TxnGroupSourceDescriptor({
+    return new ProgramSourceDescriptor({
       sourcemapFileLocation,
       sourcemap,
-      hash: data['hash'],
+      hash: new Uint8Array(Buffer.from(data.hash, 'base64')),
     });
   }
 }
 
-export class TxnGroupSourceDescriptorList {
-  private _txnGroupSources: Array<TxnGroupSourceDescriptor>;
+export class ProgramSourceDescriptorRegistry {
+  private registry: ByteArrayMap<ProgramSourceDescriptor>;
 
   constructor({
     txnGroupSources,
   }: {
-    txnGroupSources: Array<TxnGroupSourceDescriptor>;
+    txnGroupSources: ProgramSourceDescriptor[];
   }) {
-    this._txnGroupSources = txnGroupSources;
+    this.registry = new ByteArrayMap(
+      txnGroupSources.map((source) => [source.hash, source]),
+    );
   }
 
-  public get txnGroupSources(): Array<TxnGroupSourceDescriptor> {
-    return this._txnGroupSources;
-  }
-
-  public findByHash(
-    hash: string | Uint8Array,
-  ): TxnGroupSourceDescriptor | undefined {
-    if (typeof hash !== 'string') {
-      hash = Buffer.from(hash).toString('base64');
-    }
-    for (let i = 0; i < this._txnGroupSources.length; i++) {
-      if (
-        this._txnGroupSources[i].hash &&
-        this._txnGroupSources[i].hash === hash
-      ) {
-        return this._txnGroupSources[i];
-      }
-    }
-    return undefined;
+  public findByHash(hash: Uint8Array): ProgramSourceDescriptor | undefined {
+    return this.registry.get(hash);
   }
 
   static async loadFromFile(
     fileAccessor: FileAccessor,
-    txnGroupSourcesDescriptionPath: string,
-  ): Promise<TxnGroupSourceDescriptorList> {
-    const rawGroupSourcesDescription = Buffer.from(
-      await fileAccessor.readFile(txnGroupSourcesDescriptionPath),
-    );
-    const jsonGroupSourcesDescription = JSON.parse(
-      rawGroupSourcesDescription.toString('utf-8'),
-    ) as Record<string, any>;
-    const txnGroupSources = (
-      jsonGroupSourcesDescription['txn-group-sources'] as any[]
-    ).map((source) =>
-      TxnGroupSourceDescriptor.fromJSONObj(
-        fileAccessor,
-        txnGroupSourcesDescriptionPath,
-        source,
+    programSourcesDescriptionFilePath: string,
+  ): Promise<ProgramSourceDescriptorRegistry> {
+    const rawSourcesDescription = Buffer.from(
+      await prefixPotentialError(
+        fileAccessor.readFile(programSourcesDescriptionFilePath),
+        'Could not read program sources description file',
       ),
     );
-    return new TxnGroupSourceDescriptorList({
-      txnGroupSources: await Promise.all(txnGroupSources),
+    let jsonSourcesDescription: ProgramSourceEntryFile;
+    try {
+      jsonSourcesDescription = JSON.parse(
+        rawSourcesDescription.toString('utf-8'),
+      ) as ProgramSourceEntryFile;
+      if (
+        !Array.isArray(jsonSourcesDescription['txn-group-sources']) ||
+        !jsonSourcesDescription['txn-group-sources'].every(
+          (entry) =>
+            typeof entry.hash === 'string' &&
+            typeof entry['sourcemap-location'] === 'string',
+        )
+      ) {
+        throw new Error('Invalid program sources description file');
+      }
+    } catch (e) {
+      const err = e as Error;
+      throw new Error(
+        `Could not parse program sources description file from '${programSourcesDescriptionFilePath}': ${err.message}`,
+      );
+    }
+    const programSources = jsonSourcesDescription['txn-group-sources'].map(
+      (source) =>
+        ProgramSourceDescriptor.fromJSONObj(
+          fileAccessor,
+          programSourcesDescriptionFilePath,
+          source,
+        ),
+    );
+    return new ProgramSourceDescriptorRegistry({
+      txnGroupSources: await Promise.all(programSources),
     });
   }
 }
 
 export class TEALDebuggingAssets {
-  private _simulateResponse: algosdk.modelsv2.SimulateResponse;
-  private _txnGroupDescriptorList: TxnGroupSourceDescriptorList;
-
   constructor(
-    simulateResponse: algosdk.modelsv2.SimulateResponse,
-    txnGroupDescriptorList: TxnGroupSourceDescriptorList,
-  ) {
-    this._simulateResponse = simulateResponse;
-    this._txnGroupDescriptorList = txnGroupDescriptorList;
-  }
-
-  public get simulateResponse(): algosdk.modelsv2.SimulateResponse {
-    return this._simulateResponse;
-  }
-
-  public get txnGroupDescriptorList(): TxnGroupSourceDescriptorList {
-    return this._txnGroupDescriptorList;
-  }
+    public readonly simulateResponse: algosdk.modelsv2.SimulateResponse,
+    public readonly programSourceDescriptorRegistry: ProgramSourceDescriptorRegistry,
+  ) {}
 
   static async loadFromFiles(
     fileAccessor: FileAccessor,
-    simulateResponsePath: string,
-    txnGroupSourcesDescriptionPath: string,
+    simulateTraceFilePath: string,
+    programSourcesDescriptionFilePath: string,
   ): Promise<TEALDebuggingAssets> {
-    const rawSimulateResponse = Buffer.from(
-      await fileAccessor.readFile(simulateResponsePath),
+    const rawSimulateTrace = Buffer.from(
+      await prefixPotentialError(
+        fileAccessor.readFile(simulateTraceFilePath),
+        'Could not read simulate trace file',
+      ),
     );
-    const simulateResponse =
-      algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
-        parseJsonWithBigints(rawSimulateResponse.toString('utf-8')),
+    let simulateResponse: algosdk.modelsv2.SimulateResponse;
+    try {
+      simulateResponse =
+        algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
+          parseJsonWithBigints(rawSimulateTrace.toString('utf-8')),
+        );
+    } catch (e) {
+      const err = e as Error;
+      throw new Error(
+        `Could not parse simulate trace file from '${simulateTraceFilePath}': ${err.message}`,
       );
+    }
 
     const txnGroupDescriptorList =
-      await TxnGroupSourceDescriptorList.loadFromFile(
+      await ProgramSourceDescriptorRegistry.loadFromFile(
         fileAccessor,
-        txnGroupSourcesDescriptionPath,
+        programSourcesDescriptionFilePath,
       );
 
     return new TEALDebuggingAssets(simulateResponse, txnGroupDescriptorList);
   }
+}
+
+function prefixPotentialError<T>(task: Promise<T>, prefix: string): Promise<T> {
+  return task.catch((error) => {
+    throw new Error(`${prefix}: ${error.message}`);
+  });
 }

@@ -1,7 +1,5 @@
 import {
-  Logger,
-  logger,
-  LoggingDebugSession,
+  DebugSession,
   InitializedEvent,
   TerminatedEvent,
   StoppedEvent,
@@ -16,10 +14,7 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import {
-  TxnGroupWalkerRuntime,
-  IRuntimeBreakpoint,
-} from './txnGroupWalkerRuntime';
+import { AvmRuntime, IRuntimeBreakpoint } from './avmRuntime';
 import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
@@ -29,6 +24,8 @@ import {
   isValidUtf8,
   limitArray,
 } from './utils';
+
+const GENERIC_ERROR_ID = 9999;
 
 export enum RuntimeEvents {
   stopOnEntry = 'stopOnEntry',
@@ -45,28 +42,25 @@ export enum RuntimeEvents {
  * The schema for these attributes lives in the package.json of the teal-debug extension.
  * The interface should always match this schema.
  */
-interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-  /** An absolute path to the "program" to debug. */
-  program: string;
+export interface ILaunchRequestArguments
+  extends DebugProtocol.LaunchRequestArguments {
+  /** An absolute path to the simulate response to debug. */
+  simulateTraceFile: string;
+  /** An absolute path to the file which maps programs to source maps. */
+  programSourcesDescriptionFile: string;
   /** Automatically stop target after launch. If not specified, target does not stop. */
   stopOnEntry?: boolean;
-  /** enable logging the Debug Adapter Protocol */
-  trace?: boolean;
-  /** run without debugging */
-  noDebug?: boolean;
-  /** if specified, results in a simulated compile error in launch. */
-  compileError?: 'default' | 'show' | 'hide';
 }
 
 // eslint-disable-next-line @typescript-eslint/no-empty-interface
 interface IAttachRequestArguments extends ILaunchRequestArguments {}
 
-export class TxnGroupDebugSession extends LoggingDebugSession {
+export class AvmDebugSession extends DebugSession {
   // we don't support multiple threads, so we can use a hardcoded ID for the default thread
   private static threadID = 1;
 
   // txn group walker runtime for walking txn group.
-  private _runtime: TxnGroupWalkerRuntime;
+  private _runtime: AvmRuntime;
 
   private _variableHandles = new Handles<
     | ProgramStateScope
@@ -83,37 +77,28 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
 
   private _configurationDone = new Subject();
 
-  private _debugAssets: TEALDebuggingAssets;
-
   /**
    * Creates a new debug adapter that is used for one debug session.
    * We configure the default implementation of a debug adapter here.
    */
-  public constructor(
-    fileAccessor: FileAccessor,
-    debugAssets: TEALDebuggingAssets,
-  ) {
-    super('mock-debug.txt');
-
-    this._debugAssets = debugAssets;
+  public constructor(private readonly fileAccessor: FileAccessor) {
+    super();
 
     // this debugger uses zero-based lines and columns
     this.setDebuggerLinesStartAt1(false);
     this.setDebuggerColumnsStartAt1(false);
 
-    this._runtime = new TxnGroupWalkerRuntime(fileAccessor, this._debugAssets);
+    this._runtime = new AvmRuntime(fileAccessor);
 
     // setup event handlers
     this._runtime.on(RuntimeEvents.stopOnEntry, () => {
-      this.sendEvent(new StoppedEvent('entry', TxnGroupDebugSession.threadID));
+      this.sendEvent(new StoppedEvent('entry', AvmDebugSession.threadID));
     });
     this._runtime.on(RuntimeEvents.stopOnStep, () => {
-      this.sendEvent(new StoppedEvent('step', TxnGroupDebugSession.threadID));
+      this.sendEvent(new StoppedEvent('step', AvmDebugSession.threadID));
     });
     this._runtime.on(RuntimeEvents.stopOnBreakpoint, () => {
-      this.sendEvent(
-        new StoppedEvent('breakpoint', TxnGroupDebugSession.threadID),
-      );
+      this.sendEvent(new StoppedEvent('breakpoint', AvmDebugSession.threadID));
     });
     this._runtime.on(
       RuntimeEvents.breakpointValidated,
@@ -207,8 +192,8 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     // response.body.supportsReadMemoryRequest = true;
     // response.body.supportsWriteMemoryRequest = true;
 
-    response.body.supportSuspendDebuggee = true;
-    response.body.supportTerminateDebuggee = true;
+    // response.body.supportSuspendDebuggee = true;
+    // response.body.supportTerminateDebuggee = true;
     // response.body.supportsFunctionBreakpoints = true;
     response.body.supportsDelayedStackTraceLoading = true;
 
@@ -239,9 +224,12 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     args: DebugProtocol.DisconnectArguments,
     request?: DebugProtocol.Request,
   ): void {
-    console.log(
-      `disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`,
-    );
+    try {
+      this._runtime.reset();
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected async attachRequest(
@@ -255,66 +243,73 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     response: DebugProtocol.LaunchResponse,
     args: ILaunchRequestArguments,
   ) {
-    // make sure to 'Stop' the buffered logging if 'trace' is not set
-    logger.setup(
-      args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop,
-      false,
-    );
+    try {
+      const debugAssets = await TEALDebuggingAssets.loadFromFiles(
+        this.fileAccessor,
+        args.simulateTraceFile,
+        args.programSourcesDescriptionFile,
+      );
 
-    // TODO: use args.program
+      await this._runtime.onLaunch(debugAssets);
 
-    // wait 1 second until configuration has finished (and configurationDoneRequest has been called)
-    await this._configurationDone.wait(1000);
+      // wait 1 second until configuration has finished (and configurationDoneRequest has been called)
+      await this._configurationDone.wait(1000);
 
-    // start the program in the runtime
-    this._runtime.start(!!args.stopOnEntry, !args.noDebug);
+      // start the program in the runtime
+      this._runtime.start(!!args.stopOnEntry, !args.noDebug);
 
-    this.sendResponse(response);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected setBreakPointsRequest(
     response: DebugProtocol.SetBreakpointsResponse,
     args: DebugProtocol.SetBreakpointsArguments,
   ): void {
-    const { path } = args.source;
-    if (typeof path !== 'undefined') {
-      const clientBreakpoints = args.breakpoints || [];
+    try {
+      const { path } = args.source;
+      if (typeof path !== 'undefined') {
+        const clientBreakpoints = args.breakpoints || [];
 
-      // clear all breakpoints for this file
-      this._runtime.clearBreakpoints(path);
+        // clear all breakpoints for this file
+        this._runtime.clearBreakpoints(path);
 
-      // set and verify breakpoint locations
-      const actualBreakpoints = clientBreakpoints.map((clientBp) => {
-        const line = this.convertClientLineToDebugger(clientBp.line);
-        const column =
-          typeof clientBp.column === 'number'
-            ? this.convertClientColumnToDebugger(clientBp.column)
-            : undefined;
-        const runtimeBreakpoint = this._runtime.setBreakPoint(
-          path,
-          line,
-          column,
-        );
-        const bp = new Breakpoint(
-          runtimeBreakpoint.verified,
-          this.convertDebuggerLineToClient(runtimeBreakpoint.location.line),
-          typeof runtimeBreakpoint.location.column !== 'undefined'
-            ? this.convertDebuggerColumnToClient(
-                runtimeBreakpoint.location.column,
-              )
-            : undefined,
-        ) as DebugProtocol.Breakpoint;
-        bp.id = runtimeBreakpoint.id;
-        return bp;
-      });
+        // set and verify breakpoint locations
+        const actualBreakpoints = clientBreakpoints.map((clientBp) => {
+          const line = this.convertClientLineToDebugger(clientBp.line);
+          const column =
+            typeof clientBp.column === 'number'
+              ? this.convertClientColumnToDebugger(clientBp.column)
+              : undefined;
+          const runtimeBreakpoint = this._runtime.setBreakPoint(
+            path,
+            line,
+            column,
+          );
+          const bp = new Breakpoint(
+            runtimeBreakpoint.verified,
+            this.convertDebuggerLineToClient(runtimeBreakpoint.location.line),
+            typeof runtimeBreakpoint.location.column !== 'undefined'
+              ? this.convertDebuggerColumnToClient(
+                  runtimeBreakpoint.location.column,
+                )
+              : undefined,
+          ) as DebugProtocol.Breakpoint;
+          bp.id = runtimeBreakpoint.id;
+          return bp;
+        });
 
-      // send back the actual breakpoint positions
-      response.body = {
-        breakpoints: actualBreakpoints,
-      };
+        // send back the actual breakpoint positions
+        response.body = {
+          breakpoints: actualBreakpoints,
+        };
+      }
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
     }
-
-    this.sendResponse(response);
   }
 
   protected breakpointLocationsRequest(
@@ -322,54 +317,58 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     args: DebugProtocol.BreakpointLocationsArguments,
     request?: DebugProtocol.Request,
   ): void {
-    const { path } = args.source;
-    if (typeof path !== 'undefined') {
-      const startLine = this.convertClientLineToDebugger(args.line);
-      const endLine =
-        typeof args.endLine === 'number'
-          ? this.convertClientLineToDebugger(args.endLine)
-          : startLine;
-      const startColumn =
-        typeof args.column === 'number'
-          ? this.convertClientColumnToDebugger(args.column)
-          : 0;
-      const endColumn =
-        typeof args.endColumn === 'number'
-          ? this.convertClientColumnToDebugger(args.endColumn)
-          : Number.MAX_SAFE_INTEGER;
+    try {
+      const { path } = args.source;
+      if (typeof path !== 'undefined') {
+        const startLine = this.convertClientLineToDebugger(args.line);
+        const endLine =
+          typeof args.endLine === 'number'
+            ? this.convertClientLineToDebugger(args.endLine)
+            : startLine;
+        const startColumn =
+          typeof args.column === 'number'
+            ? this.convertClientColumnToDebugger(args.column)
+            : 0;
+        const endColumn =
+          typeof args.endColumn === 'number'
+            ? this.convertClientColumnToDebugger(args.endColumn)
+            : Number.MAX_SAFE_INTEGER;
 
-      const locations = this._runtime
-        .breakpointLocations(path)
-        .filter(
-          ({ line, column }) =>
-            line >= startLine &&
-            line <= endLine &&
-            (typeof column !== 'undefined'
-              ? column >= startColumn && column <= endColumn
-              : true),
-        );
+        const locations = this._runtime
+          .breakpointLocations(path)
+          .filter(
+            ({ line, column }) =>
+              line >= startLine &&
+              line <= endLine &&
+              (typeof column !== 'undefined'
+                ? column >= startColumn && column <= endColumn
+                : true),
+          );
 
-      const responseBreakpoints: DebugProtocol.BreakpointLocation[] = [];
-      for (const location of locations) {
-        responseBreakpoints.push({
-          line: this.convertDebuggerLineToClient(location.line),
-          column:
-            typeof location.column !== 'undefined'
-              ? this.convertDebuggerColumnToClient(location.column)
-              : undefined,
-        });
+        const responseBreakpoints: DebugProtocol.BreakpointLocation[] = [];
+        for (const location of locations) {
+          responseBreakpoints.push({
+            line: this.convertDebuggerLineToClient(location.line),
+            column:
+              typeof location.column !== 'undefined'
+                ? this.convertDebuggerColumnToClient(location.column)
+                : undefined,
+          });
+        }
+        response.body = {
+          breakpoints: responseBreakpoints,
+        };
       }
-      response.body = {
-        breakpoints: responseBreakpoints,
-      };
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
     }
-    this.sendResponse(response);
   }
 
   protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
     // runtime supports no threads so just return a default thread.
     response.body = {
-      threads: [new Thread(TxnGroupDebugSession.threadID, 'thread 1')],
+      threads: [new Thread(AvmDebugSession.threadID, 'thread 1')],
     };
     this.sendResponse(response);
   }
@@ -378,104 +377,112 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     response: DebugProtocol.StackTraceResponse,
     args: DebugProtocol.StackTraceArguments,
   ): void {
-    const startFrame =
-      typeof args.startFrame === 'number' ? args.startFrame : 0;
-    const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+    try {
+      const startFrame =
+        typeof args.startFrame === 'number' ? args.startFrame : 0;
+      const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 
-    // The runtime has a stack where the latest call is the last element. We need to return the
-    // reverse of that.
-    const adjustedEndFrame = this._runtime.stackLength() - startFrame;
-    const adjustedStartFrame = Math.max(0, adjustedEndFrame - maxLevels);
+      // The runtime has a stack where the latest call is the last element. We need to return the
+      // reverse of that.
+      const adjustedEndFrame = this._runtime.stackLength() - startFrame;
+      const adjustedStartFrame = Math.max(0, adjustedEndFrame - maxLevels);
 
-    const stk = this._runtime.stack(adjustedStartFrame, adjustedEndFrame);
+      const stk = this._runtime.stack(adjustedStartFrame, adjustedEndFrame);
 
-    const stackFramesForResponse = stk.frames.map((frame, index) => {
-      const id = adjustedStartFrame + index;
+      const stackFramesForResponse = stk.frames.map((frame, index) => {
+        const id = adjustedStartFrame + index;
 
-      const sourceFile = frame.sourceFile();
-      let source: Source | undefined = undefined;
-      if (typeof sourceFile.path !== 'undefined') {
-        source = this.createSource(sourceFile.path);
-      } else if (typeof sourceFile.content !== 'undefined') {
-        source = this.createSourceWithContent(
-          sourceFile.name,
-          sourceFile.content,
-          sourceFile.contentMimeType,
+        const sourceFile = frame.sourceFile();
+        let source: Source | undefined = undefined;
+        if (typeof sourceFile.path !== 'undefined') {
+          source = this.createSource(sourceFile.path);
+        } else if (typeof sourceFile.content !== 'undefined') {
+          source = this.createSourceWithContent(
+            sourceFile.name,
+            sourceFile.content,
+            sourceFile.contentMimeType,
+          );
+        }
+
+        const sourceLocation = frame.sourceLocation();
+        const line = this.convertDebuggerLineToClient(sourceLocation.line);
+        const column =
+          typeof sourceLocation.column !== 'undefined'
+            ? this.convertDebuggerColumnToClient(sourceLocation.column)
+            : undefined;
+
+        const protocolFrame = new StackFrame(
+          id,
+          frame.name(),
+          source,
+          line,
+          column,
         );
-      }
+        protocolFrame.endLine =
+          typeof sourceLocation.endLine !== 'undefined'
+            ? this.convertDebuggerLineToClient(sourceLocation.endLine)
+            : undefined;
+        protocolFrame.endColumn =
+          typeof sourceLocation.endColumn !== 'undefined'
+            ? this.convertDebuggerColumnToClient(sourceLocation.endColumn)
+            : undefined;
+        return protocolFrame;
+      });
+      stackFramesForResponse.reverse();
 
-      const sourceLocation = frame.sourceLocation();
-      const line = this.convertDebuggerLineToClient(sourceLocation.line);
-      const column =
-        typeof sourceLocation.column !== 'undefined'
-          ? this.convertDebuggerColumnToClient(sourceLocation.column)
-          : undefined;
-
-      const protocolFrame = new StackFrame(
-        id,
-        frame.name(),
-        source,
-        line,
-        column,
-      );
-      protocolFrame.endLine =
-        typeof sourceLocation.endLine !== 'undefined'
-          ? this.convertDebuggerLineToClient(sourceLocation.endLine)
-          : undefined;
-      protocolFrame.endColumn =
-        typeof sourceLocation.endColumn !== 'undefined'
-          ? this.convertDebuggerColumnToClient(sourceLocation.endColumn)
-          : undefined;
-      return protocolFrame;
-    });
-    stackFramesForResponse.reverse();
-
-    response.body = {
-      totalFrames: stk.count,
-      stackFrames: stackFramesForResponse,
-      // 4 options for 'totalFrames':
-      //omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
-      // totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
-      //totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
-      //totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
-    };
-    this.sendResponse(response);
+      response.body = {
+        totalFrames: stk.count,
+        stackFrames: stackFramesForResponse,
+        // 4 options for 'totalFrames':
+        //omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
+        // totalFrames: stk.count			// stk.count is the correct size, should result in a max. of two requests
+        //totalFrames: 1000000 			// not the correct size, should result in a max. of two requests
+        //totalFrames: endFrame + 20 	// dynamically increases the size with every requested chunk, results in paging
+      };
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected scopesRequest(
     response: DebugProtocol.ScopesResponse,
     args: DebugProtocol.ScopesArguments,
   ): void {
-    const frame = this._runtime.getStackFrame(args.frameId);
+    try {
+      const frame = this._runtime.getStackFrame(args.frameId);
 
-    const scopes: DebugProtocol.Scope[] = [];
-    if (typeof frame !== 'undefined') {
-      if (frame instanceof ProgramStackFrame) {
-        const programScope = new ProgramStateScope(args.frameId);
-        let scopeName = 'Program State';
-        const appID = frame.currentAppID();
-        if (typeof appID !== 'undefined') {
-          scopeName += `: App ${appID}`;
+      const scopes: DebugProtocol.Scope[] = [];
+      if (typeof frame !== 'undefined') {
+        if (frame instanceof ProgramStackFrame) {
+          const programScope = new ProgramStateScope(args.frameId);
+          let scopeName = 'Program State';
+          const appID = frame.currentAppID();
+          if (typeof appID !== 'undefined') {
+            scopeName += `: App ${appID}`;
+          }
+          scopes.push(
+            new Scope(
+              scopeName,
+              this._variableHandles.create(programScope),
+              false,
+            ),
+          );
         }
         scopes.push(
           new Scope(
-            scopeName,
-            this._variableHandles.create(programScope),
+            'On-chain State',
+            this._variableHandles.create('chain'),
             false,
           ),
         );
       }
-      scopes.push(
-        new Scope(
-          'On-chain State',
-          this._variableHandles.create('chain'),
-          false,
-        ),
-      );
-    }
 
-    response.body = { scopes };
-    this.sendResponse(response);
+      response.body = { scopes };
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected async variablesRequest(
@@ -483,404 +490,414 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     args: DebugProtocol.VariablesArguments,
     request?: DebugProtocol.Request,
   ): Promise<void> {
-    let variables: DebugProtocol.Variable[] = [];
+    try {
+      let variables: DebugProtocol.Variable[] = [];
 
-    const v = this._variableHandles.get(args.variablesReference);
+      const v = this._variableHandles.get(args.variablesReference);
 
-    if (v instanceof ProgramStateScope) {
-      const frame = this._runtime.getStackFrame(v.frameIndex);
-      if (!frame || !(frame instanceof ProgramStackFrame)) {
-        throw new Error(`Unexpected frame: ${typeof frame}`);
-      }
-      const programState = frame.state;
-
-      if (typeof v.specificState === 'undefined') {
-        variables = [
-          {
-            name: 'pc',
-            value: programState.pc.toString(),
-            type: 'uint64',
-            variablesReference: 0,
-            evaluateName: 'pc',
-          },
-          {
-            name: 'stack',
-            value: programState.stack.length === 0 ? '[]' : '[...]',
-            type: 'array',
-            variablesReference: this._variableHandles.create(
-              new ProgramStateScope(v.frameIndex, 'stack'),
-            ),
-            indexedVariables: programState.stack.length,
-            presentationHint: {
-              kind: 'data',
-            },
-          },
-          {
-            name: 'scratch',
-            value: '[...]',
-            type: 'array',
-            variablesReference: this._variableHandles.create(
-              new ProgramStateScope(v.frameIndex, 'scratch'),
-            ),
-            indexedVariables: 256,
-            presentationHint: {
-              kind: 'data',
-            },
-          },
-        ];
-      } else if (v.specificState === 'stack') {
-        if (args.filter !== 'named') {
-          variables = programState.stack.map((value, index) =>
-            this.convertAvmValue(v, value, index),
-          );
-        }
-      } else if (v.specificState === 'scratch') {
-        const expandedScratch: algosdk.modelsv2.AvmValue[] = [];
-        for (let i = 0; i < 256; i++) {
-          expandedScratch.push(
-            programState.scratch.get(i) ||
-              new algosdk.modelsv2.AvmValue({ type: 2 }),
-          );
-        }
-        if (args.filter !== 'named') {
-          variables = expandedScratch.map((value, index) =>
-            this.convertAvmValue(v, value, index),
-          );
-        }
-      }
-    } else if (v === 'chain') {
-      const appIDs = this._runtime.getAppStateReferences();
-      variables = [
-        {
-          name: 'app',
-          value: '',
-          type: 'object',
-          variablesReference: this._variableHandles.create('app'),
-          namedVariables: appIDs.length,
-        },
-      ];
-    } else if (v === 'app') {
-      const appIDs = this._runtime.getAppStateReferences();
-      variables = appIDs.map((appID) => ({
-        name: appID.toString(),
-        value: '',
-        type: 'object',
-        variablesReference: this._variableHandles.create(
-          new AppStateScope(appID),
-        ),
-        namedVariables: 3,
-      }));
-    } else if (v instanceof AppStateScope) {
-      variables = [
-        {
-          name: 'global',
-          value: '',
-          type: 'object',
-          variablesReference: this._variableHandles.create(
-            new AppSpecificStateScope({ scope: 'global', appID: v.appID }),
-          ),
-          namedVariables: 1, // TODO
-        },
-        {
-          name: 'local',
-          value: '',
-          type: 'object',
-          variablesReference: this._variableHandles.create(
-            new AppSpecificStateScope({ scope: 'local', appID: v.appID }),
-          ),
-          namedVariables: 1, // TODO
-        },
-        {
-          name: 'box',
-          value: '',
-          type: 'object',
-          variablesReference: this._variableHandles.create(
-            new AppSpecificStateScope({ scope: 'box', appID: v.appID }),
-          ),
-          namedVariables: 1, // TODO
-        },
-      ];
-    } else if (v instanceof AppSpecificStateScope) {
-      const state = this._runtime.getAppState(v.appID);
-      if (v.scope === 'global') {
-        variables = state
-          .globalStateArray()
-          .map((kv) => this.convertAvmKeyValue(v, kv));
-      } else if (v.scope === 'local') {
-        if (typeof v.account === 'undefined') {
-          const accounts = this._runtime.getAppLocalStateAccounts(v.appID);
-          variables = accounts.map((account) => ({
-            name: account,
-            value: 'local state',
-            type: 'object',
-            variablesReference: this._variableHandles.create(
-              new AppSpecificStateScope({
-                scope: 'local',
-                appID: v.appID,
-                account,
-              }),
-            ),
-            namedVariables: 1, // TODO
-            evaluateName: evaluateNameForScope(v, account),
-          }));
-        } else {
-          variables = state
-            .localStateArray(v.account)
-            .map((kv) => this.convertAvmKeyValue(v, kv));
-        }
-      } else if (v.scope === 'box') {
-        variables = state
-          .boxStateArray()
-          .map((kv) => this.convertAvmKeyValue(v, kv));
-      }
-    } else if (v instanceof AvmValueReference) {
-      if (v.scope instanceof ProgramStateScope) {
-        const frame = this._runtime.getStackFrame(v.scope.frameIndex);
+      if (v instanceof ProgramStateScope) {
+        const frame = this._runtime.getStackFrame(v.frameIndex);
         if (!frame || !(frame instanceof ProgramStackFrame)) {
           throw new Error(`Unexpected frame: ${typeof frame}`);
         }
-        let toExpand: algosdk.modelsv2.AvmValue;
-        if (v.scope.specificState === 'stack') {
-          toExpand = frame.state.stack[v.key as number];
-        } else if (v.scope.specificState === 'scratch') {
-          toExpand =
-            frame.state.scratch.get(v.key as number) ||
-            new algosdk.modelsv2.AvmValue({ type: 2 });
-        } else {
-          throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+        const programState = frame.state;
+
+        if (typeof v.specificState === 'undefined') {
+          variables = [
+            {
+              name: 'pc',
+              value: programState.pc.toString(),
+              type: 'uint64',
+              variablesReference: 0,
+              evaluateName: 'pc',
+            },
+            {
+              name: 'stack',
+              value: programState.stack.length === 0 ? '[]' : '[...]',
+              type: 'array',
+              variablesReference: this._variableHandles.create(
+                new ProgramStateScope(v.frameIndex, 'stack'),
+              ),
+              indexedVariables: programState.stack.length,
+              presentationHint: {
+                kind: 'data',
+              },
+            },
+            {
+              name: 'scratch',
+              value: '[...]',
+              type: 'array',
+              variablesReference: this._variableHandles.create(
+                new ProgramStateScope(v.frameIndex, 'scratch'),
+              ),
+              indexedVariables: 256,
+              presentationHint: {
+                kind: 'data',
+              },
+            },
+          ];
+        } else if (v.specificState === 'stack') {
+          if (args.filter !== 'named') {
+            variables = programState.stack.map((value, index) =>
+              this.convertAvmValue(v, value, index),
+            );
+          }
+        } else if (v.specificState === 'scratch') {
+          const expandedScratch: algosdk.modelsv2.AvmValue[] = [];
+          for (let i = 0; i < 256; i++) {
+            expandedScratch.push(
+              programState.scratch.get(i) ||
+                new algosdk.modelsv2.AvmValue({ type: 2 }),
+            );
+          }
+          if (args.filter !== 'named') {
+            variables = expandedScratch.map((value, index) =>
+              this.convertAvmValue(v, value, index),
+            );
+          }
         }
-        variables = this.expandAvmValue(toExpand, args.filter);
-      } else if (
-        v.scope instanceof AppSpecificStateScope &&
-        typeof v.key === 'string' &&
-        v.key.startsWith('0x')
-      ) {
-        let toExpand: algosdk.modelsv2.AvmKeyValue;
-        const state = this._runtime.getAppState(v.scope.appID);
-        const keyHex = v.key.slice(2);
-        if (v.scope.scope === 'global') {
-          const value = state.globalState.getHex(keyHex);
-          if (value) {
-            const keyBytes = Buffer.from(keyHex, 'hex');
-            toExpand = new algosdk.modelsv2.AvmKeyValue({
-              key: keyBytes,
-              value,
-            });
+      } else if (v === 'chain') {
+        const appIDs = this._runtime.getAppStateReferences();
+        variables = [
+          {
+            name: 'app',
+            value: '',
+            type: 'object',
+            variablesReference: this._variableHandles.create('app'),
+            namedVariables: appIDs.length,
+          },
+        ];
+      } else if (v === 'app') {
+        const appIDs = this._runtime.getAppStateReferences();
+        variables = appIDs.map((appID) => ({
+          name: appID.toString(),
+          value: '',
+          type: 'object',
+          variablesReference: this._variableHandles.create(
+            new AppStateScope(appID),
+          ),
+          namedVariables: 3,
+        }));
+      } else if (v instanceof AppStateScope) {
+        variables = [
+          {
+            name: 'global',
+            value: '',
+            type: 'object',
+            variablesReference: this._variableHandles.create(
+              new AppSpecificStateScope({ scope: 'global', appID: v.appID }),
+            ),
+            namedVariables: 1, // TODO
+          },
+          {
+            name: 'local',
+            value: '',
+            type: 'object',
+            variablesReference: this._variableHandles.create(
+              new AppSpecificStateScope({ scope: 'local', appID: v.appID }),
+            ),
+            namedVariables: 1, // TODO
+          },
+          {
+            name: 'box',
+            value: '',
+            type: 'object',
+            variablesReference: this._variableHandles.create(
+              new AppSpecificStateScope({ scope: 'box', appID: v.appID }),
+            ),
+            namedVariables: 1, // TODO
+          },
+        ];
+      } else if (v instanceof AppSpecificStateScope) {
+        const state = this._runtime.getAppState(v.appID);
+        if (v.scope === 'global') {
+          variables = state
+            .globalStateArray()
+            .map((kv) => this.convertAvmKeyValue(v, kv));
+        } else if (v.scope === 'local') {
+          if (typeof v.account === 'undefined') {
+            const accounts = this._runtime.getAppLocalStateAccounts(v.appID);
+            variables = accounts.map((account) => ({
+              name: account,
+              value: 'local state',
+              type: 'object',
+              variablesReference: this._variableHandles.create(
+                new AppSpecificStateScope({
+                  scope: 'local',
+                  appID: v.appID,
+                  account,
+                }),
+              ),
+              namedVariables: 1, // TODO
+              evaluateName: evaluateNameForScope(v, account),
+            }));
           } else {
-            throw new Error(`key "${v.key}" not found in global state`);
+            variables = state
+              .localStateArray(v.account)
+              .map((kv) => this.convertAvmKeyValue(v, kv));
           }
-        } else if (v.scope.scope === 'local') {
-          if (typeof v.scope.account === 'undefined') {
-            throw new Error("this shouldn't happen: " + JSON.stringify(v));
-          } else {
-            const accountState = state.localState.get(v.scope.account);
-            if (!accountState) {
-              throw new Error(
-                `account "${v.scope.account}" not found in local state`,
-              );
-            }
-            const value = accountState.getHex(keyHex);
-            if (!value) {
-              throw new Error(
-                `key "${v.key}" not found in local state for account "${v.scope.account}"`,
-              );
-            }
-            toExpand = new algosdk.modelsv2.AvmKeyValue({
-              key: Buffer.from(keyHex, 'hex'),
-              value,
-            });
-          }
-        } else if (v.scope.scope === 'box') {
-          const value = state.boxState.getHex(keyHex);
-          if (value) {
-            const keyBytes = Buffer.from(keyHex, 'hex');
-            toExpand = new algosdk.modelsv2.AvmKeyValue({
-              key: keyBytes,
-              value,
-            });
-          } else {
-            throw new Error(`key "${v.key}" not found in box state`);
-          }
-        } else {
-          throw new Error(`Unexpected AppSpecificStateScope scope: ${v.scope}`);
+        } else if (v.scope === 'box') {
+          variables = state
+            .boxStateArray()
+            .map((kv) => this.convertAvmKeyValue(v, kv));
         }
-        variables = this.expandAvmKeyValue(v.scope, toExpand, args.filter);
+      } else if (v instanceof AvmValueReference) {
+        if (v.scope instanceof ProgramStateScope) {
+          const frame = this._runtime.getStackFrame(v.scope.frameIndex);
+          if (!frame || !(frame instanceof ProgramStackFrame)) {
+            throw new Error(`Unexpected frame: ${typeof frame}`);
+          }
+          let toExpand: algosdk.modelsv2.AvmValue;
+          if (v.scope.specificState === 'stack') {
+            toExpand = frame.state.stack[v.key as number];
+          } else if (v.scope.specificState === 'scratch') {
+            toExpand =
+              frame.state.scratch.get(v.key as number) ||
+              new algosdk.modelsv2.AvmValue({ type: 2 });
+          } else {
+            throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+          }
+          variables = this.expandAvmValue(toExpand, args.filter);
+        } else if (
+          v.scope instanceof AppSpecificStateScope &&
+          typeof v.key === 'string' &&
+          v.key.startsWith('0x')
+        ) {
+          let toExpand: algosdk.modelsv2.AvmKeyValue;
+          const state = this._runtime.getAppState(v.scope.appID);
+          const keyHex = v.key.slice(2);
+          if (v.scope.scope === 'global') {
+            const value = state.globalState.getHex(keyHex);
+            if (value) {
+              const keyBytes = Buffer.from(keyHex, 'hex');
+              toExpand = new algosdk.modelsv2.AvmKeyValue({
+                key: keyBytes,
+                value,
+              });
+            } else {
+              throw new Error(`key "${v.key}" not found in global state`);
+            }
+          } else if (v.scope.scope === 'local') {
+            if (typeof v.scope.account === 'undefined') {
+              throw new Error("this shouldn't happen: " + JSON.stringify(v));
+            } else {
+              const accountState = state.localState.get(v.scope.account);
+              if (!accountState) {
+                throw new Error(
+                  `account "${v.scope.account}" not found in local state`,
+                );
+              }
+              const value = accountState.getHex(keyHex);
+              if (!value) {
+                throw new Error(
+                  `key "${v.key}" not found in local state for account "${v.scope.account}"`,
+                );
+              }
+              toExpand = new algosdk.modelsv2.AvmKeyValue({
+                key: Buffer.from(keyHex, 'hex'),
+                value,
+              });
+            }
+          } else if (v.scope.scope === 'box') {
+            const value = state.boxState.getHex(keyHex);
+            if (value) {
+              const keyBytes = Buffer.from(keyHex, 'hex');
+              toExpand = new algosdk.modelsv2.AvmKeyValue({
+                key: keyBytes,
+                value,
+              });
+            } else {
+              throw new Error(`key "${v.key}" not found in box state`);
+            }
+          } else {
+            throw new Error(
+              `Unexpected AppSpecificStateScope scope: ${v.scope}`,
+            );
+          }
+          variables = this.expandAvmKeyValue(v.scope, toExpand, args.filter);
+        }
       }
+
+      variables = limitArray(variables, args.start, args.count);
+
+      response.body = {
+        variables,
+      };
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
     }
-
-    variables = limitArray(variables, args.start, args.count);
-
-    response.body = {
-      variables,
-    };
-    this.sendResponse(response);
   }
 
   protected async evaluateRequest(
     response: DebugProtocol.EvaluateResponse,
     args: DebugProtocol.EvaluateArguments,
   ): Promise<void> {
-    let reply: string | undefined;
-    let rv: DebugProtocol.Variable | undefined = undefined;
-
-    // Note, can use args.context to perform different actions based on where the expression is evaluated
-
-    let result: [AvmValueScope, number | string] | undefined = undefined;
     try {
-      result = evaluateNameToScope(args.expression);
-    } catch (e) {
-      reply = (e as Error).message;
-    }
+      let reply: string | undefined;
+      let rv: DebugProtocol.Variable | undefined = undefined;
 
-    if (result) {
-      const [scope, key] = result;
-      if (scope instanceof ProgramStateScope) {
-        if (typeof args.frameId === 'undefined') {
-          reply = 'frameId required for program state';
-        } else {
-          const scopeWithFrame = new ProgramStateScope(
-            args.frameId,
-            scope.specificState,
-          );
-          const frame = this._runtime.getStackFrame(args.frameId);
-          if (!frame || !(frame instanceof ProgramStackFrame)) {
-            reply = `Unexpected frame: ${typeof frame}`;
+      // Note, can use args.context to perform different actions based on where the expression is evaluated
+
+      let result: [AvmValueScope, number | string] | undefined = undefined;
+      try {
+        result = evaluateNameToScope(args.expression);
+      } catch (e) {
+        reply = (e as Error).message;
+      }
+
+      if (result) {
+        const [scope, key] = result;
+        if (scope instanceof ProgramStateScope) {
+          if (typeof args.frameId === 'undefined') {
+            reply = 'frameId required for program state';
           } else {
-            if (scope.specificState === 'pc') {
-              rv = {
-                name: 'pc',
-                value: frame.state.pc.toString(),
-                type: 'uint64',
-                variablesReference: 0,
-                evaluateName: 'pc',
-              };
-            } else if (scope.specificState === 'stack') {
-              let index = key as number;
-              const stackValues = frame.state.stack;
-              if (index < 0) {
-                const adjustedIndex = index + stackValues.length;
-                if (adjustedIndex < 0) {
-                  reply = `stack[${index}] out of range`;
+            const scopeWithFrame = new ProgramStateScope(
+              args.frameId,
+              scope.specificState,
+            );
+            const frame = this._runtime.getStackFrame(args.frameId);
+            if (!frame || !(frame instanceof ProgramStackFrame)) {
+              reply = `Unexpected frame: ${typeof frame}`;
+            } else {
+              if (scope.specificState === 'pc') {
+                rv = {
+                  name: 'pc',
+                  value: frame.state.pc.toString(),
+                  type: 'uint64',
+                  variablesReference: 0,
+                  evaluateName: 'pc',
+                };
+              } else if (scope.specificState === 'stack') {
+                let index = key as number;
+                const stackValues = frame.state.stack;
+                if (index < 0) {
+                  const adjustedIndex = index + stackValues.length;
+                  if (adjustedIndex < 0) {
+                    reply = `stack[${index}] out of range`;
+                  } else {
+                    index = adjustedIndex;
+                  }
+                }
+                if (0 <= index && index < stackValues.length) {
+                  rv = this.convertAvmValue(
+                    scopeWithFrame,
+                    stackValues[index],
+                    index,
+                  );
+                } else if (index < 0 && stackValues.length + index >= 0) {
+                  rv = this.convertAvmValue(
+                    scopeWithFrame,
+                    stackValues[stackValues.length + index],
+                    index,
+                  );
                 } else {
-                  index = adjustedIndex;
+                  reply = `stack[${index}] out of range`;
+                }
+              } else if (scope.specificState === 'scratch') {
+                const index = key as number;
+                if (0 <= index && index < 256) {
+                  rv = this.convertAvmValue(
+                    scopeWithFrame,
+                    frame.state.scratch.get(index) ||
+                      new algosdk.modelsv2.AvmValue({ type: 2 }),
+                    index,
+                  );
+                } else {
+                  reply = `scratch[${index}] out of range`;
                 }
               }
-              if (0 <= index && index < stackValues.length) {
-                rv = this.convertAvmValue(
-                  scopeWithFrame,
-                  stackValues[index],
-                  index,
-                );
-              } else if (index < 0 && stackValues.length + index >= 0) {
-                rv = this.convertAvmValue(
-                  scopeWithFrame,
-                  stackValues[stackValues.length + index],
-                  index,
-                );
-              } else {
-                reply = `stack[${index}] out of range`;
-              }
-            } else if (scope.specificState === 'scratch') {
-              const index = key as number;
-              if (0 <= index && index < 256) {
-                rv = this.convertAvmValue(
-                  scopeWithFrame,
-                  frame.state.scratch.get(index) ||
-                    new algosdk.modelsv2.AvmValue({ type: 2 }),
-                  index,
-                );
-              } else {
-                reply = `scratch[${index}] out of range`;
-              }
             }
           }
-        }
-      } else if (typeof key === 'string') {
-        const state = this._runtime.getAppState(scope.appID);
-        if (scope.property) {
-          reply = `cannot evaluate property "${scope.property}"`;
-        } else if (scope.scope === 'global' && key.startsWith('0x')) {
-          const keyHex = key.slice(2);
-          const value = state.globalState.getHex(keyHex);
-          if (value) {
-            const keyBytes = Buffer.from(keyHex, 'hex');
-            const kv = new algosdk.modelsv2.AvmKeyValue({
-              key: keyBytes,
-              value,
-            });
-            rv = this.convertAvmKeyValue(scope, kv);
-          } else {
-            reply = `key "${key}" not found in global state`;
-          }
-        } else if (scope.scope === 'local') {
-          if (typeof scope.account === 'undefined') {
-            rv = {
-              name: key,
-              value: 'local state',
-              type: 'object',
-              variablesReference: this._variableHandles.create(
-                new AppSpecificStateScope({
-                  scope: 'local',
-                  appID: scope.appID,
-                  account: key,
-                }),
-              ),
-              namedVariables: 1, // TODO
-              evaluateName: evaluateNameForScope(scope, key),
-            };
-          } else {
-            const accountState = state.localState.get(scope.account);
-            if (!accountState) {
-              reply = `account "${scope.account}" not found in local state`;
-            } else if (key.startsWith('0x')) {
-              const keyHex = key.slice(2);
-              const value = accountState.getHex(keyHex);
-              if (value) {
-                const keyBytes = Buffer.from(keyHex, 'hex');
-                const kv = new algosdk.modelsv2.AvmKeyValue({
-                  key: keyBytes,
-                  value,
-                });
-                rv = this.convertAvmKeyValue(scope, kv);
-              } else {
-                reply = `key "${key}" not found in local state for account "${scope.account}"`;
-              }
+        } else if (typeof key === 'string') {
+          const state = this._runtime.getAppState(scope.appID);
+          if (scope.property) {
+            reply = `cannot evaluate property "${scope.property}"`;
+          } else if (scope.scope === 'global' && key.startsWith('0x')) {
+            const keyHex = key.slice(2);
+            const value = state.globalState.getHex(keyHex);
+            if (value) {
+              const keyBytes = Buffer.from(keyHex, 'hex');
+              const kv = new algosdk.modelsv2.AvmKeyValue({
+                key: keyBytes,
+                value,
+              });
+              rv = this.convertAvmKeyValue(scope, kv);
             } else {
-              reply = `cannot evaluate property "${key}"`;
+              reply = `key "${key}" not found in global state`;
             }
-          }
-        } else if (scope.scope === 'box' && key.startsWith('0x')) {
-          const keyHex = key.slice(2);
-          const value = state.boxState.getHex(keyHex);
-          if (value) {
-            const keyBytes = Buffer.from(keyHex, 'hex');
-            const kv = new algosdk.modelsv2.AvmKeyValue({
-              key: keyBytes,
-              value,
-            });
-            rv = this.convertAvmKeyValue(scope, kv);
-          } else {
-            reply = `key "${key}" not found in box state`;
+          } else if (scope.scope === 'local') {
+            if (typeof scope.account === 'undefined') {
+              rv = {
+                name: key,
+                value: 'local state',
+                type: 'object',
+                variablesReference: this._variableHandles.create(
+                  new AppSpecificStateScope({
+                    scope: 'local',
+                    appID: scope.appID,
+                    account: key,
+                  }),
+                ),
+                namedVariables: 1, // TODO
+                evaluateName: evaluateNameForScope(scope, key),
+              };
+            } else {
+              const accountState = state.localState.get(scope.account);
+              if (!accountState) {
+                reply = `account "${scope.account}" not found in local state`;
+              } else if (key.startsWith('0x')) {
+                const keyHex = key.slice(2);
+                const value = accountState.getHex(keyHex);
+                if (value) {
+                  const keyBytes = Buffer.from(keyHex, 'hex');
+                  const kv = new algosdk.modelsv2.AvmKeyValue({
+                    key: keyBytes,
+                    value,
+                  });
+                  rv = this.convertAvmKeyValue(scope, kv);
+                } else {
+                  reply = `key "${key}" not found in local state for account "${scope.account}"`;
+                }
+              } else {
+                reply = `cannot evaluate property "${key}"`;
+              }
+            }
+          } else if (scope.scope === 'box' && key.startsWith('0x')) {
+            const keyHex = key.slice(2);
+            const value = state.boxState.getHex(keyHex);
+            if (value) {
+              const keyBytes = Buffer.from(keyHex, 'hex');
+              const kv = new algosdk.modelsv2.AvmKeyValue({
+                key: keyBytes,
+                value,
+              });
+              rv = this.convertAvmKeyValue(scope, kv);
+            } else {
+              reply = `key "${key}" not found in box state`;
+            }
           }
         }
       }
-    }
 
-    if (rv) {
-      response.body = {
-        result: rv.value,
-        type: rv.type,
-        variablesReference: rv.variablesReference,
-        presentationHint: rv.presentationHint,
-      };
-    } else {
-      response.body = {
-        result: reply || `unknown expression: "${args.expression}"`,
-        variablesReference: 0,
-      };
-    }
+      if (rv) {
+        response.body = {
+          result: rv.value,
+          type: rv.type,
+          variablesReference: rv.variablesReference,
+          presentationHint: rv.presentationHint,
+        };
+      } else {
+        response.body = {
+          result: reply || `unknown expression: "${args.expression}"`,
+          variablesReference: 0,
+        };
+      }
 
-    this.sendResponse(response);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected sourceRequest(
@@ -888,85 +905,117 @@ export class TxnGroupDebugSession extends LoggingDebugSession {
     args: DebugProtocol.SourceArguments,
     request?: DebugProtocol.Request,
   ): void {
-    const sourceInfo = this._sourceHandles.get(args.sourceReference);
-    if (typeof sourceInfo !== 'undefined') {
-      response.body = {
-        content: sourceInfo.content,
-        mimeType: sourceInfo.mimeType,
-      };
-    } else {
-      response.body = {
-        content: `source not available`,
-      };
+    try {
+      const sourceInfo = this._sourceHandles.get(args.sourceReference);
+      if (typeof sourceInfo !== 'undefined') {
+        response.body = {
+          content: sourceInfo.content,
+          mimeType: sourceInfo.mimeType,
+        };
+      } else {
+        response.body = {
+          content: `source not available`,
+        };
+      }
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
     }
-    this.sendResponse(response);
   }
 
   protected continueRequest(
     response: DebugProtocol.ContinueResponse,
     args: DebugProtocol.ContinueArguments,
   ): void {
-    this.executionResumed();
-    this._runtime.continue(false);
-    this.sendResponse(response);
+    try {
+      this.executionResumed();
+      this._runtime.continue(false);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected reverseContinueRequest(
     response: DebugProtocol.ReverseContinueResponse,
     args: DebugProtocol.ReverseContinueArguments,
   ): void {
-    this.executionResumed();
-    this._runtime.continue(true);
-    this.sendResponse(response);
+    try {
+      this.executionResumed();
+      this._runtime.continue(true);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected nextRequest(
     response: DebugProtocol.NextResponse,
     args: DebugProtocol.NextArguments,
   ): void {
-    this.executionResumed();
-    this._runtime.step(false);
-    this.sendResponse(response);
+    try {
+      this.executionResumed();
+      this._runtime.step(false);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected stepBackRequest(
     response: DebugProtocol.StepBackResponse,
     args: DebugProtocol.StepBackArguments,
   ): void {
-    this.executionResumed();
-    this._runtime.step(true);
-    this.sendResponse(response);
+    try {
+      this.executionResumed();
+      this._runtime.step(true);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected stepInTargetsRequest(
     response: DebugProtocol.StepInTargetsResponse,
     args: DebugProtocol.StepInTargetsArguments,
   ) {
-    const targets = this._runtime.getStepInTargets(args.frameId);
-    response.body = {
-      targets: targets.map((t) => {
-        return { id: t.id, label: t.label };
-      }),
-    };
-    this.sendResponse(response);
+    try {
+      const targets = this._runtime.getStepInTargets(args.frameId);
+      response.body = {
+        targets: targets.map((t) => {
+          return { id: t.id, label: t.label };
+        }),
+      };
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected stepInRequest(
     response: DebugProtocol.StepInResponse,
     args: DebugProtocol.StepInArguments,
   ): void {
-    this.executionResumed();
-    this._runtime.stepIn(args.targetId);
-    this.sendResponse(response);
+    try {
+      this.executionResumed();
+      this._runtime.stepIn(args.targetId);
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   protected stepOutRequest(
     response: DebugProtocol.StepOutResponse,
     args: DebugProtocol.StepOutArguments,
   ): void {
-    this.executionResumed();
-    this._runtime.stepOut();
-    this.sendResponse(response);
+    try {
+      this.executionResumed();
+      this._runtime.stepOut();
+      this.sendResponse(response);
+    } catch (e) {
+      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
+    }
   }
 
   private executionResumed(): void {

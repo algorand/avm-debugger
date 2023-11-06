@@ -9,7 +9,7 @@ import {
 import {
   FileAccessor,
   TEALDebuggingAssets,
-  TxnGroupSourceDescriptor,
+  ProgramSourceDescriptor,
 } from './utils';
 
 export interface IRuntimeBreakpoint {
@@ -33,22 +33,28 @@ interface IRuntimeStack {
   frames: TraceReplayStackFrame[];
 }
 
-export class TxnGroupWalkerRuntime extends EventEmitter {
+export class AvmRuntime extends EventEmitter {
   // maps from sourceFile to array of IRuntimeBreakpoint
-  private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
+  private readonly breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 
-  private engine: TraceReplayEngine;
+  private readonly engine: TraceReplayEngine = new TraceReplayEngine();
 
   // since we want to send breakpoint events, we will assign an id to every event
   // so that the frontend can match events with breakpoints.
   private breakpointId = 1;
 
-  constructor(
-    private fileAccessor: FileAccessor,
-    debugAssets: TEALDebuggingAssets,
-  ) {
+  constructor(private readonly fileAccessor: FileAccessor) {
     super();
-    this.engine = new TraceReplayEngine(debugAssets);
+  }
+
+  public onLaunch(debugAssets: TEALDebuggingAssets): Promise<void> {
+    return this.engine.loadResources(debugAssets);
+  }
+
+  public reset() {
+    this.breakPoints.clear();
+    this.breakpointId = 1;
+    this.engine.reset();
   }
 
   private nextTickWithErrorReporting(fn: () => Promise<void> | void) {
@@ -374,11 +380,11 @@ export class TxnGroupWalkerRuntime extends EventEmitter {
 
   private findSourceDescriptorsForPath(
     filePath: string,
-  ): Array<{ descriptor: TxnGroupSourceDescriptor; sourceIndex: number }> {
+  ): Array<{ descriptor: ProgramSourceDescriptor; sourceIndex: number }> {
     filePath = this.normalizePathAndCasing(filePath);
 
     const sourceDescriptors: Array<{
-      descriptor: TxnGroupSourceDescriptor;
+      descriptor: ProgramSourceDescriptor;
       sourceIndex: number;
     }> = [];
 

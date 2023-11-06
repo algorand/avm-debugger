@@ -8,18 +8,17 @@ import { TestFixture, assertVariables, advanceTo, DATA_ROOT } from './testing';
 describe('Debug Adapter Tests', () => {
   const fixture = new TestFixture();
 
+  before(async () => await fixture.init());
+
   afterEach(async () => {
     await fixture.reset();
   });
 
-  describe('general', () => {
-    beforeEach(async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json'),
-        path.join(DATA_ROOT, 'app-state-changes/sources.json'),
-      );
-    });
+  after(async () => {
+    await fixture.stop();
+  });
 
+  describe('general', () => {
     describe('basic', () => {
       it('should produce error for unknown request', async () => {
         let success: boolean;
@@ -62,29 +61,147 @@ describe('Debug Adapter Tests', () => {
     });
 
     describe('launch', () => {
-      it('should run program to the end', async () => {
-        const PROGRAM = path.join(
-          DATA_ROOT,
-          'app-state-changes/local-simulate-response.json',
+      it('should return error when simulate trace file does not exist', async () => {
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'does-not-exist/simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes('Could not read simulate trace file'),
+          caughtError.message,
         );
+      });
 
+      it('should return error when program sources description files does not exist', async () => {
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'does-not-exist/sources.json',
+            ),
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes(
+            'Could not read program sources description file',
+          ),
+          caughtError.message,
+        );
+      });
+
+      it('should return error when simulate trace file is invalid', async () => {
+        const simulateTraceFile = path.join(
+          DATA_ROOT,
+          'slot-machine/sources.json', // not a valid simulate trace file
+        );
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile,
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes(
+            `Could not parse simulate trace file from '${simulateTraceFile}'`,
+          ),
+          caughtError.message,
+        );
+      });
+
+      it('should return error when program sources description files is invalid', async () => {
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'slot-machine/simulate-response.json', // not a valid program sources description file
+        );
+        let caughtError: Error | undefined;
+        try {
+          await fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile,
+          });
+        } catch (e) {
+          caughtError = e as Error;
+        }
+        if (!caughtError) {
+          assert.fail('Expected error');
+        }
+        assert.ok(
+          caughtError.message.includes(
+            `Could not parse program sources description file from '${programSourcesDescriptionFile}': Invalid program sources description file`,
+          ),
+          caughtError.message,
+        );
+      });
+
+      it('should run program to the end', async () => {
         await Promise.all([
           fixture.client.configurationSequence(),
-          fixture.client.launch({ program: PROGRAM }),
+          fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+          }),
           fixture.client.waitForEvent('terminated'),
         ]);
       });
 
       it('should stop on entry', async () => {
-        const PROGRAM = path.join(
-          DATA_ROOT,
-          'app-state-changes/local-simulate-response.json',
-        );
         const ENTRY_LINE = 2;
 
         await Promise.all([
           fixture.client.configurationSequence(),
-          fixture.client.launch({ program: PROGRAM, stopOnEntry: true }),
+          fixture.client.launch({
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+            stopOnEntry: true,
+          }),
           fixture.client.assertStoppedLocation('entry', { line: ENTRY_LINE }),
         ]);
       });
@@ -99,7 +216,16 @@ describe('Debug Adapter Tests', () => {
         const BREAKPOINT_LINE = 2;
 
         await fixture.client.hitBreakpoint(
-          { program: PROGRAM },
+          {
+            simulateTraceFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/local-simulate-response.json',
+            ),
+            programSourcesDescriptionFile: path.join(
+              DATA_ROOT,
+              'app-state-changes/sources.json',
+            ),
+          },
           { path: PROGRAM, line: BREAKPOINT_LINE },
         );
       });
@@ -337,19 +463,23 @@ describe('Debug Adapter Tests', () => {
 
     describe('Step in', () => {
       it('should pause at the correct locations', async () => {
-        const simulateTracePath = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'stepping-test/simulate-response.json',
         );
-        await fixture.init(
-          simulateTracePath,
-          path.join(DATA_ROOT, 'stepping-test/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'stepping-test/sources.json',
         );
         const { client } = fixture;
 
         await Promise.all([
           client.configurationSequence(),
-          client.launch({ program: simulateTracePath, stopOnEntry: true }),
+          client.launch({
+            simulateTraceFile,
+            programSourcesDescriptionFile,
+            stopOnEntry: true,
+          }),
           client.assertStoppedLocation('entry', {}),
         ]);
 
@@ -538,19 +668,24 @@ describe('Debug Adapter Tests', () => {
 
     describe('Step over', () => {
       it('should pause at the correct locations in a transaction group', async () => {
-        const simulateTracePath = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'stepping-test/simulate-response.json',
         );
-        await fixture.init(
-          simulateTracePath,
-          path.join(DATA_ROOT, 'stepping-test/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'stepping-test/sources.json',
         );
+
         const { client } = fixture;
 
         await Promise.all([
           client.configurationSequence(),
-          client.launch({ program: simulateTracePath, stopOnEntry: true }),
+          client.launch({
+            simulateTraceFile,
+            programSourcesDescriptionFile,
+            stopOnEntry: true,
+          }),
           client.assertStoppedLocation('entry', {}),
         ]);
 
@@ -584,13 +719,13 @@ describe('Debug Adapter Tests', () => {
       });
 
       it('should pause at the correct locations in app execution', async () => {
-        const simulateTracePath = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'slot-machine/simulate-response.json',
         );
-        await fixture.init(
-          simulateTracePath,
-          path.join(DATA_ROOT, 'slot-machine/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'slot-machine/sources.json',
         );
         const { client } = fixture;
 
@@ -600,7 +735,7 @@ describe('Debug Adapter Tests', () => {
         );
 
         await client.hitBreakpoint(
-          { program: simulateTracePath },
+          { simulateTraceFile, programSourcesDescriptionFile },
           { path: programPath, line: 2 },
         );
 
@@ -648,13 +783,13 @@ describe('Debug Adapter Tests', () => {
 
     describe('Step out', () => {
       it('should pause at the correct locations', async () => {
-        const simulateTracePath = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'slot-machine/simulate-response.json',
         );
-        await fixture.init(
-          simulateTracePath,
-          path.join(DATA_ROOT, 'slot-machine/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'slot-machine/sources.json',
         );
         const { client } = fixture;
 
@@ -672,7 +807,7 @@ describe('Debug Adapter Tests', () => {
         );
 
         await client.hitBreakpoint(
-          { program: simulateTracePath },
+          { simulateTraceFile, programSourcesDescriptionFile },
           { path: fakeRandomPath, line: 13 },
         );
 
@@ -836,19 +971,23 @@ describe('Debug Adapter Tests', () => {
 
     describe('Step back', () => {
       it('should pause at the correct locations in a transaction group', async () => {
-        const simulateTracePath = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'stepping-test/simulate-response.json',
         );
-        await fixture.init(
-          simulateTracePath,
-          path.join(DATA_ROOT, 'stepping-test/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'stepping-test/sources.json',
         );
         const { client } = fixture;
 
         await Promise.all([
           client.configurationSequence(),
-          client.launch({ program: simulateTracePath, stopOnEntry: true }),
+          client.launch({
+            simulateTraceFile,
+            programSourcesDescriptionFile,
+            stopOnEntry: true,
+          }),
           client.assertStoppedLocation('entry', {}),
         ]);
 
@@ -901,13 +1040,13 @@ describe('Debug Adapter Tests', () => {
       });
 
       it('should pause at the correct locations in app execution', async () => {
-        const simulateTracePath = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'slot-machine/simulate-response.json',
         );
-        await fixture.init(
-          simulateTracePath,
-          path.join(DATA_ROOT, 'slot-machine/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'slot-machine/sources.json',
         );
         const { client } = fixture;
 
@@ -917,7 +1056,7 @@ describe('Debug Adapter Tests', () => {
 
         const startLocation = expectedLocations[0];
         await client.hitBreakpoint(
-          { program: simulateTracePath },
+          { simulateTraceFile, programSourcesDescriptionFile },
           {
             path: startLocation.program!,
             line: startLocation.line,
@@ -969,20 +1108,20 @@ describe('Debug Adapter Tests', () => {
   describe('Stack and scratch changes', () => {
     context('LogicSig', () => {
       it('should return variables correctly', async () => {
-        const simulateResponse = path.join(
+        const simulateTraceFile = path.join(
           DATA_ROOT,
           'stepping-test/simulate-response.json',
         );
-        await fixture.init(
-          simulateResponse,
-          path.join(DATA_ROOT, 'stepping-test/sources.json'),
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'stepping-test/sources.json',
         );
 
         const { client } = fixture;
         const PROGRAM = path.join(DATA_ROOT, 'stepping-test/lsig.teal');
 
         await client.hitBreakpoint(
-          { program: simulateResponse },
+          { simulateTraceFile, programSourcesDescriptionFile },
           { path: PROGRAM, line: 3 },
         );
 
@@ -1011,19 +1150,23 @@ describe('Debug Adapter Tests', () => {
     });
     context('App', () => {
       it('should return variables correctly', async () => {
-        await fixture.init(
-          path.join(DATA_ROOT, 'stack-scratch/simulate-response.json'),
-          path.join(DATA_ROOT, 'stack-scratch/sources.json'),
+        const simulateTraceFile = path.join(
+          DATA_ROOT,
+          'stack-scratch/simulate-response.json',
         );
-
+        const programSourcesDescriptionFile = path.join(
+          DATA_ROOT,
+          'stack-scratch/sources.json',
+        );
         const { client } = fixture;
+
         const PROGRAM = path.join(
           DATA_ROOT,
           'stack-scratch/stack-scratch.teal',
         );
 
         await client.hitBreakpoint(
-          { program: PROGRAM },
+          { simulateTraceFile, programSourcesDescriptionFile },
           { path: PROGRAM, line: 3 },
         );
 
@@ -1122,9 +1265,13 @@ describe('Debug Adapter Tests', () => {
 
   describe('Global state changes', () => {
     it('should return variables correctly', async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'app-state-changes/global-simulate-response.json'),
-        path.join(DATA_ROOT, 'app-state-changes/sources.json'),
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'app-state-changes/global-simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'app-state-changes/sources.json',
       );
 
       const { client } = fixture;
@@ -1134,7 +1281,7 @@ describe('Debug Adapter Tests', () => {
       );
 
       await client.hitBreakpoint(
-        { program: PROGRAM },
+        { simulateTraceFile, programSourcesDescriptionFile },
         { path: PROGRAM, line: 3 },
       );
 
@@ -1215,9 +1362,13 @@ describe('Debug Adapter Tests', () => {
 
   describe('Local state changes', () => {
     it('should return variables correctly', async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'app-state-changes/local-simulate-response.json'),
-        path.join(DATA_ROOT, 'app-state-changes/sources.json'),
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'app-state-changes/local-simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'app-state-changes/sources.json',
       );
 
       const { client } = fixture;
@@ -1227,7 +1378,7 @@ describe('Debug Adapter Tests', () => {
       );
 
       await client.hitBreakpoint(
-        { program: PROGRAM },
+        { simulateTraceFile, programSourcesDescriptionFile },
         { path: PROGRAM, line: 3 },
       );
 
@@ -1344,9 +1495,13 @@ describe('Debug Adapter Tests', () => {
 
   describe('Box state changes', () => {
     it('should return variables correctly', async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'app-state-changes/box-simulate-response.json'),
-        path.join(DATA_ROOT, 'app-state-changes/sources.json'),
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'app-state-changes/box-simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'app-state-changes/sources.json',
       );
 
       const { client } = fixture;
@@ -1356,7 +1511,7 @@ describe('Debug Adapter Tests', () => {
       );
 
       await client.hitBreakpoint(
-        { program: PROGRAM },
+        { simulateTraceFile, programSourcesDescriptionFile },
         { path: PROGRAM, line: 3 },
       );
 
@@ -1469,12 +1624,23 @@ describe('Debug Adapter Tests', () => {
     ];
 
     it('should return correct breakpoint locations', async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
-        path.join(DATA_ROOT, 'sourcemap-test/sources.json'),
-      );
-
       const { client } = fixture;
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile: path.join(
+            DATA_ROOT,
+            'sourcemap-test/simulate-response.json',
+          ),
+          programSourcesDescriptionFile: path.join(
+            DATA_ROOT,
+            'sourcemap-test/sources.json',
+          ),
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
 
       for (const source of testSources) {
         const response = await client.breakpointLocationsRequest({
@@ -1503,19 +1669,18 @@ describe('Debug Adapter Tests', () => {
     });
 
     it('should correctly set and stop at valid breakpoints', async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
-        path.join(DATA_ROOT, 'sourcemap-test/sources.json'),
-      );
-
       const { client } = fixture;
 
       await Promise.all([
         client.configurationSequence(),
         client.launch({
-          program: path.join(
+          simulateTraceFile: path.join(
             DATA_ROOT,
             'sourcemap-test/simulate-response.json',
+          ),
+          programSourcesDescriptionFile: path.join(
+            DATA_ROOT,
+            'sourcemap-test/sources.json',
           ),
           stopOnEntry: true,
         }),
@@ -1591,19 +1756,18 @@ describe('Debug Adapter Tests', () => {
     });
 
     it('should correctly handle invalid breakpoints and not stop at them', async () => {
-      await fixture.init(
-        path.join(DATA_ROOT, 'sourcemap-test/simulate-response.json'),
-        path.join(DATA_ROOT, 'sourcemap-test/sources.json'),
-      );
-
       const { client } = fixture;
 
       await Promise.all([
         client.configurationSequence(),
         client.launch({
-          program: path.join(
+          simulateTraceFile: path.join(
             DATA_ROOT,
             'sourcemap-test/simulate-response.json',
+          ),
+          programSourcesDescriptionFile: path.join(
+            DATA_ROOT,
+            'sourcemap-test/sources.json',
           ),
           stopOnEntry: true,
         }),

@@ -7,19 +7,12 @@
     {
       "type": "teal",
       "request": "launch",
-      "name": "Debug Transaction Group",
-      "debuggerPath": "stuff-to-deal",
+      "name": "Debug Slot Machine",
 
-      // "program": "${workspaceFolder}/stepping-test/simulate-response.json",
-      // "simulationTraceFile": "${workspaceFolder}/stepping-test/simulate-response.json",
-      // "appSourceDescriptionFile": "${workspaceFolder}/stepping-test/sources.json",
+      "simulateTraceFile": "${workspaceFolder}/slot-machine/simulate-response.json",
+      "programSourcesDescriptionFile": "${workspaceFolder}/slot-machine/sources.json",
 
-      "program": "${workspaceFolder}/slot-machine/simulate-response.json",
-      "simulationTraceFile": "${workspaceFolder}/slot-machine/simulate-response.json",
-      "appSourceDescriptionFile": "${workspaceFolder}/slot-machine/sources.json",
-
-      "stopOnEntry": true,
-      "trace": false
+      "stopOnEntry": true
     }
   ]
 }
