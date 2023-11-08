@@ -7,6 +7,37 @@ import {
   ProgramSourceDescriptorRegistry,
 } from './utils';
 
+export enum SteppingResultType {
+  /* eslint-disable @typescript-eslint/naming-convention */
+  OK,
+  END,
+  EXCEPTION,
+  /* eslint-enable @typescript-eslint/naming-convention */
+}
+
+export class SteppingResult {
+  private constructor(
+    public readonly type: SteppingResultType,
+    public readonly exceptionInfo?: ExceptionInfo,
+  ) {}
+
+  public static ok(): SteppingResult {
+    return new SteppingResult(SteppingResultType.OK);
+  }
+
+  public static end(): SteppingResult {
+    return new SteppingResult(SteppingResultType.END);
+  }
+
+  public static exception(info: ExceptionInfo): SteppingResult {
+    return new SteppingResult(SteppingResultType.EXCEPTION, info);
+  }
+}
+
+export class ExceptionInfo {
+  constructor(public readonly message: string) {}
+}
+
 export class TraceReplayEngine {
   public simulateResponse: algosdk.modelsv2.SimulateResponse | undefined;
 
@@ -153,29 +184,34 @@ export class TraceReplayEngine {
     return this.stack[this.stack.length - 1];
   }
 
-  public forward(): boolean {
+  public forward(): SteppingResult {
     let length: number;
     do {
       length = this.stack.length;
-      this.currentFrame().forward(this.stack);
+      const exceptionInfo = this.currentFrame().forward(this.stack);
+      if (exceptionInfo) {
+        return SteppingResult.exception(exceptionInfo);
+      }
       if (this.stack.length === 0) {
-        return false;
+        return SteppingResult.end();
       }
     } while (this.stack.length < length);
-    return true;
+    return SteppingResult.ok();
   }
 
-  public backward(): boolean {
+  public backward(): SteppingResult {
     let length: number;
     do {
       length = this.stack.length;
-      this.currentFrame().backward(this.stack);
+      const exceptionInfo = this.currentFrame().backward(this.stack);
       if (this.stack.length === 0) {
         this.setStartingStack(this.simulateResponse!);
-        return false;
+        return exceptionInfo
+          ? SteppingResult.exception(exceptionInfo)
+          : SteppingResult.end();
       }
     } while (this.stack.length < length);
-    return true;
+    return SteppingResult.ok();
   }
 }
 
@@ -238,8 +274,10 @@ export abstract class TraceReplayStackFrame {
   public abstract sourceFile(): FrameSource;
   public abstract sourceLocation(): FrameSourceLocation;
 
-  public abstract forward(stack: TraceReplayStackFrame[]): void;
-  public abstract backward(stack: TraceReplayStackFrame[]): void;
+  public abstract forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void;
+  public abstract backward(
+    stack: TraceReplayStackFrame[],
+  ): ExceptionInfo | void;
 }
 
 export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
@@ -290,7 +328,7 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
     };
   }
 
-  public forward(stack: TraceReplayStackFrame[]): void {
+  public forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
     if (!this.txnGroupDone) {
       stack.push(this.frameForIndex(this.index));
       this.txnGroupDone = true;
@@ -304,7 +342,7 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
     stack.pop();
   }
 
-  private frameForIndex(index: number): TransactionStackFrame {
+  private frameForIndex(index: number): TransactionGroupStackFrame {
     const txnInfos: algosdk.modelsv2.PendingTransactionResponse[] = [];
     const txnTraces: Array<
       algosdk.modelsv2.SimulationTransactionExecTrace | undefined
@@ -314,16 +352,24 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
       txnInfos.push(txnResult);
       txnTraces.push(execTrace);
     }
-    const txnGroupFrame = new TransactionStackFrame(
+    let failureInfo: TransactionFailureInfo | undefined = undefined;
+    if (this.response.txnGroups[index].failedAt) {
+      failureInfo = {
+        message: this.response.txnGroups[index].failureMessage!,
+        path: this.response.txnGroups[index].failedAt!.map((n) => Number(n)),
+      };
+    }
+    const txnGroupFrame = new TransactionGroupStackFrame(
       this.engine,
-      [index],
+      [index, 0],
       txnInfos,
       txnTraces,
+      failureInfo,
     );
     return txnGroupFrame;
   }
 
-  public backward(stack: TraceReplayStackFrame[]): void {
+  public backward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
     if (this.txnGroupDone) {
       this.txnGroupDone = false;
       return;
@@ -358,21 +404,28 @@ enum ProgramStatus {
   /* eslint-enable @typescript-eslint/naming-convention */
 }
 
-export class TransactionStackFrame extends TraceReplayStackFrame {
+interface TransactionFailureInfo {
+  message: string;
+  path: number[];
+}
+
+export class TransactionGroupStackFrame extends TraceReplayStackFrame {
   private txnIndex: number = 0;
   private logicSigStatus: ProgramStatus = ProgramStatus.DONE;
   private appStatus: ProgramStatus = ProgramStatus.DONE;
+  private onException: boolean = false;
 
   private sourceContent: string;
   private sourceLocations: TransactionSourceLocation[] = [];
 
   constructor(
     engine: TraceReplayEngine,
-    private readonly txnPath: number[],
+    private txnPath: number[],
     private readonly txnInfos: algosdk.modelsv2.PendingTransactionResponse[],
     private readonly txnTraces: Array<
       algosdk.modelsv2.SimulationTransactionExecTrace | undefined
     >,
+    private readonly failureInfo: TransactionFailureInfo | undefined,
   ) {
     super(engine);
 
@@ -450,7 +503,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
   }
 
   public name(): string {
-    return `${this.txnPath.length > 1 ? 'inner ' : ''}transaction ${
+    return `${this.txnPath.length > 2 ? 'inner ' : ''}transaction ${
       this.txnIndex
     }`;
   }
@@ -458,8 +511,8 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
   public sourceFile(): FrameSource {
     return {
       name: `${
-        this.txnPath.length > 1 ? 'inner-' : ''
-      }transaction-group-${this.txnPath.join('-')}.json`,
+        this.txnPath.length > 2 ? 'inner-' : ''
+      }transaction-group-${this.txnPath.slice(0, -1).join('-')}.json`,
       content: this.sourceContent,
       contentMimeType: 'application/json',
     };
@@ -489,9 +542,34 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
     return frameSourceLocation;
   }
 
-  public forward(stack: TraceReplayStackFrame[]): void {
+  public forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
     const currentTxnTrace = this.txnTraces[this.txnIndex];
     const currentTxnInfo = this.txnInfos[this.txnIndex];
+
+    let childFailureInfo: TransactionFailureInfo | undefined = undefined;
+    if (
+      this.failureInfo &&
+      pathStartWith(this.failureInfo.path, this.txnPath.slice(1))
+    ) {
+      if (this.failureInfo.path.length === this.txnPath.length - 1) {
+        if (
+          currentTxnTrace &&
+          (currentTxnTrace.logicSigTrace ||
+            currentTxnTrace.approvalProgramTrace ||
+            currentTxnTrace.clearStateProgramTrace)
+        ) {
+          // Fail in the trace
+          childFailureInfo = this.failureInfo;
+        } else {
+          // Fail right now
+          this.onException = true;
+          return new ExceptionInfo(this.failureInfo.message);
+        }
+      } else {
+        childFailureInfo = this.failureInfo;
+      }
+    }
+
     if (this.logicSigStatus === ProgramStatus.NOT_STARTED) {
       this.logicSigStatus = ProgramStatus.STARTING;
       return;
@@ -505,6 +583,11 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
         currentTxnTrace.logicSigTrace!,
         currentTxnTrace,
         currentTxnInfo,
+        // Only forward childFailureInfo if the LogicSig is the one that failed. The LogicSig could
+        // not have failed if we have an app trace.
+        this.appStatus === ProgramStatus.NOT_STARTED
+          ? undefined
+          : childFailureInfo,
       );
       this.logicSigStatus = ProgramStatus.DONE;
       stack.push(logicSigFrame);
@@ -525,6 +608,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
           currentTxnTrace.approvalProgramTrace!,
           currentTxnTrace,
           currentTxnInfo,
+          childFailureInfo,
         );
       } else {
         appFrame = new ProgramStackFrame(
@@ -535,6 +619,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
           currentTxnTrace.clearStateProgramTrace!,
           currentTxnTrace,
           currentTxnInfo,
+          childFailureInfo,
         );
       }
       this.appStatus = ProgramStatus.DONE;
@@ -543,6 +628,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
     }
     if (this.txnIndex + 1 < this.txnTraces.length) {
       this.txnIndex++;
+      this.txnPath[this.txnPath.length - 1]++;
       const nextTrace = this.txnTraces[this.txnIndex];
       if (nextTrace) {
         this.logicSigStatus = nextTrace.logicSigTrace
@@ -561,7 +647,11 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
     stack.pop();
   }
 
-  public backward(stack: TraceReplayStackFrame[]): void {
+  public backward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+    if (this.onException) {
+      this.onException = false;
+      return;
+    }
     const currentTrace = this.txnTraces[this.txnIndex];
     if (currentTrace) {
       if (
@@ -576,8 +666,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
           this.appStatus = ProgramStatus.NOT_STARTED;
           // Need to unwind the forward call that is implicit when the app program frame
           // is popped
-          this.backward(stack);
-          return;
+          return this.backward(stack);
         }
       }
       if (currentTrace.logicSigTrace) {
@@ -596,6 +685,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
       return;
     }
     this.txnIndex--;
+    this.txnPath[this.txnPath.length - 1]--;
     this.logicSigStatus = ProgramStatus.DONE;
     this.appStatus = ProgramStatus.DONE;
     const previousTrace = this.txnTraces[this.txnIndex];
@@ -605,7 +695,7 @@ export class TransactionStackFrame extends TraceReplayStackFrame {
       previousTrace?.logicSigHash
     ) {
       // Need to step back on the app or lsig status
-      this.backward(stack);
+      return this.backward(stack);
     }
   }
 }
@@ -619,9 +709,9 @@ export interface ProgramState {
 export class ProgramStackFrame extends TraceReplayStackFrame {
   private index: number = 0;
   private handledInnerTxns: boolean = false;
-  private innerTxnGroupCount: number = 0;
   private initialAppState: AppState | undefined;
   private logicSigAddress: string | undefined;
+  private blockingException: ExceptionInfo | undefined;
 
   public state: ProgramState = { pc: 0, stack: [], scratch: new Map() };
 
@@ -633,6 +723,7 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     private readonly programTrace: algosdk.modelsv2.SimulationOpcodeTraceUnit[],
     private readonly trace: algosdk.modelsv2.SimulationTransactionExecTrace,
     private readonly txnInfo: algosdk.modelsv2.PendingTransactionResponse,
+    private readonly failureInfo: TransactionFailureInfo | undefined,
   ) {
     super(engine);
     this.state.pc = Number(programTrace[0].pc);
@@ -723,41 +814,65 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     };
   }
 
-  public forward(stack: TraceReplayStackFrame[]): void {
+  public forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+    if (this.blockingException) {
+      return this.blockingException;
+    }
+
+    if (this.index === this.programTrace.length) {
+      stack.pop();
+      return;
+    }
+
     const currentUnit = this.programTrace[this.index];
     this.processUnit(currentUnit);
 
     const spawnedInners = currentUnit.spawnedInners;
     if (!this.handledInnerTxns && spawnedInners && spawnedInners.length !== 0) {
+      const spawnedInnerIndexes = spawnedInners.map((i) => Number(i));
       const innerGroupInfo: algosdk.modelsv2.PendingTransactionResponse[] = [];
       const innerTraces: algosdk.modelsv2.SimulationTransactionExecTrace[] = [];
-      for (const innerIndex of spawnedInners) {
-        const innerTxnInfo = this.txnInfo.innerTxns![Number(innerIndex)];
-        const innerTrace = this.trace.innerTrace![Number(innerIndex)];
+      for (const innerIndex of spawnedInnerIndexes) {
+        const innerTxnInfo = this.txnInfo.innerTxns![innerIndex];
+        const innerTrace = this.trace.innerTrace![innerIndex];
         innerGroupInfo.push(innerTxnInfo);
         innerTraces.push(innerTrace);
       }
       const expandedPath = this.txnPath.slice();
-      expandedPath.push(this.innerTxnGroupCount);
-      const innerGroupFrame = new TransactionStackFrame(
+      expandedPath.push(spawnedInnerIndexes[0]);
+      let innerFailureInfo: TransactionFailureInfo | undefined = undefined;
+      if (
+        this.failureInfo &&
+        this.failureInfo.path.length > this.txnPath.length - 1 &&
+        pathStartWith(this.failureInfo.path, this.txnPath.slice(1))
+      ) {
+        innerFailureInfo = this.failureInfo;
+      }
+      const innerGroupFrame = new TransactionGroupStackFrame(
         this.engine,
         expandedPath,
         innerGroupInfo,
         innerTraces,
+        innerFailureInfo,
       );
       stack.push(innerGroupFrame);
       this.handledInnerTxns = true;
-      this.innerTxnGroupCount++;
       return;
     }
 
-    if (this.index + 1 < this.programTrace.length) {
-      this.index++;
+    this.index++;
+
+    if (this.index < this.programTrace.length) {
       this.state.pc = Number(this.programTrace[this.index].pc);
       this.handledInnerTxns = false;
-      return;
+    } else if (
+      this.failureInfo &&
+      pathsEqual(this.txnPath.slice(1), this.failureInfo.path)
+    ) {
+      // If there's an error, show it at the end of execution
+      this.blockingException = new ExceptionInfo(this.failureInfo.message);
+      return this.blockingException;
     }
-    stack.pop();
   }
 
   private processUnit(unit: algosdk.modelsv2.SimulationOpcodeTraceUnit) {
@@ -839,7 +954,10 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     }
   }
 
-  public backward(stack: TraceReplayStackFrame[]): void {
+  public backward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+    if (this.blockingException) {
+      this.blockingException = undefined;
+    }
     if (this.handledInnerTxns) {
       // We can roll this back without any other effects
       this.handledInnerTxns = false;
@@ -859,7 +977,6 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
   private reset() {
     this.index = 0;
     this.handledInnerTxns = false;
-    this.innerTxnGroupCount = 0;
     this.state.pc = Number(this.programTrace[0].pc);
     this.state.stack = [];
     this.state.scratch.clear();
@@ -870,4 +987,31 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
       );
     }
   }
+}
+
+function pathsEqual(path1: number[], path2: number[]): boolean {
+  if (path1.length !== path2.length) {
+    return false;
+  }
+  for (let i = 0; i < path1.length; i++) {
+    if (path1[i] !== path2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Determines if the given path starts with the given prefix.
+ */
+function pathStartWith(path: number[], prefix: number[]): boolean {
+  if (path.length < prefix.length) {
+    return false;
+  }
+  for (let i = 0; i < prefix.length; i++) {
+    if (path[i] !== prefix[i]) {
+      return false;
+    }
+  }
+  return true;
 }

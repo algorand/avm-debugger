@@ -31,6 +31,7 @@ export enum RuntimeEvents {
   stopOnEntry = 'stopOnEntry',
   stopOnStep = 'stopOnStep',
   stopOnBreakpoint = 'stopOnBreakpoint',
+  stopOnException = 'stopOnException',
   breakpointValidated = 'breakpointValidated',
   end = 'end',
   error = 'error',
@@ -99,6 +100,11 @@ export class AvmDebugSession extends DebugSession {
     });
     this._runtime.on(RuntimeEvents.stopOnBreakpoint, () => {
       this.sendEvent(new StoppedEvent('breakpoint', AvmDebugSession.threadID));
+    });
+    this._runtime.on(RuntimeEvents.stopOnException, (message) => {
+      this.sendEvent(
+        new StoppedEvent('exception', AvmDebugSession.threadID, message),
+      );
     });
     this._runtime.on(
       RuntimeEvents.breakpointValidated,

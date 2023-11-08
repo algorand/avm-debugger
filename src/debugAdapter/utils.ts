@@ -276,10 +276,23 @@ export class TEALDebuggingAssets {
     );
     let simulateResponse: algosdk.modelsv2.SimulateResponse;
     try {
-      simulateResponse =
-        algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(
-          parseJsonWithBigints(rawSimulateTrace.toString('utf-8')),
+      const jsonPased = parseJsonWithBigints(
+        rawSimulateTrace.toString('utf-8'),
+      );
+      if (jsonPased.version !== 2) {
+        throw new Error(
+          `Unsupported simulate response version: ${jsonPased.version}`,
         );
+      }
+      simulateResponse =
+        algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(jsonPased);
+      if (!simulateResponse.execTraceConfig?.enable) {
+        throw new Error(
+          `Simulate response does not contain trace data. execTraceConfig=${JSON.stringify(
+            simulateResponse.execTraceConfig,
+          )}`,
+        );
+      }
     } catch (e) {
       const err = e as Error;
       throw new Error(
