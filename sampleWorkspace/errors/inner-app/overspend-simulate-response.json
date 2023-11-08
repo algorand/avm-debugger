@@ -11,10 +11,7 @@
     {
       "app-budget-added": 1400,
       "app-budget-consumed": 10,
-      "failed-at": [
-        0,
-        0
-      ],
+      "failed-at": [0, 0],
       "failure-message": "transaction 2APGJLEQVGE3ZVHPR6UNSFWAW7BGYYVKVCFENWX4CBZUM5CQX7EQ: logic eval error: overspend (account YCVGIALPB5UCXY3QS4ICXLGXXAAFCA35QAEUB2MSBH7J6UJQU5D3LEY36Q, data {AccountBaseData:{Status:Offline MicroAlgos:{Raw:0} RewardsBase:0 RewardedMicroAlgos:{Raw:0} AuthAddr:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ TotalAppSchema:{_struct:{} NumUint:0 NumByteSlice:0} TotalExtraAppPages:0 TotalAppParams:0 TotalAppLocalStates:0 TotalAssetParams:0 TotalAssets:0 TotalBoxes:0 TotalBoxBytes:0} VotingData:{VoteID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] SelectionID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] StateProofID:[0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] VoteFirstValid:0 VoteLastValid:0 VoteKeyDilution:0}}, tried to spend {1000}). Details: pc=21, opcodes=txna ApplicationArgs 0; itxn_field ApplicationArgs; itxn_submit; label1:",
       "txn-results": [
         {
@@ -79,14 +76,10 @@
               },
               {
                 "pc": 21,
-                "spawned-inners": [
-                  0
-                ]
+                "spawned-inners": [0]
               }
             ],
-            "inner-trace": [
-              {}
-            ]
+            "inner-trace": [{}]
           },
           "txn-result": {
             "inner-txns": [
@@ -94,9 +87,7 @@
                 "pool-error": "",
                 "txn": {
                   "txn": {
-                    "apaa": [
-                      "AAAAAAAAAAA="
-                    ],
+                    "apaa": ["AAAAAAAAAAA="],
                     "apid": 1007,
                     "fee": 1000,
                     "fv": 11,
@@ -111,12 +102,8 @@
             "txn": {
               "sig": "qGI2+ooLqAU0+5jUDhNUzneSQrq+WoB6lPmezTmiUTASkCwR/ttI53flPOqUDoOjnoyEAVpWN8L9jemrL9ybBA==",
               "txn": {
-                "apaa": [
-                  "AAAAAAAAAAA="
-                ],
-                "apfa": [
-                  1007
-                ],
+                "apaa": ["AAAAAAAAAAA="],
+                "apfa": [1007],
                 "apid": 1011,
                 "fee": 1000,
                 "fv": 11,

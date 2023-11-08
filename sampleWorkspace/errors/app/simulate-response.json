@@ -11,9 +11,7 @@
     {
       "app-budget-added": 700,
       "app-budget-consumed": 2,
-      "failed-at": [
-        1
-      ],
+      "failed-at": [1],
       "failure-message": "transaction Z4XYNPFASUB3NMVQQUVY3MM74IMSZTJKWSWTTUIBX5GZZNIS2ZEA: transaction rejected by ApprovalProgram",
       "txn-results": [
         {
