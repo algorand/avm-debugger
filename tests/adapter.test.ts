@@ -2098,5 +2098,122 @@ describe('Debug Adapter Tests', () => {
         stack: [0],
       });
     });
+
+    it('should step through the LogicSig if it calls a failing app', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/sources.json',
+      );
+      const { client } = fixture;
+
+      const lsigProgram = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/nine.teal',
+      );
+      const appProgram = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/inner.teal',
+      );
+
+      await client.hitBreakpoint(
+        {
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+        },
+        {
+          path: lsigProgram,
+          line: 2,
+          column: 1,
+        },
+      );
+
+      // clear breakpoint
+      await client.setBreakpointsRequest({
+        source: { path: lsigProgram },
+        breakpoints: [],
+      });
+
+      await client.continueRequest({ threadId: 1 });
+
+      await client.assertStoppedLocation('exception', {
+        path: appProgram,
+        line: 7,
+        column: 1,
+      });
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes(
+          'logic eval error: assert failed pc=10',
+        ),
+        stoppedEvent.body.text,
+      );
+    });
+
+    it('should properly handle an error in a transaction before a LogicSig', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/sources.json',
+      );
+      const { client } = fixture;
+
+      const lsigProgram = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/nine.teal',
+      );
+      const appProgram = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/inner.teal',
+      );
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
+
+      // Technically the LogicSig program could be executed, since all LogicSigs are processed
+      // before transactions, and we have the trace for it. However, in the debugger we interleave
+      // LogicSig executions with the rest of the transaction group, so we won't reach it. This test
+      // is only here to pin down the behavior, but it might make sense to change this at some point.
+
+      // The breakpoint should not be hit
+      await client.setBreakpointsRequest({
+        source: { path: lsigProgram },
+        breakpoints: [
+          {
+            line: 2,
+            column: 1,
+          },
+        ],
+      });
+
+      await client.continueRequest({ threadId: 1 });
+
+      await client.assertStoppedLocation('exception', {
+        path: appProgram,
+        line: 7,
+        column: 1,
+      });
+
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes(
+          'logic eval error: assert failed pc=10',
+        ),
+        stoppedEvent.body.text,
+      );
+    });
   });
 });

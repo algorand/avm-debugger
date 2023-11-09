@@ -33,6 +33,16 @@
       "programSourcesDescriptionFile": "${workspaceFolder}/errors/inner-app/sources.json",
 
       "stopOnEntry": true
+    },
+    {
+      "type": "teal",
+      "request": "launch",
+      "name": "Debug App from LogicSig Error",
+
+      "simulateTraceFile": "${workspaceFolder}/errors/app-from-logicsig/simulate-response.json",
+      "programSourcesDescriptionFile": "${workspaceFolder}/errors/app-from-logicsig/sources.json",
+
+      "stopOnEntry": true
     }
   ]
 }
