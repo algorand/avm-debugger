@@ -11,9 +11,7 @@
     {
       "app-budget-added": 700,
       "app-budget-consumed": 5,
-      "failed-at": [
-        0
-      ],
+      "failed-at": [0],
       "failure-message": "transaction 3V4M5QIRCBTBZFANMCTTQICNTTV4MVMEFHZQLIXYJOAURHAYJXNA: logic eval error: assert failed pc=10. Details: pc=10, opcodes=txna ApplicationArgs 0; btoi; assert; label1:",
       "txn-results": [
         {
@@ -63,9 +61,7 @@
             "txn": {
               "sig": "QnStcK68j/sTA3Cv0+oZLDaurqC+e8/WJ6nKBIVz+UxS/CU2P2Wc/UfdeZXGwb5MMzjLH4Et9ZJVF28vTCBcAQ==",
               "txn": {
-                "apaa": [
-                  "AAAAAAAAAAA="
-                ],
+                "apaa": ["AAAAAAAAAAA="],
                 "apid": 1007,
                 "fee": 1000,
                 "fv": 13,
