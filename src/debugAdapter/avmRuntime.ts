@@ -3,6 +3,7 @@ import { RuntimeEvents } from './debugRequestHandlers';
 import { AppState } from './appState';
 import {
   FrameSourceLocation,
+  SteppingResultType,
   TraceReplayEngine,
   TraceReplayStackFrame,
 } from './traceReplayEngine';
@@ -100,14 +101,30 @@ export class AvmRuntime extends EventEmitter {
 
   private updateCurrentLine(reverse: boolean): boolean {
     if (reverse) {
-      if (!this.engine.backward()) {
-        this.sendEvent(RuntimeEvents.stopOnEntry);
-        return false;
+      const result = this.engine.backward();
+      switch (result.type) {
+        case SteppingResultType.END:
+          this.sendEvent(RuntimeEvents.stopOnEntry);
+          return false;
+        case SteppingResultType.EXCEPTION:
+          this.sendEvent(
+            RuntimeEvents.stopOnException,
+            result.exceptionInfo?.message,
+          );
+          return false;
       }
     } else {
-      if (!this.engine.forward()) {
-        this.sendEvent(RuntimeEvents.end);
-        return false;
+      const result = this.engine.forward();
+      switch (result.type) {
+        case SteppingResultType.END:
+          this.sendEvent(RuntimeEvents.end);
+          return false;
+        case SteppingResultType.EXCEPTION:
+          this.sendEvent(
+            RuntimeEvents.stopOnException,
+            result.exceptionInfo?.message,
+          );
+          return false;
       }
     }
 

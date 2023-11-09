@@ -20,10 +20,10 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/ahangsu/vscode-teal-debug.git"
+    "url": "https://github.com/algorand/teal-debugger.git"
   },
   "bugs": {
-    "url": "https://github.com/ahangsu/vscode-teal-debug/issues"
+    "url": "https://github.com/algorand/teal-debugger/issues"
   },
   "scripts": {
     "compile": "tsc -p ./",

@@ -454,6 +454,7 @@ describe('Debug Adapter Tests', () => {
         { line: 93, column: 1 },
         { line: 94, column: 1 },
         { line: 95, column: 1 },
+        { line: 95, column: 1 },
       ].map((partial) => ({
         ...partial,
         name: 'slot-machine.teal',
@@ -538,6 +539,12 @@ describe('Debug Adapter Tests', () => {
             column: 1,
           },
           {
+            program: lsigPath,
+            name: 'lsig.teal',
+            line: 7,
+            column: 1,
+          },
+          {
             name: 'transaction-group-0.json',
             line: 23,
             column: 0,
@@ -591,6 +598,12 @@ describe('Debug Adapter Tests', () => {
             column: 1,
           },
           {
+            program: appPath,
+            name: 'app.teal',
+            line: 9,
+            column: 1,
+          },
+          {
             name: 'transaction-group-0.json',
             line: 33,
             column: 0,
@@ -628,6 +641,12 @@ describe('Debug Adapter Tests', () => {
             program: lsigPath,
             name: 'lsig.teal',
             line: 6,
+            column: 1,
+          },
+          {
+            program: lsigPath,
+            name: 'lsig.teal',
+            line: 7,
             column: 1,
           },
           {
@@ -876,7 +895,7 @@ describe('Debug Adapter Tests', () => {
           },
           {
             location: {
-              name: 'inner-transaction-group-0-0.json',
+              name: 'inner-transaction-group-0-1.json',
               line: 20,
               column: 0,
             },
@@ -1063,6 +1082,19 @@ describe('Debug Adapter Tests', () => {
             column: startLocation.column,
           },
         );
+
+        // Reset breakpoints
+        await client.setBreakpointsRequest({
+          source: { path: startLocation.program! },
+          breakpoints: [],
+        });
+
+        // Since the first 2 locations are the same (due to before/after opcode execution), the
+        // breakpoint only hits the first. Must manually advance to the second.
+        assert.deepStrictEqual(expectedLocations[0], expectedLocations[1]);
+        await client.nextRequest({ threadId: 1 });
+        const stoppedEvent = await client.waitForStop();
+        assert.strictEqual(stoppedEvent.body.reason, 'step');
 
         for (let i = 0; i < expectedLocations.length; i++) {
           const expectedLocation = expectedLocations[i];
@@ -1793,6 +1825,395 @@ describe('Debug Adapter Tests', () => {
         client.continueRequest({ threadId: 1 }),
         client.waitForEvent('terminated'),
       ]);
+    });
+  });
+
+  describe('Errors Reporting', () => {
+    it('should correctly report an inner app error', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/inner-app/app-reject-simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/inner-app/sources.json',
+      );
+      const { client } = fixture;
+
+      const program = path.join(DATA_ROOT, 'errors/inner-app/inner.teal');
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
+
+      await client.continueRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 7,
+        column: 1,
+      });
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes(
+          'logic eval error: logic eval error: assert failed pc=10',
+        ),
+        stoppedEvent.body.text,
+      );
+      await assertVariables(client, {
+        pc: 10,
+        stack: [],
+      });
+
+      // Cannot walk forward over the error
+      await client.nextRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 7,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 10,
+        stack: [],
+      });
+
+      // Can walk backwards
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: program,
+        line: 7,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 10, // We're at the same pc, but before the opcode ran, hence the stack value
+        stack: [0],
+      });
+
+      // And backwards again
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: program,
+        line: 6,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 9,
+        stack: [new Uint8Array(8)],
+      });
+
+      // Walking forward hits the error again
+      await client.continueRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 7,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 10,
+        stack: [],
+      });
+    });
+
+    it('should correctly report an inner transaction error', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/inner-app/overspend-simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/inner-app/sources.json',
+      );
+      const { client } = fixture;
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
+
+      await client.continueRequest({ threadId: 1 });
+
+      let stoppedEvent = await client.waitForStop();
+      assert.strictEqual(stoppedEvent.body.reason, 'exception');
+      assert.ok(
+        stoppedEvent.body.text?.includes('logic eval error: overspend'),
+        stoppedEvent.body.text,
+      );
+      let stackTraceResponse = await client.stackTraceRequest({
+        threadId: 1,
+      });
+      let currentFrame = stackTraceResponse.body.stackFrames[0];
+      assert.strictEqual(
+        currentFrame.source?.name,
+        'inner-transaction-group-0-0.json',
+      );
+      assert.strictEqual(currentFrame.line, 2);
+
+      // Cannot walk forward over the error
+      await client.nextRequest({ threadId: 1 });
+      stoppedEvent = await client.waitForStop();
+      assert.strictEqual(stoppedEvent.body.reason, 'exception');
+      stackTraceResponse = await client.stackTraceRequest({
+        threadId: 1,
+      });
+      currentFrame = stackTraceResponse.body.stackFrames[0];
+      assert.strictEqual(
+        currentFrame.source?.name,
+        'inner-transaction-group-0-0.json',
+      );
+      assert.strictEqual(currentFrame.line, 2);
+
+      // Can walk backwards
+      await client.stepBackRequest({ threadId: 1 });
+      stoppedEvent = await client.waitForStop();
+      assert.strictEqual(stoppedEvent.body.reason, 'step');
+      stackTraceResponse = await client.stackTraceRequest({
+        threadId: 1,
+      });
+      currentFrame = stackTraceResponse.body.stackFrames[0];
+      assert.strictEqual(
+        currentFrame.source?.name,
+        'inner-transaction-group-0-0.json',
+      );
+      assert.strictEqual(currentFrame.line, 2);
+
+      // And backwards again
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: path.join(DATA_ROOT, 'errors/inner-app/outer.teal'),
+        line: 12,
+        column: 1,
+      });
+
+      // Walking forward hits the error again
+      await client.continueRequest({ threadId: 1 });
+      stoppedEvent = await client.waitForStop();
+      assert.strictEqual(stoppedEvent.body.reason, 'exception');
+      stackTraceResponse = await client.stackTraceRequest({
+        threadId: 1,
+      });
+      currentFrame = stackTraceResponse.body.stackFrames[0];
+      assert.strictEqual(
+        currentFrame.source?.name,
+        'inner-transaction-group-0-0.json',
+      );
+      assert.strictEqual(currentFrame.line, 2);
+    });
+
+    it('should correctly report a LogicSig error', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/logicsig/simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/logicsig/sources.json',
+      );
+      const { client } = fixture;
+
+      const program = path.join(DATA_ROOT, 'errors/logicsig/lsig-err.teal');
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
+
+      await client.continueRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 4,
+        column: 1,
+      });
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes(
+          'rejected by logic err=err opcode executed. Details: pc=4',
+        ),
+        stoppedEvent.body.text,
+      );
+      await assertVariables(client, {
+        pc: 4,
+        stack: [0],
+      });
+
+      // Cannot walk forward over the error
+      await client.nextRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 4,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 4,
+        stack: [0],
+      });
+
+      // Can walk backwards
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: program,
+        line: 4,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 4, // We're at the same pc, but before the opcode ran
+        stack: [0],
+      });
+
+      // And backwards again
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: program,
+        line: 3,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 3,
+        stack: [2000],
+      });
+
+      // Walking forward hits the error again
+      await client.continueRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 4,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 4,
+        stack: [0],
+      });
+    });
+
+    it('should step through the LogicSig if it calls a failing app', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/sources.json',
+      );
+      const { client } = fixture;
+
+      const lsigProgram = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/nine.teal',
+      );
+      const appProgram = path.join(
+        DATA_ROOT,
+        'errors/app-from-logicsig/inner.teal',
+      );
+
+      await client.hitBreakpoint(
+        {
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+        },
+        {
+          path: lsigProgram,
+          line: 2,
+          column: 1,
+        },
+      );
+
+      // clear breakpoint
+      await client.setBreakpointsRequest({
+        source: { path: lsigProgram },
+        breakpoints: [],
+      });
+
+      await client.continueRequest({ threadId: 1 });
+
+      await client.assertStoppedLocation('exception', {
+        path: appProgram,
+        line: 7,
+        column: 1,
+      });
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes(
+          'logic eval error: assert failed pc=10',
+        ),
+        stoppedEvent.body.text,
+      );
+    });
+
+    it('should properly handle an error in a transaction before a LogicSig', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/simulate-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/sources.json',
+      );
+      const { client } = fixture;
+
+      const lsigProgram = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/nine.teal',
+      );
+      const appProgram = path.join(
+        DATA_ROOT,
+        'errors/logicsig-after-error/inner.teal',
+      );
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
+
+      // Technically the LogicSig program could be executed, since all LogicSigs are processed
+      // before transactions, and we have the trace for it. However, in the debugger we interleave
+      // LogicSig executions with the rest of the transaction group, so we won't reach it. This test
+      // is only here to pin down the behavior, but it might make sense to change this at some point.
+
+      // The breakpoint should not be hit
+      await client.setBreakpointsRequest({
+        source: { path: lsigProgram },
+        breakpoints: [
+          {
+            line: 2,
+            column: 1,
+          },
+        ],
+      });
+
+      await client.continueRequest({ threadId: 1 });
+
+      await client.assertStoppedLocation('exception', {
+        path: appProgram,
+        line: 7,
+        column: 1,
+      });
+
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes(
+          'logic eval error: assert failed pc=10',
+        ),
+        stoppedEvent.body.text,
+      );
     });
   });
 });
