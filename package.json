@@ -108,6 +108,13 @@
         "configuration": "./teal-language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "teal",
+        "scopeName": "source.teal",
+        "path": "./syntaxes/teal.tmLanguage.json"
+      }
+    ],
     "breakpoints": [
       {
         "language": "teal"
