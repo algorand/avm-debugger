@@ -1,30 +1,22 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import { activateTealDebug } from './activateMockDebug';
-import {
-  ServerDebugAdapterFactory,
-  ExecutableDebugAdapterFactory,
-} from './externalDescriptorFactory';
+import { activateAvmDebug } from './activateAvmDebug';
+import { ServerDebugAdapterFactory } from './serverDescriptorFactory';
 import { InlineDebugAdapterFactory } from './internalDescriptorFactory';
 
-const runMode: 'external' | 'server' | 'inline' = 'inline';
+const runMode: 'server' | 'inline' = 'inline';
 
 export function activate(context: vscode.ExtensionContext) {
   switch (runMode) {
     case 'server':
       // run the debug adapter as a server inside the extension and communicate via a socket
-      activateTealDebug(context, new ServerDebugAdapterFactory());
-      break;
-
-    case 'external':
-      // run the debug adapter as a separate process
-      activateTealDebug(context, new ExecutableDebugAdapterFactory());
+      activateAvmDebug(context, new ServerDebugAdapterFactory());
       break;
 
     case 'inline':
       // run the debug adapter inside the extension and directly talk to it
-      activateTealDebug(context, new InlineDebugAdapterFactory());
+      activateAvmDebug(context, new InlineDebugAdapterFactory());
       break;
   }
 }

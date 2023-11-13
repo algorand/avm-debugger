@@ -1,20 +1,20 @@
 'use strict';
 
 import * as vscode from 'vscode';
-import { TealDebugConfigProvider } from './configuration';
+import { AvmDebugConfigProvider } from './configuration';
 
-export function activateTealDebug(
+export function activateAvmDebug(
   context: vscode.ExtensionContext,
   factory: vscode.DebugAdapterDescriptorFactory,
 ) {
-  // register a configuration provider for 'teal' debug type
-  const provider = new TealDebugConfigProvider();
+  // register a configuration provider for 'avm' debug type
+  const provider = new AvmDebugConfigProvider();
   context.subscriptions.push(
-    vscode.debug.registerDebugConfigurationProvider('teal', provider),
+    vscode.debug.registerDebugConfigurationProvider('avm', provider),
   );
 
   context.subscriptions.push(
-    vscode.debug.registerDebugAdapterDescriptorFactory('teal', factory),
+    vscode.debug.registerDebugAdapterDescriptorFactory('avm', factory),
   );
 
   if (isDisposable(factory)) {

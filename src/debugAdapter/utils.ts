@@ -257,7 +257,7 @@ export class ProgramSourceDescriptorRegistry {
   }
 }
 
-export class TEALDebuggingAssets {
+export class AvmDebuggingAssets {
   constructor(
     public readonly simulateResponse: algosdk.modelsv2.SimulateResponse,
     public readonly programSourceDescriptorRegistry: ProgramSourceDescriptorRegistry,
@@ -267,7 +267,7 @@ export class TEALDebuggingAssets {
     fileAccessor: FileAccessor,
     simulateTraceFilePath: string,
     programSourcesDescriptionFilePath: string,
-  ): Promise<TEALDebuggingAssets> {
+  ): Promise<AvmDebuggingAssets> {
     const rawSimulateTrace = await prefixPotentialError(
       fileAccessor.readFile(simulateTraceFilePath),
       'Could not read simulate trace file',
@@ -304,7 +304,7 @@ export class TEALDebuggingAssets {
         programSourcesDescriptionFilePath,
       );
 
-    return new TEALDebuggingAssets(simulateResponse, txnGroupDescriptorList);
+    return new AvmDebuggingAssets(simulateResponse, txnGroupDescriptorList);
   }
 }
 

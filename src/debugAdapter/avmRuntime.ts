@@ -9,7 +9,7 @@ import {
 } from './traceReplayEngine';
 import {
   FileAccessor,
-  TEALDebuggingAssets,
+  AvmDebuggingAssets,
   ProgramSourceDescriptor,
 } from './utils';
 
@@ -43,7 +43,7 @@ export class AvmRuntime extends EventEmitter {
     super();
   }
 
-  public onLaunch(debugAssets: TEALDebuggingAssets): Promise<void> {
+  public onLaunch(debugAssets: AvmDebuggingAssets): Promise<void> {
     return this.engine.loadResources(debugAssets);
   }
 

@@ -2,7 +2,7 @@ import * as algosdk from 'algosdk';
 import { AppState } from './appState';
 import {
   ByteArrayMap,
-  TEALDebuggingAssets,
+  AvmDebuggingAssets,
   ProgramSourceDescriptor,
   ProgramSourceDescriptorRegistry,
 } from './utils';
@@ -58,7 +58,7 @@ export class TraceReplayEngine {
     this.stack = [];
   }
 
-  public async loadResources(debugAssets: TEALDebuggingAssets) {
+  public async loadResources(debugAssets: AvmDebuggingAssets) {
     const { simulateResponse, programSourceDescriptorRegistry } = debugAssets;
     this.simulateResponse = simulateResponse;
 

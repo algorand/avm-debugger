@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "teal",
+      "type": "avm",
       "request": "launch",
       "name": "Debug Slot Machine",
 
@@ -15,7 +15,7 @@
       "stopOnEntry": true
     },
     {
-      "type": "teal",
+      "type": "avm",
       "request": "launch",
       "name": "Debug Sourcemap Test",
 
@@ -25,7 +25,7 @@
       "stopOnEntry": true
     },
     {
-      "type": "teal",
+      "type": "avm",
       "request": "launch",
       "name": "Debug Stepping Test",
 
@@ -35,7 +35,7 @@
       "stopOnEntry": true
     },
     {
-      "type": "teal",
+      "type": "avm",
       "request": "launch",
       "name": "Debug Inner App Error",
 
@@ -45,7 +45,7 @@
       "stopOnEntry": true
     },
     {
-      "type": "teal",
+      "type": "avm",
       "request": "launch",
       "name": "Debug App from LogicSig Error",
 

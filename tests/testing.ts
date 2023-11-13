@@ -46,7 +46,7 @@ export class TestFixture {
   public async init() {
     this._server = new BasicServer(testFileAccessor);
 
-    this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'teal');
+    this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'avm');
     await this._client.start(this._server.port());
 
     // If you want to invoke the debug adapter separately in a child process and
@@ -54,7 +54,7 @@ export class TestFixture {
     // this._client = new DebugClient(
     //   'node',
     //   DEBUG_CLIENT_PATH,
-    //   'teal',
+    //   'avm',
     //   undefined,
     //   true,
     // );

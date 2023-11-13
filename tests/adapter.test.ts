@@ -47,7 +47,7 @@ describe('Debug Adapter Tests', () => {
         let success: boolean;
         try {
           await fixture.client.initializeRequest({
-            adapterID: 'teal',
+            adapterID: 'avm',
             linesStartAt1: true,
             columnsStartAt1: true,
             pathFormat: 'url',

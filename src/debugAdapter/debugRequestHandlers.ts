@@ -19,7 +19,7 @@ import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
 import {
   FileAccessor,
-  TEALDebuggingAssets,
+  AvmDebuggingAssets,
   utf8Decode,
   limitArray,
 } from './utils';
@@ -37,9 +37,9 @@ export enum RuntimeEvents {
 }
 
 /**
- * This interface describes the teal-debug specific launch attributes
+ * This interface describes the avm-debug specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the teal-debug extension.
+ * The schema for these attributes lives in the package.json of the avm-debug extension.
  * The interface should always match this schema.
  */
 export interface ILaunchRequestArguments
@@ -189,7 +189,7 @@ export class AvmDebugSession extends DebugSession {
     args: ILaunchRequestArguments,
   ) {
     try {
-      const debugAssets = await TEALDebuggingAssets.loadFromFiles(
+      const debugAssets = await AvmDebuggingAssets.loadFromFiles(
         this.fileAccessor,
         args.simulateTraceFile,
         args.programSourcesDescriptionFile,
@@ -1171,9 +1171,6 @@ export class AvmDebugSession extends DebugSession {
     return new Source(
       this.fileAccessor.basename(filePath),
       this.convertDebuggerPathToClient(filePath),
-      undefined,
-      undefined,
-      'teal-txn-group-adapter-data',
     );
   }
 
