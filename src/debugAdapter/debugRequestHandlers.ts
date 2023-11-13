@@ -140,67 +140,12 @@ export class AvmDebugSession extends DebugSession {
     // the adapter implements the configurationDone request.
     response.body.supportsConfigurationDoneRequest = true;
 
-    // make VS Code use 'evaluate' when hovering over source
-    response.body.supportsEvaluateForHovers = false;
-
     // make VS Code show a 'step back' button
     response.body.supportsStepBack = true;
-
-    // make VS Code send cancel request
-    response.body.supportsCancelRequest = false;
 
     // make VS Code send the breakpointLocations request
     response.body.supportsBreakpointLocationsRequest = true;
 
-    // make VS Code provide "Step in Target" functionality
-    response.body.supportsStepInTargetsRequest = true;
-
-    // TEAL is not so thready.
-    response.body.supportsSingleThreadExecutionRequests = false;
-    response.body.supportsTerminateThreadsRequest = false;
-
-    // the adapter defines two exceptions filters, one with support for conditions.
-    response.body.supportsExceptionFilterOptions = true;
-    response.body.exceptionBreakpointFilters = [
-      // TODO: make filter inner txn only
-      {
-        filter: 'namedException',
-        label: 'Named Exception',
-        description: `Break on named exceptions. Enter the exception's name as the Condition.`,
-        default: false,
-        supportsCondition: true,
-        conditionDescription: `Enter the exception's name`,
-      },
-      {
-        filter: 'otherExceptions',
-        label: 'Other Exceptions',
-        description: 'This is a other exception',
-        default: true,
-        supportsCondition: false,
-      },
-    ];
-
-    // make VS Code send exceptionInfo request
-    // response.body.supportsExceptionInfoRequest = true;
-
-    // make VS Code send setVariable request
-    // response.body.supportsSetVariable = true;
-
-    // make VS Code send setExpression request
-    // response.body.supportsSetExpression = true;
-
-    // make VS Code send disassemble request
-    // response.body.supportsDisassembleRequest = true;
-    // response.body.supportsSteppingGranularity = true;
-    // response.body.supportsInstructionBreakpoints = true;
-
-    // make VS Code able to read and write variable memory
-    // response.body.supportsReadMemoryRequest = true;
-    // response.body.supportsWriteMemoryRequest = true;
-
-    // response.body.supportSuspendDebuggee = true;
-    // response.body.supportTerminateDebuggee = true;
-    // response.body.supportsFunctionBreakpoints = true;
     response.body.supportsDelayedStackTraceLoading = true;
 
     this.sendResponse(response);
@@ -973,23 +918,6 @@ export class AvmDebugSession extends DebugSession {
     try {
       this.executionResumed();
       this._runtime.step(true);
-      this.sendResponse(response);
-    } catch (e) {
-      this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);
-    }
-  }
-
-  protected stepInTargetsRequest(
-    response: DebugProtocol.StepInTargetsResponse,
-    args: DebugProtocol.StepInTargetsArguments,
-  ) {
-    try {
-      const targets = this._runtime.getStepInTargets(args.frameId);
-      response.body = {
-        targets: targets.map((t) => {
-          return { id: t.id, label: t.label };
-        }),
-      };
       this.sendResponse(response);
     } catch (e) {
       this.sendErrorResponse(response, GENERIC_ERROR_ID, (e as Error).message);

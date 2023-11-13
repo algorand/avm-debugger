@@ -24,11 +24,6 @@ export interface IRuntimeBreakpointLocation {
   column?: number;
 }
 
-interface IRuntimeStepInTargets {
-  id: number;
-  label: string;
-}
-
 interface IRuntimeStack {
   count: number;
   frames: TraceReplayStackFrame[];
@@ -197,10 +192,6 @@ export class AvmRuntime extends EventEmitter {
       } while (targetStackDepth < this.engine.stack.length);
       this.sendEvent(RuntimeEvents.stopOnStep);
     });
-  }
-
-  public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
-    return [];
   }
 
   public stackLength(): number {
