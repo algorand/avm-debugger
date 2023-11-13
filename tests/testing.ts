@@ -8,7 +8,7 @@ import { FileAccessor, ByteArrayMap } from '../src/debugAdapter/utils';
 export const PROJECT_ROOT = path.join(__dirname, '../');
 const DEBUG_CLIENT_PATH = path.join(
   PROJECT_ROOT,
-  'out/src/debugAdapter/debugAdapter.js',
+  'out/src/debugAdapter/cli.js',
 );
 export const DATA_ROOT = path.join(PROJECT_ROOT, 'sampleWorkspace/');
 
@@ -19,6 +19,9 @@ export const testFileAccessor: FileAccessor = {
   },
   async writeFile(path: string, contents: Uint8Array) {
     return await fs.writeFile(path, contents);
+  },
+  basename(p: string): string {
+    return path.basename(p);
   },
 };
 

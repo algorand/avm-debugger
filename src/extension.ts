@@ -3,21 +3,28 @@
 import * as vscode from 'vscode';
 import { activateTealDebug } from './activateMockDebug';
 import {
-  TEALDebugAdapterServerDescriptorFactory,
-  TEALDebugAdapterExecutableFactory,
-} from './descriptorFactory';
+  ServerDebugAdapterFactory,
+  ExecutableDebugAdapterFactory,
+} from './externalDescriptorFactory';
+import { InlineDebugAdapterFactory } from './internalDescriptorFactory';
 
-const runMode: 'external' | 'server' = 'server';
+const runMode: 'external' | 'server' | 'inline' = 'inline';
 
 export function activate(context: vscode.ExtensionContext) {
   switch (runMode) {
     case 'server':
-      activateTealDebug(context, new TEALDebugAdapterServerDescriptorFactory());
+      // run the debug adapter as a server inside the extension and communicate via a socket
+      activateTealDebug(context, new ServerDebugAdapterFactory());
       break;
 
     case 'external':
-    default:
-      activateTealDebug(context, new TEALDebugAdapterExecutableFactory());
+      // run the debug adapter as a separate process
+      activateTealDebug(context, new ExecutableDebugAdapterFactory());
+      break;
+
+    case 'inline':
+      // run the debug adapter inside the extension and directly talk to it
+      activateTealDebug(context, new InlineDebugAdapterFactory());
       break;
   }
 }

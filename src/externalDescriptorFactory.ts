@@ -6,13 +6,8 @@ import { ProviderResult } from 'vscode';
 import { AvmDebugSession } from './debugAdapter/debugRequestHandlers';
 import { workspaceFileAccessor } from './fileAccessor';
 
-export interface TEALDebugAdapterDescriptorFactory
-  extends vscode.DebugAdapterDescriptorFactory {
-  dispose();
-}
-
-export class TEALDebugAdapterExecutableFactory
-  implements TEALDebugAdapterDescriptorFactory
+export class ExecutableDebugAdapterFactory
+  implements vscode.DebugAdapterDescriptorFactory
 {
   createDebugAdapterDescriptor(
     _session: vscode.DebugSession,
@@ -36,13 +31,10 @@ export class TEALDebugAdapterExecutableFactory
     // make VS Code launch the DA executable
     return executable;
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
-  dispose() {}
 }
 
-export class TEALDebugAdapterServerDescriptorFactory
-  implements TEALDebugAdapterDescriptorFactory
+export class ServerDebugAdapterFactory
+  implements vscode.DebugAdapterDescriptorFactory
 {
   private server?: Net.Server;
 

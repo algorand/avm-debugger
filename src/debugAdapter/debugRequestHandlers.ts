@@ -13,7 +13,6 @@ import {
   Breakpoint,
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { basename } from 'path-browserify';
 import { AvmRuntime, IRuntimeBreakpoint } from './avmRuntime';
 import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
@@ -21,7 +20,7 @@ import * as algosdk from 'algosdk';
 import {
   FileAccessor,
   TEALDebuggingAssets,
-  isValidUtf8,
+  utf8Decode,
   limitArray,
 } from './utils';
 
@@ -618,9 +617,8 @@ export class AvmDebugSession extends DebugSession {
           if (v.scope.scope === 'global') {
             const value = state.globalState.getHex(keyHex);
             if (value) {
-              const keyBytes = Buffer.from(keyHex, 'hex');
               toExpand = new algosdk.modelsv2.AvmKeyValue({
-                key: keyBytes,
+                key: algosdk.hexToBytes(keyHex),
                 value,
               });
             } else {
@@ -643,16 +641,15 @@ export class AvmDebugSession extends DebugSession {
                 );
               }
               toExpand = new algosdk.modelsv2.AvmKeyValue({
-                key: Buffer.from(keyHex, 'hex'),
+                key: algosdk.hexToBytes(keyHex),
                 value,
               });
             }
           } else if (v.scope.scope === 'box') {
             const value = state.boxState.getHex(keyHex);
             if (value) {
-              const keyBytes = Buffer.from(keyHex, 'hex');
               toExpand = new algosdk.modelsv2.AvmKeyValue({
-                key: keyBytes,
+                key: algosdk.hexToBytes(keyHex),
                 value,
               });
             } else {
@@ -766,9 +763,8 @@ export class AvmDebugSession extends DebugSession {
             const keyHex = key.slice(2);
             const value = state.globalState.getHex(keyHex);
             if (value) {
-              const keyBytes = Buffer.from(keyHex, 'hex');
               const kv = new algosdk.modelsv2.AvmKeyValue({
-                key: keyBytes,
+                key: algosdk.hexToBytes(keyHex),
                 value,
               });
               rv = this.convertAvmKeyValue(scope, kv);
@@ -799,9 +795,8 @@ export class AvmDebugSession extends DebugSession {
                 const keyHex = key.slice(2);
                 const value = accountState.getHex(keyHex);
                 if (value) {
-                  const keyBytes = Buffer.from(keyHex, 'hex');
                   const kv = new algosdk.modelsv2.AvmKeyValue({
-                    key: keyBytes,
+                    key: algosdk.hexToBytes(keyHex),
                     value,
                   });
                   rv = this.convertAvmKeyValue(scope, kv);
@@ -816,9 +811,8 @@ export class AvmDebugSession extends DebugSession {
             const keyHex = key.slice(2);
             const value = state.boxState.getHex(keyHex);
             if (value) {
-              const keyBytes = Buffer.from(keyHex, 'hex');
               const kv = new algosdk.modelsv2.AvmKeyValue({
-                key: keyBytes,
+                key: algosdk.hexToBytes(keyHex),
                 value,
               });
               rv = this.convertAvmKeyValue(scope, kv);
@@ -972,7 +966,7 @@ export class AvmDebugSession extends DebugSession {
       // byte array
       const bytes = avmValue.bytes || new Uint8Array();
       namedVariables = 2;
-      if (isValidUtf8(bytes)) {
+      if (typeof utf8Decode(bytes) !== 'undefined') {
         namedVariables++;
       }
       indexedVariables = bytes.length;
@@ -1012,19 +1006,26 @@ export class AvmDebugSession extends DebugSession {
     const values: DebugProtocol.Variable[] = [];
 
     if (filter !== 'indexed') {
-      let formats: BufferEncoding[] = ['hex', 'base64'];
-      if (isValidUtf8(bytes)) {
-        formats.push('utf-8');
-      }
-      if (bytes.length === 0) {
-        formats = [];
-      }
+      values.push({
+        name: 'hex',
+        type: 'string',
+        value: algosdk.bytesToHex(bytes),
+        variablesReference: 0,
+      });
 
-      for (const format of formats) {
+      values.push({
+        name: 'base64',
+        type: 'string',
+        value: algosdk.bytesToBase64(bytes),
+        variablesReference: 0,
+      });
+
+      const utf8Value = utf8Decode(bytes);
+      if (typeof utf8Value !== 'undefined') {
         values.push({
-          name: format,
+          name: 'utf-8',
           type: 'string',
-          value: Buffer.from(bytes).toString(format),
+          value: utf8Value,
           variablesReference: 0,
         });
       }
@@ -1065,7 +1066,7 @@ export class AvmDebugSession extends DebugSession {
     avmKeyValue: algosdk.modelsv2.AvmKeyValue,
   ): DebugProtocol.Variable {
     const keyString =
-      '0x' + Buffer.from(avmKeyValue.key || new Uint8Array()).toString('hex');
+      '0x' + algosdk.bytesToHex(avmKeyValue.key || new Uint8Array());
     const value = this.convertAvmValue(
       scope,
       avmKeyValue.value,
@@ -1087,7 +1088,7 @@ export class AvmDebugSession extends DebugSession {
         return [];
       }
       const keyString =
-        '0x' + Buffer.from(avmKeyValue.key || new Uint8Array()).toString('hex');
+        '0x' + algosdk.bytesToHex(avmKeyValue.key || new Uint8Array());
       const keyScope = new AppSpecificStateScope({
         scope: scope.scope,
         appID: scope.appID,
@@ -1159,7 +1160,7 @@ export class AvmDebugSession extends DebugSession {
     if (avmValue.type === 1) {
       // byte array
       const bytes = avmValue.bytes || new Uint8Array();
-      return '0x' + Buffer.from(bytes).toString('hex');
+      return '0x' + algosdk.bytesToHex(bytes);
     }
     // uint64
     const uint = avmValue.uint || 0;
@@ -1168,7 +1169,7 @@ export class AvmDebugSession extends DebugSession {
 
   private createSource(filePath: string): Source {
     return new Source(
-      basename(filePath),
+      this.fileAccessor.basename(filePath),
       this.convertDebuggerPathToClient(filePath),
       undefined,
       undefined,

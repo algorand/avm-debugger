@@ -17,6 +17,16 @@
     {
       "type": "teal",
       "request": "launch",
+      "name": "Debug Sourcemap Test",
+
+      "simulateTraceFile": "${workspaceFolder}/sourcemap-test/simulate-response.json",
+      "programSourcesDescriptionFile": "${workspaceFolder}/sourcemap-test/sources.json",
+
+      "stopOnEntry": true
+    },
+    {
+      "type": "teal",
+      "request": "launch",
       "name": "Debug Stepping Test",
 
       "simulateTraceFile": "${workspaceFolder}/stepping-test/simulate-response.json",

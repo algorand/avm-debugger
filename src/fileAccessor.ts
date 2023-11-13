@@ -13,6 +13,14 @@ export const workspaceFileAccessor: FileAccessor = {
     const uri = pathToUri(path);
     return thenableToPromise(vscode.workspace.fs.writeFile(uri, contents));
   },
+  basename(path: string): string {
+    const uri = pathToUri(path);
+    const lastSlash = uri.path.lastIndexOf('/');
+    if (lastSlash === -1) {
+      return path;
+    }
+    return uri.path.substring(lastSlash + 1);
+  },
 };
 
 function pathToUri(path: string) {

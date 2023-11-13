@@ -33,11 +33,13 @@
     "format": "prettier . --write",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=dist/extension.js",
     "watch": "npm run -S esbuild-base -- --sourcemap --sources-content=false --watch",
-    "build": "npm run -S esbuild-base -- --sourcemap --sources-content=false",
+    "esbuild-web": "esbuild ./src/web-extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=browser --outfile=dist/web-extension.js",
+    "watch-web": "npm run -S esbuild-web -- --sourcemap --sources-content=false --watch",
+    "build": "npm run -S esbuild-base -- --sourcemap --sources-content=false && npm run -S esbuild-web -- --sourcemap --sources-content=false",
     "package": "vsce package",
     "publish": "vsce publish",
     "publish-pre-release": "vsce publish --pre-release",
-    "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify",
+    "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify && npm run -S esbuild-web -- --minify",
     "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false",
     "test:coverage": "nyc npm run test"
   },
@@ -68,10 +70,10 @@
     "@types/vscode": "^1.66.0",
     "@typescript-eslint/eslint-plugin": "^5.62.0",
     "@typescript-eslint/parser": "^5.62.0",
-    "@vscode/debugadapter": "^1.56.0",
-    "@vscode/debugadapter-testsupport": "^1.56.0",
+    "@vscode/debugadapter": "^1.64.0",
+    "@vscode/debugadapter-testsupport": "^1.64.0",
+    "@vscode/vsce": "^2.22.0",
     "await-notify": "^1.0.1",
-    "base64-js": "^1.5.1",
     "esbuild": "^0.14.29",
     "eslint": "^8.52.0",
     "eslint-config-prettier": "^9.0.0",
@@ -79,13 +81,11 @@
     "glob": "^7.2.0",
     "mocha": "^10.2.0",
     "nyc": "^15.1.0",
-    "path-browserify": "^1.0.1",
     "prettier": "^3.0.3",
     "rimraf": "^3.0.2",
     "ts-mocha": "^10.0.0",
     "typescript": "^4.6.3",
-    "url": "^0.11.0",
-    "vsce": "^2.7.0"
+    "url": "^0.11.3"
   },
   "main": "./dist/extension.js",
   "browser": "./dist/web-extension.js",
@@ -127,7 +127,7 @@
           "teal"
         ],
         "label": "TEAL Debug",
-        "program": "./out/src/debugAdapter/debugAdapter.js",
+        "program": "./out/src/debugAdapter/cli.js",
         "runtime": "node",
         "configurationAttributes": {
           "launch": {
