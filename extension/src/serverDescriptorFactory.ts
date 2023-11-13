@@ -3,7 +3,7 @@
 import * as Net from 'net';
 import * as vscode from 'vscode';
 import { ProviderResult } from 'vscode';
-import { AvmDebugSession } from './debugAdapter/debugRequestHandlers';
+import { AvmDebugSession } from '../../src';
 import { workspaceFileAccessor } from './fileAccessor';
 
 export class ServerDebugAdapterFactory

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import { SpawnOptions } from 'child_process';
 import { DebugClient as DebugClientBase } from '@vscode/debugadapter-testsupport';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { ILaunchRequestArguments } from '../src/debugAdapter/debugRequestHandlers';
+import { ILaunchRequestArguments } from '../src/debugSession';
 import {
   ILocation,
   IPartialLocation,

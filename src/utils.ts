@@ -1,12 +1,6 @@
 import * as JSONbigWithoutConfig from 'json-bigint';
 import * as algosdk from 'algosdk';
-
-export interface FileAccessor {
-  isWindows: boolean;
-  readFile(path: string): Promise<Uint8Array>;
-  writeFile(path: string, contents: Uint8Array): Promise<void>;
-  basename(path: string): string;
-}
+import { FileAccessor } from './fileAccessor';
 
 /**
  * Attempt to decode the given data as UTF-8 and return the result if it is

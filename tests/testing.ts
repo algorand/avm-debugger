@@ -2,8 +2,9 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import { DebugClient } from './client';
-import { BasicServer } from '../src/debugAdapter/basicServer';
-import { FileAccessor, ByteArrayMap } from '../src/debugAdapter/utils';
+import { BasicServer } from '../src/basicServer';
+import { FileAccessor } from '../src/fileAccessor';
+import { ByteArrayMap } from '../src/utils';
 
 export const PROJECT_ROOT = path.join(__dirname, '../');
 const DEBUG_CLIENT_PATH = path.join(

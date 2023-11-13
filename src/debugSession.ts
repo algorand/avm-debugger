@@ -13,16 +13,12 @@ import {
   Breakpoint,
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { AvmRuntime, IRuntimeBreakpoint } from './avmRuntime';
+import { AvmRuntime, IRuntimeBreakpoint } from './runtime';
 import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
-import {
-  FileAccessor,
-  AvmDebuggingAssets,
-  utf8Decode,
-  limitArray,
-} from './utils';
+import { FileAccessor } from './fileAccessor';
+import { AvmDebuggingAssets, utf8Decode, limitArray } from './utils';
 
 const GENERIC_ERROR_ID = 9999;
 

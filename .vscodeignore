@@ -3,6 +3,7 @@
 .travis.yml
 appveyor.yml
 src/**/*
+extension/src/**/*
 out/tests/**/*
 **/*.js.map
 build

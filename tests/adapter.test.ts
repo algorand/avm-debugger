@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as algosdk from 'algosdk';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { ByteArrayMap } from '../src/debugAdapter/utils';
+import { ByteArrayMap } from '../src/utils';
 import { TestFixture, assertVariables, advanceTo, DATA_ROOT } from './testing';
 
 describe('Debug Adapter Tests', () => {

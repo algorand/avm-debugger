@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { RuntimeEvents } from './debugRequestHandlers';
+import { RuntimeEvents } from './debugSession';
 import { AppState } from './appState';
 import {
   FrameSourceLocation,
@@ -7,11 +7,8 @@ import {
   TraceReplayEngine,
   TraceReplayStackFrame,
 } from './traceReplayEngine';
-import {
-  FileAccessor,
-  AvmDebuggingAssets,
-  ProgramSourceDescriptor,
-} from './utils';
+import { FileAccessor } from './fileAccessor';
+import { AvmDebuggingAssets, ProgramSourceDescriptor } from './utils';
 
 export interface IRuntimeBreakpoint {
   id: number;
