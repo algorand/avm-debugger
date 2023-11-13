@@ -204,11 +204,6 @@ export class AvmDebugSession extends DebugSession {
     response.body.supportsDelayedStackTraceLoading = true;
 
     this.sendResponse(response);
-
-    // since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
-    // we request them early by sending an 'initializeRequest' to the frontend.
-    // The frontend will end the configuration sequence by calling 'configurationDone' request.
-    this.sendEvent(new InitializedEvent());
   }
 
   /**
@@ -258,8 +253,11 @@ export class AvmDebugSession extends DebugSession {
 
       await this._runtime.onLaunch(debugAssets);
 
-      // wait 1 second until configuration has finished (and configurationDoneRequest has been called)
-      await this._configurationDone.wait(1000);
+      // This indicates that we can now accept configuration requests like 'setBreakpoint'
+      this.sendEvent(new InitializedEvent());
+
+      // Wait until configuration has finished (and configurationDoneRequest has been called)
+      await this._configurationDone.wait(0);
 
       // start the program in the runtime
       this._runtime.start(!!args.stopOnEntry, !args.noDebug);
