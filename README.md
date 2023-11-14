@@ -22,8 +22,8 @@ See [FEATURES.md](FEATURES.md) for a list of features this debugger supports.
 ## Build and Run
 
 1. Clone the repo.
-2. Open the project folder in VS Code.
-3. Press `F5` to build and launch TEAL Debug in another VS Code window.
-4. In the explorer view of the new window open the file `stack-scratch.teal`
-5. Set some breakpoints
-6. From the editor's "Run and Debug" toolbar dropdown menu select "Debug File"
+2. `npm i` to install dependencies.
+3. Open the project folder in VS Code.
+4. From the Run and Debug menu, run the `Extension` configuration to open the AVM Debug extension in another VS Code window.
+5. In the new window, go to its Run and Debug menu to select and launch one of the existing configurations.
+6. You are now in a debugging session of a transaction group. You can step through the transaction group, inspect variables, set breakpoints and more. See [FEATURES.md](FEATURES.md) for more details.
