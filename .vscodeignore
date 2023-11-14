@@ -3,6 +3,7 @@
 .travis.yml
 appveyor.yml
 src/**/*
+extension/src/**/*
 out/tests/**/*
 **/*.js.map
 build
@@ -12,3 +13,4 @@ tsconfig.json
 out
 sampleWebWorkerWorkspace
 sampleWorkspace
+images
