@@ -1,7 +1,7 @@
 {
   "name": "avm-debug-vscode-extension",
   "displayName": "AVM Debug",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "publisher": "algorand-vscode",
   "description": "Debug extension for developing AVM transactions and smart contracts.",
   "author": {
