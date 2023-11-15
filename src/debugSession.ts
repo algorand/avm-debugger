@@ -93,8 +93,13 @@ export class AvmDebugSession extends DebugSession {
     this._runtime.on(RuntimeEvents.stopOnStep, () => {
       this.sendEvent(new StoppedEvent('step', AvmDebugSession.threadID));
     });
-    this._runtime.on(RuntimeEvents.stopOnBreakpoint, () => {
-      this.sendEvent(new StoppedEvent('breakpoint', AvmDebugSession.threadID));
+    this._runtime.on(RuntimeEvents.stopOnBreakpoint, (breakpointID: number) => {
+      const event = new StoppedEvent(
+        'breakpoint',
+        AvmDebugSession.threadID,
+      ) as DebugProtocol.StoppedEvent;
+      event.body.hitBreakpointIds = [breakpointID];
+      this.sendEvent(event);
     });
     this._runtime.on(RuntimeEvents.stopOnException, (message) => {
       this.sendEvent(

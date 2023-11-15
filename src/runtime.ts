@@ -301,7 +301,7 @@ export class AvmRuntime extends EventEmitter {
       );
       if (bps.length !== 0) {
         // send 'stopped' event
-        this.sendEvent(RuntimeEvents.stopOnBreakpoint);
+        this.sendEvent(RuntimeEvents.stopOnBreakpoint, bps[0].id);
 
         // the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
         // if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
