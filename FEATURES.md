@@ -10,7 +10,7 @@ Every execution starts with a top level transaction group.
 
 ![A transaction group being debugged](images/transaction%20group.png)
 
-## Step into programs executions
+## Step into program executions
 
 Both LogicSig and application programs associated with transactions can be stepped into. Source maps
 are used to show the original source code.
