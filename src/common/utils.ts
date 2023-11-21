@@ -136,7 +136,7 @@ interface ProgramSourceEntry {
 
 export class ProgramSourceDescriptor {
   public readonly sourcemapFileLocation: string;
-  public readonly sourcemap: algosdk.SourceMap;
+  public readonly sourcemap: algosdk.ProgramSourceMap;
   public readonly hash: Uint8Array;
 
   constructor({
@@ -145,7 +145,7 @@ export class ProgramSourceDescriptor {
     hash,
   }: {
     sourcemapFileLocation: string;
-    sourcemap: algosdk.SourceMap;
+    sourcemap: algosdk.ProgramSourceMap;
     hash: Uint8Array;
   }) {
     this.sourcemapFileLocation = sourcemapFileLocation;
@@ -179,7 +179,7 @@ export class ProgramSourceDescriptor {
       fileAccessor.readFile(sourcemapFileLocation),
       'Could not read source map file',
     );
-    const sourcemap = new algosdk.SourceMap(
+    const sourcemap = new algosdk.ProgramSourceMap(
       JSON.parse(new TextDecoder().decode(rawSourcemap)),
     );
 

@@ -52,7 +52,7 @@
   },
   "dependencies": {
     "@vscode/debugadapter": "^1.64.0",
-    "algosdk": "github:jasonpaulos/js-algorand-sdk#teal-source-map-improvements",
+    "algosdk": "github:algorand/js-algorand-sdk#3.0.0",
     "await-notify": "^1.0.1",
     "json-bigint": "^1.0.0"
   },
