@@ -18,22 +18,23 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/common/index.d.ts",
-      "default": "./dist/common/index.js"
+      "types": "./out/src/common/index.d.ts",
+      "default": "./out/src/common/index.js"
     },
     "./node": {
-      "types": "./dist/node/index.d.ts",
-      "default": "./dist/node/index.js"
+      "types": "./out/src/node/index.d.ts",
+      "default": "./out/src/node/index.js"
     }
   },
   "bin": {
-    "avm-debug": "./dist/cli.js"
+    "avm-debug": "./out/src/cli.js"
   },
   "files": [
-    "dist"
+    "out",
+    "src"
   ],
   "scripts": {
-    "compile": "rimraf out && rimraf dist && tsc -p ./ && cp -R out/src dist",
+    "compile": "rimraf out && tsc -p ./ && rimraf out/tests out/extension",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check-format": "prettier . --check",
