@@ -1,7 +1,5 @@
-'use strict';
-
 import * as vscode from 'vscode';
-import { FileAccessor } from '../../src';
+import { FileAccessor } from '../../src/common';
 
 export const workspaceFileAccessor: FileAccessor = {
   isWindows: typeof process !== 'undefined' && process.platform === 'win32',

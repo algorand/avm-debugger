@@ -1,10 +1,8 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import * as fs from 'fs/promises';
 import { DebugClient } from './client';
-import { BasicServer } from '../src/basicServer';
-import { FileAccessor } from '../src/fileAccessor';
-import { ByteArrayMap } from '../src/utils';
+import { Server, nodeFileAccessor } from '../src/node';
+import { ByteArrayMap } from '../src/common/utils';
 
 export const PROJECT_ROOT = path.join(__dirname, '../');
 const DEBUG_CLIENT_PATH = path.join(
@@ -13,22 +11,9 @@ const DEBUG_CLIENT_PATH = path.join(
 );
 export const DATA_ROOT = path.join(PROJECT_ROOT, 'sampleWorkspace/');
 
-export const testFileAccessor: FileAccessor = {
-  isWindows: typeof process !== 'undefined' && process.platform === 'win32',
-  async readFile(path: string): Promise<Uint8Array> {
-    return await fs.readFile(path);
-  },
-  async writeFile(path: string, contents: Uint8Array) {
-    return await fs.writeFile(path, contents);
-  },
-  basename(p: string): string {
-    return path.basename(p);
-  },
-};
-
 export class TestFixture {
   private _client: DebugClient | undefined;
-  private _server: BasicServer | undefined;
+  private _server: Server | undefined;
 
   public get client(): DebugClient {
     if (!this._client) {
@@ -37,7 +22,7 @@ export class TestFixture {
     return this._client;
   }
 
-  private get server(): BasicServer {
+  private get server(): Server {
     if (!this._server) {
       throw new Error('Not initialized');
     }
@@ -45,7 +30,16 @@ export class TestFixture {
   }
 
   public async init() {
-    this._server = new BasicServer(testFileAccessor);
+    this._server = new Server({
+      fileAccessor: nodeFileAccessor,
+      port: 0,
+      onServerError(err) {
+        throw err;
+      },
+      onSocketError(err) {
+        throw err;
+      },
+    });
 
     this._client = new DebugClient('node', DEBUG_CLIENT_PATH, 'avm');
     await this._client.start(this._server.port());
@@ -68,7 +62,7 @@ export class TestFixture {
 
   public async stop() {
     await this.client.stop();
-    this.server.dispose();
+    this.server.close();
     this._client = undefined;
     this._server = undefined;
   }

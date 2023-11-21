@@ -5,6 +5,7 @@
     "outDir": "out",
     "lib": ["WebWorker", "ES2020"],
     "sourceMap": true,
+    "declaration": true,
     "rootDir": ".",
     "strict": true /* enable all strict type-checking options */,
     /* Additional Checks */

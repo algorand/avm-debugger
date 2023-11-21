@@ -1,5 +1,5 @@
 {
-  "name": "avm-debug",
+  "name": "avm-debug-adapter",
   "version": "0.1.0",
   "description": "Algorand AVM transaction and smart contract debugger using the Debugger Adapter Protocol",
   "author": {
@@ -16,25 +16,40 @@
   "bugs": {
     "url": "https://github.com/algorand/avm-debugger/issues"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/common/index.d.ts",
+      "default": "./dist/common/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "default": "./dist/node/index.js"
+    }
+  },
+  "bin": {
+    "avm-debug": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "rimraf out && rimraf dist && tsc -p ./ && cp -R out/src dist",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check-format": "prettier . --check",
     "format": "prettier . --write",
-    "esbuild-base": "esbuild ./extension/src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=extension/dist/extension.js",
-    "watch": "npm run -S esbuild-base -- --sourcemap --sources-content=false --watch",
-    "esbuild-web": "esbuild ./extension/src/web-extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=browser --outfile=extension/dist/web-extension.js",
-    "watch-web": "npm run -S esbuild-web -- --sourcemap --sources-content=false --watch",
-    "build": "npm run -S esbuild-base -- --sourcemap --sources-content=false && npm run -S esbuild-web -- --sourcemap --sources-content=false",
+    "extension:esbuild-base": "esbuild ./extension/src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=extension/dist/extension.js",
+    "extension:watch": "npm run -S extension:esbuild-base -- --sourcemap --sources-content=false --watch",
+    "extension:esbuild-web": "esbuild ./extension/src/web-extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=browser --outfile=extension/dist/web-extension.js",
+    "extension:watch-web": "npm run -S extension:esbuild-web -- --sourcemap --sources-content=false --watch",
+    "extension:build": "npm run -S extension:esbuild-base -- --sourcemap --sources-content=false && npm run -S extension:esbuild-web -- --sourcemap --sources-content=false",
     "package": "vsce package",
     "publish": "vsce publish",
     "publish-pre-release": "vsce publish --pre-release",
-    "vscode:prepublish": "rimraf dist && npm run -S esbuild-base -- --minify && npm run -S esbuild-web -- --minify",
+    "vscode:prepublish": "rimraf extension/dist && npm run -S esbuild-base -- --minify && npm run -S esbuild-web -- --minify",
     "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false",
     "test:coverage": "nyc npm run test"
   },
-  "main": "./dist/debugAdapter/index.js",
   "dependencies": {
     "@vscode/debugadapter": "^1.64.0",
     "algosdk": "github:jasonpaulos/js-algorand-sdk#teal-source-map-improvements",
@@ -64,23 +79,5 @@
     "ts-mocha": "^10.0.0",
     "typescript": "^4.6.3",
     "url": "^0.11.3"
-  },
-  "nyc": {
-    "extends": "@istanbuljs/nyc-config-typescript",
-    "check-coverage": true,
-    "all": true,
-    "include": [
-      "src/**/!(*.test.*).[tj]s?(x)"
-    ],
-    "exclude": [
-      "src/_tests_/**/*.*"
-    ],
-    "reporter": [
-      "html",
-      "lcov",
-      "text",
-      "text-summary"
-    ],
-    "report-dir": "coverage"
   }
 }

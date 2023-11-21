@@ -1,8 +1,6 @@
-'use strict';
-
 import * as vscode from 'vscode';
 import { ProviderResult } from 'vscode';
-import { AvmDebugSession } from '../../src';
+import { AvmDebugSession } from '../../src/common';
 import { workspaceFileAccessor } from './fileAccessor';
 
 export class InlineDebugAdapterFactory
