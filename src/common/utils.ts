@@ -1,5 +1,5 @@
 import * as JSONbigWithoutConfig from 'json-bigint';
-import * as algosdk from 'algosdk';
+import * as algosdk from '../../algosdk';
 import { FileAccessor } from './fileAccessor';
 
 /**

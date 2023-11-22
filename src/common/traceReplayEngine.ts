@@ -1,4 +1,4 @@
-import * as algosdk from 'algosdk';
+import * as algosdk from '../../algosdk';
 import { AppState } from './appState';
 import {
   ByteArrayMap,

@@ -16,7 +16,7 @@ import { DebugProtocol } from '@vscode/debugprotocol';
 import { AvmRuntime, IRuntimeBreakpoint } from './runtime';
 import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
-import * as algosdk from 'algosdk';
+import * as algosdk from '../../algosdk';
 import { FileAccessor } from './fileAccessor';
 import { AvmDebuggingAssets, utf8Decode, limitArray } from './utils';
 

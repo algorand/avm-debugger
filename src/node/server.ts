@@ -7,13 +7,11 @@ export class Server {
   constructor({
     fileAccessor,
     port,
-    ready,
     onSocketError,
     onServerError,
   }: {
     fileAccessor: FileAccessor;
     port: number;
-    ready?: () => void;
     onSocketError: (err: Error) => void;
     onServerError: (err: Error) => void;
   }) {
@@ -22,9 +20,6 @@ export class Server {
       session.setRunAsServer(true);
       session.start(socket, socket);
       socket.on('error', onSocketError);
-      if (ready) {
-        ready();
-      }
     }).listen(port);
     this.server.on('error', onServerError);
   }

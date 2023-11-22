@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import * as algosdk from 'algosdk';
+import * as algosdk from '../algosdk';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ByteArrayMap } from '../src/common/utils';
 import { TestFixture, assertVariables, advanceTo, DATA_ROOT } from './testing';

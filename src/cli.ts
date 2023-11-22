@@ -35,21 +35,18 @@ async function run() {
   });
 
   if (typeof port !== 'undefined') {
-    console.log('>> running as a server with port ' + port);
-
     // start a server that creates a new session for every connection request
 
     const server = new Server({
       fileAccessor: nodeFileAccessor,
       port,
-      ready: () => {
-        console.log(`Waiting for debug protocol on ${server.address()}`);
-      },
       onSocketError: (err) => {
         console.error('>> client connection error: ', err);
       },
       onServerError: handleError,
     });
+
+    console.log(`>> running as a server, listening on ${server.port()}`);
 
     process.on('SIGTERM', () => {
       server.close();
