@@ -20,5 +20,5 @@ jobs:
       - run: npm run lint
       - run: npm run check-format
       - run: npm run compile
-      - run: npm run build
+      - run: npm run extension:build
       - run: npm test

@@ -1,5 +1,3 @@
-'use strict';
-
 import * as vscode from 'vscode';
 import { activateAvmDebug } from './activateAvmDebug';
 import { ServerDebugAdapterFactory } from './serverDescriptorFactory';

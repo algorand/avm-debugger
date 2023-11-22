@@ -15,6 +15,51 @@ exist.
 
 This code is based on the [`vscode-mock-debug`](https://github.com/microsoft/vscode-mock-debug) repo.
 
+## Usage
+
+There are multiple ways to invoke the debug adapter exported by this package.
+
+### CLI
+
+The debug adapter can be invoked from the command line using the `avm-debug-adapter` command.
+
+If given no arguments, the debug adapter will use stdin and stdout to process messages.
+
+To run as a server, use the `--port` option, shown below:
+
+```bash
+$ npm exec avm-debug-adapter -- --port=8080
+>> running as a server, listening on 8080
+```
+
+### Programmatically
+
+```typescript
+// AvmDebugSession is a vscode.DebugAdapter implementation and can be imported
+// directly if you don't want to run it as a server.
+import { AvmDebugSession } from 'avm-debug-adapter';
+
+// From node, you can create a debug adapter server like so
+import { Server, nodeFileAccessor } from 'avm-debug-adapter/node';
+
+const server = new Server({
+  fileAccessor: nodeFileAccessor,
+  port: 8080,
+  onSocketError: (err) => {
+    console.error(err);
+  },
+  onServerError: (err) => {
+    console.error(err);
+  },
+});
+
+console.log('Server listening on port ' + server.port());
+
+process.on('SIGTERM', () => {
+  server.close();
+});
+```
+
 ## Features
 
 See [FEATURES.md](FEATURES.md) for a list of features this debugger supports.
