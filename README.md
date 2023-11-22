@@ -29,7 +29,7 @@ To run as a server, use the `--port` option, shown below:
 
 ```bash
 $ npm exec avm-debug-adapter -- --port=8080
->> running as a server with port 8080
+>> running as a server, listening on 8080
 ```
 
 ### Programmatically
