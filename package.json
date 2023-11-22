@@ -45,10 +45,9 @@
     "extension:esbuild-web": "esbuild ./extension/src/web-extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=browser --outfile=extension/dist/web-extension.js",
     "extension:watch-web": "npm run -S extension:esbuild-web -- --sourcemap --sources-content=false --watch",
     "extension:build": "npm run -S extension:esbuild-base -- --sourcemap --sources-content=false && npm run -S extension:esbuild-web -- --sourcemap --sources-content=false",
-    "package": "vsce package",
-    "publish": "vsce publish",
-    "publish-pre-release": "vsce publish --pre-release",
-    "vscode:prepublish": "rimraf extension/dist && npm run -S esbuild-base -- --minify && npm run -S esbuild-web -- --minify",
+    "extension:package": "vsce package",
+    "extension:publish": "vsce publish",
+    "extension:publish-pre-release": "vsce publish --pre-release",
     "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false",
     "test:coverage": "nyc npm run test"
   },
