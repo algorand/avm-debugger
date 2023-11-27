@@ -14,19 +14,19 @@
     },
     {
       "type": "npm",
-      "script": "watch",
+      "script": "extension:watch",
       "group": "build",
       "problemMatcher": "$esbuild-watch",
       "isBackground": true,
-      "label": "npm: watch"
+      "label": "npm: extension watch"
     },
     {
       "type": "npm",
-      "script": "watch-web",
+      "script": "extension:watch-web",
       "group": "build",
       "problemMatcher": "$esbuild-watch",
       "isBackground": true,
-      "label": "npm: watch web"
+      "label": "npm: extension watch web"
     }
   ]
 }

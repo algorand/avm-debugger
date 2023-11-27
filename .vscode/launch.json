@@ -10,7 +10,7 @@
         "${workspaceFolder}/sampleWorkspace"
       ],
       "outFiles": ["${workspaceFolder}/extension/dist/**/*.js"],
-      "preLaunchTask": "npm: watch"
+      "preLaunchTask": "npm: extension watch"
     },
     {
       "name": "Server",
