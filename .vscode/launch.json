@@ -17,8 +17,8 @@
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}",
-      "program": "${workspaceFolder}/src/debugAdapter.ts",
-      "args": ["--server=4711"],
+      "program": "${workspaceFolder}/src/cli.ts",
+      "args": ["--port=4711"],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
       "preLaunchTask": "npm: compile"
     },
