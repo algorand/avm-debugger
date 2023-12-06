@@ -56,8 +56,8 @@
     "check-format": "prettier . --check",
     "format": "prettier . --write",
     "extension:esbuild-base": "esbuild ./extension/src/extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=extension/dist/extension.js",
+    "extension:esbuild-web": "esbuild ./extension/src/web-extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=node --outfile=extension/dist/web-extension.js",
     "extension:watch": "npm run -S extension:esbuild-base -- --sourcemap --sources-content=false --watch",
-    "extension:esbuild-web": "esbuild ./extension/src/web-extension.ts --bundle --tsconfig=./tsconfig.json --external:vscode --format=cjs --platform=browser --outfile=extension/dist/web-extension.js",
     "extension:watch-web": "npm run -S extension:esbuild-web -- --sourcemap --sources-content=false --watch",
     "extension:build": "npm run -S extension:esbuild-base -- --sourcemap --sources-content=false && npm run -S extension:esbuild-web -- --sourcemap --sources-content=false",
     "extension:package": "vsce package",
@@ -98,7 +98,6 @@
     "nyc": "^15.1.0",
     "prettier": "^3.0.3",
     "rimraf": "^3.0.2",
-    "shx": "^0.3.4",
     "ts-mocha": "^10.0.0",
     "typescript": "^4.6.3",
     "url": "^0.11.3"
