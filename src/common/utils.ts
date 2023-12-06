@@ -1,6 +1,7 @@
 import * as JSONbigWithoutConfig from 'json-bigint';
 import * as algosdk from '../../algosdk';
 import { FileAccessor } from './fileAccessor';
+import * as path from 'path';
 
 /**
  * Attempt to decode the given data as UTF-8 and return the result if it is
@@ -122,7 +123,19 @@ export class ByteArrayMap<T> {
 }
 
 function filePathRelativeTo(base: string, filePath: string): string {
-  return new URL(filePath, new URL(base, 'file://')).pathname;
+  // Normalize the base path to convert any Windows backslashes to forward slashes
+  // This is necessary because the URL object expects forward slashes
+  const normalizedBase = base.replace(/\\/g, '/');
+
+  // Create a URL object with the file protocol and the normalized base path
+  const baseURL = new URL(normalizedBase, 'file:///');
+
+  // Resolve the file path against the base URL
+  const fullURL = new URL(filePath, baseURL);
+
+  // Convert the URL back to a local file path
+  // On Windows, this will correctly handle the drive letter and convert to backslashes
+  return path.resolve(fullURL.pathname);
 }
 
 interface ProgramSourceEntryFile {
