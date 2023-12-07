@@ -147,19 +147,23 @@ interface ProgramSourceEntry {
 }
 
 export class ProgramSourceDescriptor {
+  public readonly fileAccessor: FileAccessor;
   public readonly sourcemapFileLocation: string;
   public readonly sourcemap: algosdk.ProgramSourceMap;
   public readonly hash: Uint8Array;
 
   constructor({
+    fileAccessor,
     sourcemapFileLocation,
     sourcemap,
     hash,
   }: {
+    fileAccessor: FileAccessor;
     sourcemapFileLocation: string;
     sourcemap: algosdk.ProgramSourceMap;
     hash: Uint8Array;
   }) {
+    this.fileAccessor = fileAccessor;
     this.sourcemapFileLocation = sourcemapFileLocation;
     this.sourcemap = sourcemap;
     this.hash = hash;
@@ -172,7 +176,7 @@ export class ProgramSourceDescriptor {
   }
 
   public getFullSourcePath(index: number): string {
-    return filePathRelativeTo(
+    return this.fileAccessor.filePathRelativeTo(
       this.sourcemapFileLocation,
       this.sourcemap.sources[index],
     );
@@ -196,6 +200,7 @@ export class ProgramSourceDescriptor {
     );
 
     return new ProgramSourceDescriptor({
+      fileAccessor,
       sourcemapFileLocation,
       sourcemap,
       hash: algosdk.base64ToBytes(data.hash),

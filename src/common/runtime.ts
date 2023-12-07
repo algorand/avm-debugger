@@ -361,7 +361,7 @@ export class AvmRuntime extends EventEmitter {
 
   private normalizePathAndCasing(filePath: string) {
     if (this.fileAccessor.isWindows) {
-      return filePath.replace(/\//g, '\\').toLowerCase();
+      return filePath.replace(/\//g, '\\');
     } else {
       return filePath.replace(/\\/g, '/');
     }

@@ -19,6 +19,19 @@ export const workspaceFileAccessor: FileAccessor = {
     }
     return uri.path.substring(lastSlash + 1);
   },
+  filePathRelativeTo: function (base: string, filePath: string): string {
+    // Create a Uri object with the base path
+    const baseUri = vscode.Uri.file(base);
+
+    // Resolve the file path against the base Uri
+    const fullUri = vscode.Uri.joinPath(baseUri, filePath);
+
+    // Extract the path from the Uri
+    const resolvedPath = fullUri.path;
+
+    // Normalize the resolved path
+    return resolvedPath.replace(/\\/g, '/');
+  },
 };
 
 function pathToUri(path: string) {
