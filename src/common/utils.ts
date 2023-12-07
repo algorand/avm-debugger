@@ -1,7 +1,6 @@
 import * as JSONbigWithoutConfig from 'json-bigint';
 import * as algosdk from '../../algosdk';
 import { FileAccessor } from './fileAccessor';
-import * as path from 'path';
 
 /**
  * Attempt to decode the given data as UTF-8 and return the result if it is
@@ -135,7 +134,7 @@ function filePathRelativeTo(base: string, filePath: string): string {
 
   // Convert the URL back to a local file path
   // On Windows, this will correctly handle the drive letter and convert to backslashes
-  return path.resolve(fullURL.pathname);
+  return fullURL.pathname;
 }
 
 interface ProgramSourceEntryFile {
