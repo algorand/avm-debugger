@@ -63,7 +63,7 @@
     "extension:package": "vsce package",
     "extension:publish": "vsce publish",
     "extension:publish-pre-release": "vsce publish --pre-release",
-    "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false",
+    "test": "ts-mocha -p tsconfig.json 'tests/**/*test.ts' --timeout 30s --diff false",
     "test:coverage": "nyc npm run test"
   },
   "dependencies": {

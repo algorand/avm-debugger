@@ -121,7 +121,7 @@ export class ByteArrayMap<T> {
   }
 }
 
-function filePathRelativeTo(base: string, filePath: string): string {
+export function filePathRelativeTo(base: string, filePath: string): string {
   // Normalize the base path to convert any Windows backslashes to forward slashes
   // This is necessary because the URL object expects forward slashes
   const normalizedBase = base.replace(/\\/g, '/');
