@@ -14,22 +14,14 @@ export const nodeFileAccessor: FileAccessor = {
   basename(path: string): string {
     return basename(path);
   },
-  filePathRelativeTo: function (base: string, filePath: string): string {
-    // Create a URL object with the file protocol and the base path
-    const baseURL = new URL(base, 'file:///');
-
-    // Resolve the file path against the base URL
-    const fullURL = new URL(filePath, baseURL);
-
-    // Convert the URL back to a local file path
-    // On Windows, this will correctly handle the drive letter and convert to backslashes
-    const resolvedPath = path.resolve(fullURL.pathname);
-
-    // Normalize the resolved path to ensure it's in the correct format for the current OS
-    if (this.isWindows) {
-      return resolvedPath.replace(/\//g, '\\');
-    } else {
-      return resolvedPath.replace(/\\/g, '/');
+  filePathRelativeTo(base: string, filePath: string): string {
+    if (path.isAbsolute(filePath)) {
+      return filePath;
     }
+    if (!base.endsWith(path.sep)) {
+      // If the base path is not a directory, get its parent directory
+      base = path.dirname(base);
+    }
+    return path.join(base, filePath);
   },
 };

@@ -121,22 +121,6 @@ export class ByteArrayMap<T> {
   }
 }
 
-export function filePathRelativeTo(base: string, filePath: string): string {
-  // Normalize the base path to convert any Windows backslashes to forward slashes
-  // This is necessary because the URL object expects forward slashes
-  const normalizedBase = base.replace(/\\/g, '/');
-
-  // Create a URL object with the file protocol and the normalized base path
-  const baseURL = new URL(normalizedBase, 'file:///');
-
-  // Resolve the file path against the base URL
-  const fullURL = new URL(filePath, baseURL);
-
-  // Convert the URL back to a local file path
-  // On Windows, this will correctly handle the drive letter and convert to backslashes
-  return fullURL.pathname;
-}
-
 interface ProgramSourceEntryFile {
   'txn-group-sources': ProgramSourceEntry[];
 }
@@ -187,7 +171,7 @@ export class ProgramSourceDescriptor {
     originFile: string,
     data: ProgramSourceEntry,
   ): Promise<ProgramSourceDescriptor> {
-    const sourcemapFileLocation = filePathRelativeTo(
+    const sourcemapFileLocation = fileAccessor.filePathRelativeTo(
       originFile,
       data['sourcemap-location'],
     );
