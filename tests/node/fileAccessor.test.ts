@@ -7,7 +7,7 @@ describe('Node FileAccessor Tests', () => {
     function getExampleAbsolutePathFor(filename: string): string {
       let base: string;
       if (nodeFileAccessor.isWindows) {
-        base = 'C:\\somelongpath\\sources';
+        base = 'c:\\somelongpath\\sources';
       } else {
         base = '/somelongpath/sources';
       }

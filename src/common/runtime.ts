@@ -8,7 +8,11 @@ import {
   TraceReplayStackFrame,
 } from './traceReplayEngine';
 import { FileAccessor } from './fileAccessor';
-import { AvmDebuggingAssets, ProgramSourceDescriptor } from './utils';
+import {
+  AvmDebuggingAssets,
+  ProgramSourceDescriptor,
+  normalizePathAndCasing,
+} from './utils';
 
 export interface IRuntimeBreakpoint {
   id: number;
@@ -249,7 +253,7 @@ export class AvmRuntime extends EventEmitter {
     line: number,
     column?: number,
   ): IRuntimeBreakpoint {
-    path = this.normalizePathAndCasing(path);
+    path = normalizePathAndCasing(this.fileAccessor, path);
 
     const bp: IRuntimeBreakpoint = {
       verified: false,
@@ -269,7 +273,7 @@ export class AvmRuntime extends EventEmitter {
   }
 
   public clearBreakpoints(path: string): void {
-    this.breakPoints.delete(this.normalizePathAndCasing(path));
+    this.breakPoints.delete(normalizePathAndCasing(this.fileAccessor, path));
   }
 
   public getAppStateReferences(): number[] {
@@ -359,14 +363,6 @@ export class AvmRuntime extends EventEmitter {
     }, 0);
   }
 
-  private normalizePathAndCasing(filePath: string) {
-    if (this.fileAccessor.isWindows) {
-      return filePath.replace(/\//g, '\\');
-    } else {
-      return filePath.replace(/\\/g, '/');
-    }
-  }
-
   private isFrameLocationOnBreakpoint(
     location: FrameSourceLocation,
     bp: IRuntimeBreakpointLocation,
@@ -386,7 +382,7 @@ export class AvmRuntime extends EventEmitter {
   private findSourceDescriptorsForPath(
     filePath: string,
   ): Array<{ descriptor: ProgramSourceDescriptor; sourceIndex: number }> {
-    filePath = this.normalizePathAndCasing(filePath);
+    filePath = normalizePathAndCasing(this.fileAccessor, filePath);
 
     const sourceDescriptors: Array<{
       descriptor: ProgramSourceDescriptor;
