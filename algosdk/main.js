@@ -201,4 +201,3 @@ __exportStar(require("./signer"), exports);
 __exportStar(require("./composer"), exports);
 __exportStar(require("./types"), exports);
 __exportStar(require("./abi"), exports);
-//# sourceMappingURL=main.js.map

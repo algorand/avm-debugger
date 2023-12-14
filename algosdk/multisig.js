@@ -390,4 +390,3 @@ function multisigAddress({ version, threshold, addrs, }) {
     return address.fromMultisigPreImgAddrs({ version, threshold, addrs });
 }
 exports.multisigAddress = multisigAddress;
-//# sourceMappingURL=multisig.js.map

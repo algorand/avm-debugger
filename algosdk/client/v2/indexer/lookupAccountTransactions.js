@@ -376,4 +376,3 @@ class LookupAccountTransactions extends jsonrequest_1.default {
     }
 }
 exports.default = LookupAccountTransactions;
-//# sourceMappingURL=lookupAccountTransactions.js.map

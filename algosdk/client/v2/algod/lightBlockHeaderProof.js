@@ -20,4 +20,3 @@ class LightBlockHeaderProof extends jsonrequest_1.default {
     }
 }
 exports.default = LightBlockHeaderProof;
-//# sourceMappingURL=lightBlockHeaderProof.js.map

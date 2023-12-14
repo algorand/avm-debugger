@@ -22,4 +22,3 @@ class StatusAfterBlock extends jsonrequest_1.default {
     }
 }
 exports.default = StatusAfterBlock;
-//# sourceMappingURL=statusAfterBlock.js.map

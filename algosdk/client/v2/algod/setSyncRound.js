@@ -19,4 +19,3 @@ class SetSyncRound extends jsonrequest_1.default {
     }
 }
 exports.default = SetSyncRound;
-//# sourceMappingURL=setSyncRound.js.map

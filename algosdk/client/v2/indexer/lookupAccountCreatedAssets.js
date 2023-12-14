@@ -134,4 +134,3 @@ class LookupAccountCreatedAssets extends jsonrequest_1.default {
     }
 }
 exports.default = LookupAccountCreatedAssets;
-//# sourceMappingURL=lookupAccountCreatedAssets.js.map

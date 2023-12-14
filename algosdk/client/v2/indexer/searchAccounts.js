@@ -262,4 +262,3 @@ class SearchAccounts extends jsonrequest_1.default {
     }
 }
 exports.default = SearchAccounts;
-//# sourceMappingURL=searchAccounts.js.map

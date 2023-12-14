@@ -22,4 +22,3 @@ function abiTypeIsReference(type) {
         type === ABIReferenceType.asset);
 }
 exports.abiTypeIsReference = abiTypeIsReference;
-//# sourceMappingURL=reference.js.map

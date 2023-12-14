@@ -86,4 +86,3 @@ function decode(buffer) {
     return msgpack.decode(buffer);
 }
 exports.decode = decode;
-//# sourceMappingURL=encoding.js.map

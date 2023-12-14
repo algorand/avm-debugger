@@ -15,4 +15,3 @@ class UnsetSyncRound extends jsonrequest_1.default {
     }
 }
 exports.default = UnsetSyncRound;
-//# sourceMappingURL=unsetSyncRound.js.map

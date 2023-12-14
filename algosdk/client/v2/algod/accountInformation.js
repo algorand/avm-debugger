@@ -38,4 +38,3 @@ class AccountInformation extends jsonrequest_1.default {
     }
 }
 exports.default = AccountInformation;
-//# sourceMappingURL=accountInformation.js.map

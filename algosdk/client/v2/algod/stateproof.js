@@ -20,4 +20,3 @@ class StateProof extends jsonrequest_1.default {
     }
 }
 exports.default = StateProof;
-//# sourceMappingURL=stateproof.js.map

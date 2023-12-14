@@ -43,4 +43,3 @@ class LookupApplicationBoxByIDandName extends jsonrequest_1.default {
     }
 }
 exports.default = LookupApplicationBoxByIDandName;
-//# sourceMappingURL=lookupApplicationBoxByIDandName.js.map

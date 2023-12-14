@@ -104,4 +104,3 @@ function assignGroupID(txns, sender) {
 }
 exports.assignGroupID = assignGroupID;
 exports.default = TxGroup;
-//# sourceMappingURL=group.js.map

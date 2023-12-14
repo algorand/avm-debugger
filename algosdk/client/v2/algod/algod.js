@@ -785,4 +785,3 @@ class AlgodClient extends serviceClient_1.default {
     }
 }
 exports.default = AlgodClient;
-//# sourceMappingURL=algod.js.map

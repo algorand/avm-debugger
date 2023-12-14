@@ -17,4 +17,3 @@ class GetLedgerStateDeltaForTransactionGroup extends jsonrequest_1.default {
     }
 }
 exports.default = GetLedgerStateDeltaForTransactionGroup;
-//# sourceMappingURL=getLedgerStateDeltaForTransactionGroup.js.map

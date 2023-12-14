@@ -11,4 +11,3 @@ class Ready extends jsonrequest_1.default {
     }
 }
 exports.default = Ready;
-//# sourceMappingURL=ready.js.map

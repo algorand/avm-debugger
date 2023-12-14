@@ -31,4 +31,3 @@ class LookupTransactionByID extends jsonrequest_1.default {
     }
 }
 exports.default = LookupTransactionByID;
-//# sourceMappingURL=lookupTransactionByID.js.map

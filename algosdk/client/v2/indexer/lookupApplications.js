@@ -59,4 +59,3 @@ class LookupApplications extends jsonrequest_1.default {
     }
 }
 exports.default = LookupApplications;
-//# sourceMappingURL=lookupApplications.js.map

@@ -35,4 +35,3 @@ function bytesToBigInt(bytes) {
     return res;
 }
 exports.bytesToBigInt = bytesToBigInt;
-//# sourceMappingURL=bigint.js.map

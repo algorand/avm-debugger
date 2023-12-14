@@ -3039,4 +3039,3 @@ class TransactionsResponse extends basemodel_1.default {
     }
 }
 exports.TransactionsResponse = TransactionsResponse;
-//# sourceMappingURL=types.js.map

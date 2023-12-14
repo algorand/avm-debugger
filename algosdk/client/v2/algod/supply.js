@@ -16,4 +16,3 @@ class Supply extends jsonrequest_1.default {
     }
 }
 exports.default = Supply;
-//# sourceMappingURL=supply.js.map

@@ -61,4 +61,3 @@ class ServiceClient {
     }
 }
 exports.default = ServiceClient;
-//# sourceMappingURL=serviceClient.js.map

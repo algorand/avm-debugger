@@ -11,4 +11,3 @@ class Genesis extends jsonrequest_1.default {
     }
 }
 exports.default = Genesis;
-//# sourceMappingURL=genesis.js.map

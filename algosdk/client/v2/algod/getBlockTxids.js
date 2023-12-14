@@ -16,4 +16,3 @@ class GetBlockTxids extends jsonrequest_1.default {
     }
 }
 exports.default = GetBlockTxids;
-//# sourceMappingURL=getBlockTxids.js.map

@@ -69,4 +69,3 @@ class SimulateRawTransactions extends jsonrequest_1.default {
     }
 }
 exports.default = SimulateRawTransactions;
-//# sourceMappingURL=simulateTransaction.js.map

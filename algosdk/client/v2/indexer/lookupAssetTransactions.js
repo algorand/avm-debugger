@@ -380,4 +380,3 @@ class LookupAssetTransactions extends jsonrequest_1.default {
     }
 }
 exports.default = LookupAssetTransactions;
-//# sourceMappingURL=lookupAssetTransactions.js.map

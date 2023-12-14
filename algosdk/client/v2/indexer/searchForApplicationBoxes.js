@@ -96,4 +96,3 @@ class SearchForApplicationBoxes extends jsonrequest_1.default {
     }
 }
 exports.default = SearchForApplicationBoxes;
-//# sourceMappingURL=searchForApplicationBoxes.js.map

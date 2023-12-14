@@ -84,4 +84,3 @@ function isTransactionWithSigner(value) {
         typeof value.signer === 'function');
 }
 exports.isTransactionWithSigner = isTransactionWithSigner;
-//# sourceMappingURL=signer.js.map

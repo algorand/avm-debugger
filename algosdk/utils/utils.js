@@ -124,4 +124,3 @@ function isReactNative() {
     return false;
 }
 exports.isReactNative = isReactNative;
-//# sourceMappingURL=utils.js.map

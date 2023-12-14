@@ -58,4 +58,3 @@ class LookupAssetByID extends jsonrequest_1.default {
     }
 }
 exports.default = LookupAssetByID;
-//# sourceMappingURL=lookupAssetByID.js.map

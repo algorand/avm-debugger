@@ -447,4 +447,3 @@ function tealSignFromProgram(sk, data, program) {
     return tealSign(sk, data, contractAddress);
 }
 exports.tealSignFromProgram = tealSignFromProgram;
-//# sourceMappingURL=logicsig.js.map

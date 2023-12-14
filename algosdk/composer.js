@@ -530,4 +530,3 @@ class AtomicTransactionComposer {
 exports.AtomicTransactionComposer = AtomicTransactionComposer;
 /** The maximum size of an atomic transaction group. */
 AtomicTransactionComposer.MAX_GROUP_SIZE = 16;
-//# sourceMappingURL=composer.js.map

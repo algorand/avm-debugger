@@ -143,4 +143,3 @@ class LookupAssetBalances extends jsonrequest_1.default {
     }
 }
 exports.default = LookupAssetBalances;
-//# sourceMappingURL=lookupAssetBalances.js.map

@@ -188,4 +188,3 @@ function masterDerivationKeyToMnemonic(mdk) {
     return mnemonicFromSeed(mdk);
 }
 exports.masterDerivationKeyToMnemonic = masterDerivationKeyToMnemonic;
-//# sourceMappingURL=mnemonic.js.map

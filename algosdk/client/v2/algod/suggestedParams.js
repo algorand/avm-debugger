@@ -25,4 +25,3 @@ class SuggestedParamsRequest extends jsonrequest_1.default {
     }
 }
 exports.default = SuggestedParamsRequest;
-//# sourceMappingURL=suggestedParams.js.map

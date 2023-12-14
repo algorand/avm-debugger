@@ -20,4 +20,3 @@ __exportStar(require("./interface"), exports);
 __exportStar(require("./method"), exports);
 __exportStar(require("./transaction"), exports);
 __exportStar(require("./reference"), exports);
-//# sourceMappingURL=index.js.map

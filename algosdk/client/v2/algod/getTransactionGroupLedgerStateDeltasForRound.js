@@ -22,4 +22,3 @@ class GetTransactionGroupLedgerStateDeltasForRound extends jsonrequest_1.default
     }
 }
 exports.default = GetTransactionGroupLedgerStateDeltasForRound;
-//# sourceMappingURL=getTransactionGroupLedgerStateDeltasForRound.js.map

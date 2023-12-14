@@ -2051,4 +2051,3 @@ const english = [
     'zoo',
 ];
 exports.default = english;
-//# sourceMappingURL=english.js.map

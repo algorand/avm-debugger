@@ -19,4 +19,3 @@ class Versions extends jsonrequest_1.default {
     }
 }
 exports.default = Versions;
-//# sourceMappingURL=versions.js.map

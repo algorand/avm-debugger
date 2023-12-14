@@ -29,4 +29,3 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const algosdk = __importStar(require("./main"));
 __exportStar(require("./main"), exports);
 exports.default = algosdk;
-//# sourceMappingURL=index.js.map

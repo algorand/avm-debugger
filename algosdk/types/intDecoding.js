@@ -26,4 +26,3 @@ var IntDecoding;
     IntDecoding["BIGINT"] = "bigint";
 })(IntDecoding || (IntDecoding = {}));
 exports.default = IntDecoding;
-//# sourceMappingURL=intDecoding.js.map

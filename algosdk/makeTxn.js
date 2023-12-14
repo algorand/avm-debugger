@@ -667,4 +667,3 @@ function makeApplicationCallTxnFromObject(options) {
     return new txnBuilder.Transaction(o);
 }
 exports.makeApplicationCallTxnFromObject = makeApplicationCallTxnFromObject;
-//# sourceMappingURL=makeTxn.js.map

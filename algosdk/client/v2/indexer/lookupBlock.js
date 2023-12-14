@@ -39,4 +39,3 @@ class LookupBlock extends jsonrequest_1.default {
     }
 }
 exports.default = LookupBlock;
-//# sourceMappingURL=lookupBlock.js.map

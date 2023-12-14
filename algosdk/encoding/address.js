@@ -177,4 +177,3 @@ function getApplicationAddress(appID) {
     return encodeAddress(new Uint8Array(hash));
 }
 exports.getApplicationAddress = getApplicationAddress;
-//# sourceMappingURL=address.js.map

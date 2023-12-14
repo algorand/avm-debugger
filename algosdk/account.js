@@ -34,4 +34,3 @@ function generateAccount() {
     return { addr: encodedPk, sk: keys.secretKey };
 }
 exports.default = generateAccount;
-//# sourceMappingURL=account.js.map

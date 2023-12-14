@@ -17,4 +17,3 @@ class GetLedgerStateDelta extends jsonrequest_1.default {
     }
 }
 exports.default = GetLedgerStateDelta;
-//# sourceMappingURL=getLedgerStateDelta.js.map

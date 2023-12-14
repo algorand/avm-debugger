@@ -52,4 +52,3 @@ class Compile extends jsonrequest_1.default {
     }
 }
 exports.default = Compile;
-//# sourceMappingURL=compile.js.map

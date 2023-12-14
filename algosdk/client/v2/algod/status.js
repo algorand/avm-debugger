@@ -16,4 +16,3 @@ class Status extends jsonrequest_1.default {
     }
 }
 exports.default = Status;
-//# sourceMappingURL=status.js.map

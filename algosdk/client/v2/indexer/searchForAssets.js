@@ -171,4 +171,3 @@ class SearchForAssets extends jsonrequest_1.default {
     }
 }
 exports.default = SearchForAssets;
-//# sourceMappingURL=searchForAssets.js.map

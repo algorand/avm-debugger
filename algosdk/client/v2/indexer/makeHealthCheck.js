@@ -26,4 +26,3 @@ class MakeHealthCheck extends jsonrequest_1.default {
     }
 }
 exports.default = MakeHealthCheck;
-//# sourceMappingURL=makeHealthCheck.js.map

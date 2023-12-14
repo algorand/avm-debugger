@@ -418,4 +418,3 @@ class SearchForTransactions extends jsonrequest_1.default {
     }
 }
 exports.default = SearchForTransactions;
-//# sourceMappingURL=searchForTransactions.js.map

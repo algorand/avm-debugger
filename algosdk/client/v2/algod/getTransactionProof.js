@@ -43,4 +43,3 @@ class GetTransactionProof extends jsonrequest_1.default {
     }
 }
 exports.default = GetTransactionProof;
-//# sourceMappingURL=getTransactionProof.js.map

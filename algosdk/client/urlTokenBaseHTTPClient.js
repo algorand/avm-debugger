@@ -143,4 +143,3 @@ class URLTokenBaseHTTPClient {
     }
 }
 exports.URLTokenBaseHTTPClient = URLTokenBaseHTTPClient;
-//# sourceMappingURL=urlTokenBaseHTTPClient.js.map

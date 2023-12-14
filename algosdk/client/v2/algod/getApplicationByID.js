@@ -20,4 +20,3 @@ class GetApplicationByID extends jsonrequest_1.default {
     }
 }
 exports.default = GetApplicationByID;
-//# sourceMappingURL=getApplicationByID.js.map

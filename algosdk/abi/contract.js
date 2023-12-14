@@ -27,4 +27,3 @@ class ABIContract {
     }
 }
 exports.ABIContract = ABIContract;
-//# sourceMappingURL=contract.js.map

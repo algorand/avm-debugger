@@ -17,4 +17,3 @@ Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./transactions"), exports);
 __exportStar(require("./multisig"), exports);
 __exportStar(require("./address"), exports);
-//# sourceMappingURL=index.js.map

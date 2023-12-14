@@ -19,4 +19,3 @@ exports.TransactionType = void 0;
 var base_1 = require("./base");
 Object.defineProperty(exports, "TransactionType", { enumerable: true, get: function () { return base_1.TransactionType; } });
 __exportStar(require("./encoded"), exports);
-//# sourceMappingURL=index.js.map

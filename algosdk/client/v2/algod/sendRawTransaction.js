@@ -58,4 +58,3 @@ class SendRawTransaction extends jsonrequest_1.default {
     }
 }
 exports.default = SendRawTransaction;
-//# sourceMappingURL=sendRawTransaction.js.map

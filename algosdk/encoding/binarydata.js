@@ -83,4 +83,3 @@ function hexToBytes(hexString) {
     return byteArray;
 }
 exports.hexToBytes = hexToBytes;
-//# sourceMappingURL=binarydata.js.map

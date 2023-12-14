@@ -50,4 +50,3 @@ async function waitForConfirmation(client, txid, waitRounds) {
     throw new Error(`Transaction not confirmed after ${waitRounds} rounds`);
 }
 exports.waitForConfirmation = waitForConfirmation;
-//# sourceMappingURL=wait.js.map

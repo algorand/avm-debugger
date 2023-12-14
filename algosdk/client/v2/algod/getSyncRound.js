@@ -16,4 +16,3 @@ class GetSyncRound extends jsonrequest_1.default {
     }
 }
 exports.default = GetSyncRound;
-//# sourceMappingURL=getSyncRound.js.map

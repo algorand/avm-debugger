@@ -42,4 +42,3 @@ class GetApplicationBoxByName extends jsonrequest_1.default {
     }
 }
 exports.default = GetApplicationBoxByName;
-//# sourceMappingURL=getApplicationBoxByName.js.map

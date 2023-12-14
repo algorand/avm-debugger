@@ -126,4 +126,3 @@ function getMethodByName(methods, name) {
     return filteredMethods[0];
 }
 exports.getMethodByName = getMethodByName;
-//# sourceMappingURL=method.js.map

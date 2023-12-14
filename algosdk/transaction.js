@@ -1126,4 +1126,3 @@ function instantiateTxnIfNeeded(transactionLike) {
 }
 exports.instantiateTxnIfNeeded = instantiateTxnIfNeeded;
 exports.default = Transaction;
-//# sourceMappingURL=transaction.js.map

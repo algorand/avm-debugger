@@ -20,4 +20,3 @@ class GetAssetByID extends jsonrequest_1.default {
     }
 }
 exports.default = GetAssetByID;
-//# sourceMappingURL=getAssetByID.js.map

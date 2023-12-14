@@ -19,4 +19,3 @@ class SetBlockOffsetTimestamp extends jsonrequest_1.default {
     }
 }
 exports.default = SetBlockOffsetTimestamp;
-//# sourceMappingURL=setBlockOffsetTimestamp.js.map

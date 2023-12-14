@@ -30,4 +30,3 @@ function translateBoxReferences(references, foreignApps, appIndex) {
     return references.map((bx) => translateBoxReference(bx, foreignApps, appIndex));
 }
 exports.translateBoxReferences = translateBoxReferences;
-//# sourceMappingURL=boxStorage.js.map

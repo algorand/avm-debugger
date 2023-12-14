@@ -56,4 +56,3 @@ class PendingTransactionInformation extends jsonrequest_1.default {
     }
 }
 exports.default = PendingTransactionInformation;
-//# sourceMappingURL=pendingTransactionInformation.js.map

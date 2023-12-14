@@ -25,4 +25,3 @@ function algosToMicroalgos(algos) {
     return Math.round(microalgos);
 }
 exports.algosToMicroalgos = algosToMicroalgos;
-//# sourceMappingURL=convert.js.map

@@ -57,4 +57,3 @@ class GetApplicationBoxes extends jsonrequest_1.default {
     }
 }
 exports.default = GetApplicationBoxes;
-//# sourceMappingURL=getApplicationBoxes.js.map

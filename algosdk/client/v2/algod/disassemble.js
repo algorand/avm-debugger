@@ -48,4 +48,3 @@ class Disassemble extends jsonrequest_1.default {
     }
 }
 exports.default = Disassemble;
-//# sourceMappingURL=disassemble.js.map

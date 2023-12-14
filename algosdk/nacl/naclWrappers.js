@@ -52,4 +52,3 @@ exports.PUBLIC_KEY_LENGTH = tweetnacl_1.default.sign.publicKeyLength;
 exports.SECRET_KEY_LENGTH = tweetnacl_1.default.sign.secretKeyLength;
 exports.HASH_BYTES_LENGTH = 32;
 exports.SEED_BTYES_LENGTH = 32;
-//# sourceMappingURL=naclWrappers.js.map

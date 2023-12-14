@@ -133,4 +133,3 @@ class LookupAccountCreatedApplications extends jsonrequest_1.default {
     }
 }
 exports.default = LookupAccountCreatedApplications;
-//# sourceMappingURL=lookupAccountCreatedApplications.js.map

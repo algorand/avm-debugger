@@ -50,4 +50,3 @@ class Block extends jsonrequest_1.default {
     }
 }
 exports.default = Block;
-//# sourceMappingURL=block.js.map

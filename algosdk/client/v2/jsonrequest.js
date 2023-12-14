@@ -86,4 +86,3 @@ class JSONRequest {
     }
 }
 exports.default = JSONRequest;
-//# sourceMappingURL=jsonrequest.js.map

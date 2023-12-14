@@ -219,4 +219,3 @@ class HTTPClient {
     }
 }
 exports.default = HTTPClient;
-//# sourceMappingURL=client.js.map

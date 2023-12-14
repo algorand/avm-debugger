@@ -392,4 +392,3 @@ class IndexerClient extends serviceClient_1.default {
     }
 }
 exports.default = IndexerClient;
-//# sourceMappingURL=indexer.js.map

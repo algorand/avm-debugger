@@ -23,4 +23,3 @@ class ABIInterface {
     }
 }
 exports.ABIInterface = ABIInterface;
-//# sourceMappingURL=interface.js.map

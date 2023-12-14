@@ -132,4 +132,3 @@ class SearchForApplications extends jsonrequest_1.default {
     }
 }
 exports.default = SearchForApplications;
-//# sourceMappingURL=searchForApplications.js.map

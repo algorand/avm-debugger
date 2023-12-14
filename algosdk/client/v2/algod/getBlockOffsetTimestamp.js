@@ -16,4 +16,3 @@ class GetBlockOffsetTimestamp extends jsonrequest_1.default {
     }
 }
 exports.default = GetBlockOffsetTimestamp;
-//# sourceMappingURL=getBlockOffsetTimestamp.js.map

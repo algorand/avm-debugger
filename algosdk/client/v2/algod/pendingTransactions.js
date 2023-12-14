@@ -55,4 +55,3 @@ class PendingTransactions extends jsonrequest_1.default {
     }
 }
 exports.default = PendingTransactions;
-//# sourceMappingURL=pendingTransactions.js.map

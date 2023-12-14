@@ -49,4 +49,3 @@ function abiCheckTransactionType(type, txn) {
     return txn.type && txn.type.toString() === type.toString();
 }
 exports.abiCheckTransactionType = abiCheckTransactionType;
-//# sourceMappingURL=transaction.js.map

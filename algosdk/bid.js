@@ -79,4 +79,3 @@ class Bid {
     }
 }
 exports.default = Bid;
-//# sourceMappingURL=bid.js.map

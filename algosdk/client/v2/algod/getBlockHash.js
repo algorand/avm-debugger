@@ -19,4 +19,3 @@ class GetBlockHash extends jsonrequest_1.default {
     }
 }
 exports.default = GetBlockHash;
-//# sourceMappingURL=getBlockHash.js.map

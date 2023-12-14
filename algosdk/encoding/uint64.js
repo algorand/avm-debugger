@@ -51,4 +51,3 @@ function decodeUint64(data, decodingMode = 'safe') {
     return num;
 }
 exports.decodeUint64 = decodeUint64;
-//# sourceMappingURL=uint64.js.map

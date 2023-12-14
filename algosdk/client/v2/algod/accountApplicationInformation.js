@@ -22,4 +22,3 @@ class AccountApplicationInformation extends jsonrequest_1.default {
     }
 }
 exports.default = AccountApplicationInformation;
-//# sourceMappingURL=accountApplicationInformation.js.map
