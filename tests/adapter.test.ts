@@ -2,7 +2,8 @@ import * as assert from 'assert';
 import * as path from 'path';
 import * as algosdk from '../algosdk';
 import { DebugProtocol } from '@vscode/debugprotocol';
-import { ByteArrayMap } from '../src/common/utils';
+import { ByteArrayMap, normalizePathAndCasing } from '../src/common/utils';
+import { nodeFileAccessor } from '../src/node';
 import { TestFixture, assertVariables, advanceTo, DATA_ROOT } from './testing';
 
 describe('Debug Adapter Tests', () => {
@@ -209,9 +210,9 @@ describe('Debug Adapter Tests', () => {
 
     describe('setBreakpoints', () => {
       it('should stop on a breakpoint', async () => {
-        const PROGRAM = path.join(
-          DATA_ROOT,
-          'app-state-changes/state-changes.teal',
+        const PROGRAM = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'app-state-changes/state-changes.teal'),
         );
         const BREAKPOINT_LINE = 2;
 
@@ -275,9 +276,9 @@ describe('Debug Adapter Tests', () => {
 
     let expectedStepOverLocationsSlotMachine: Location[];
     {
-      const slotMachinePath = path.join(
-        DATA_ROOT,
-        'slot-machine/slot-machine.teal',
+      const slotMachinePath = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'slot-machine/slot-machine.teal'),
       );
 
       const label5Callsub = [
@@ -484,8 +485,14 @@ describe('Debug Adapter Tests', () => {
           client.assertStoppedLocation('entry', {}),
         ]);
 
-        const lsigPath = path.join(DATA_ROOT, 'stepping-test/lsig.teal');
-        const appPath = path.join(DATA_ROOT, 'stepping-test/app.teal');
+        const lsigPath = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'stepping-test/lsig.teal'),
+        );
+        const appPath = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'stepping-test/app.teal'),
+        );
         const expectedLocations: Location[] = [
           {
             name: 'transaction-group-0.json',
@@ -748,9 +755,9 @@ describe('Debug Adapter Tests', () => {
         );
         const { client } = fixture;
 
-        const programPath = path.join(
-          DATA_ROOT,
-          'slot-machine/slot-machine.teal',
+        const programPath = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'slot-machine/slot-machine.teal'),
         );
 
         await client.hitBreakpoint(
@@ -812,17 +819,17 @@ describe('Debug Adapter Tests', () => {
         );
         const { client } = fixture;
 
-        const fakeRandomPath = path.join(
-          DATA_ROOT,
-          'slot-machine/fake-random.teal',
+        const fakeRandomPath = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'slot-machine/fake-random.teal'),
         );
-        const randomBytePath = path.join(
-          DATA_ROOT,
-          'slot-machine/random-byte.teal',
+        const randomBytePath = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'slot-machine/random-byte.teal'),
         );
-        const slotMachinePath = path.join(
-          DATA_ROOT,
-          'slot-machine/slot-machine.teal',
+        const slotMachinePath = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'slot-machine/slot-machine.teal'),
         );
 
         await client.hitBreakpoint(
@@ -1125,7 +1132,10 @@ describe('Debug Adapter Tests', () => {
         const currentFrame = stackTraceResponse.body.stackFrames[0];
         assert.notStrictEqual(
           currentFrame.source?.path,
-          path.join(DATA_ROOT, 'slot-machine/slot-machine.teal'),
+          normalizePathAndCasing(
+            nodeFileAccessor,
+            path.join(DATA_ROOT, 'slot-machine/slot-machine.teal'),
+          ),
           'Program has step locations beyond expected',
         );
         assert.notStrictEqual(
@@ -1150,7 +1160,10 @@ describe('Debug Adapter Tests', () => {
         );
 
         const { client } = fixture;
-        const PROGRAM = path.join(DATA_ROOT, 'stepping-test/lsig.teal');
+        const PROGRAM = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'stepping-test/lsig.teal'),
+        );
 
         await client.hitBreakpoint(
           { simulateTraceFile, programSourcesDescriptionFile },
@@ -1192,9 +1205,9 @@ describe('Debug Adapter Tests', () => {
         );
         const { client } = fixture;
 
-        const PROGRAM = path.join(
-          DATA_ROOT,
-          'stack-scratch/stack-scratch.teal',
+        const PROGRAM = normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'stack-scratch/stack-scratch.teal'),
         );
 
         await client.hitBreakpoint(
@@ -1307,9 +1320,9 @@ describe('Debug Adapter Tests', () => {
       );
 
       const { client } = fixture;
-      const PROGRAM = path.join(
-        DATA_ROOT,
-        'app-state-changes/state-changes.teal',
+      const PROGRAM = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'app-state-changes/state-changes.teal'),
       );
 
       await client.hitBreakpoint(
@@ -1404,9 +1417,9 @@ describe('Debug Adapter Tests', () => {
       );
 
       const { client } = fixture;
-      const PROGRAM = path.join(
-        DATA_ROOT,
-        'app-state-changes/state-changes.teal',
+      const PROGRAM = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'app-state-changes/state-changes.teal'),
       );
 
       await client.hitBreakpoint(
@@ -1537,9 +1550,9 @@ describe('Debug Adapter Tests', () => {
       );
 
       const { client } = fixture;
-      const PROGRAM = path.join(
-        DATA_ROOT,
-        'app-state-changes/state-changes.teal',
+      const PROGRAM = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'app-state-changes/state-changes.teal'),
       );
 
       await client.hitBreakpoint(
@@ -1630,7 +1643,10 @@ describe('Debug Adapter Tests', () => {
 
     const testSources: SourceInfo[] = [
       {
-        path: path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal'),
+        path: normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal'),
+        ),
         validBreakpoints: [
           { line: 4, column: 1 },
           { line: 4, column: 20 },
@@ -1647,7 +1663,10 @@ describe('Debug Adapter Tests', () => {
         ],
       },
       {
-        path: path.join(DATA_ROOT, 'sourcemap-test/lib.teal'),
+        path: normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'sourcemap-test/lib.teal'),
+        ),
         validBreakpoints: [
           { line: 2, column: 22 },
           { line: 2, column: 26 },
@@ -1808,7 +1827,10 @@ describe('Debug Adapter Tests', () => {
 
       const result = await client.setBreakpointsRequest({
         source: {
-          path: path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal'),
+          path: normalizePathAndCasing(
+            nodeFileAccessor,
+            path.join(DATA_ROOT, 'sourcemap-test/sourcemap-test.teal'),
+          ),
         },
         breakpoints: [
           { line: 0, column: 0 },
@@ -1840,7 +1862,10 @@ describe('Debug Adapter Tests', () => {
       );
       const { client } = fixture;
 
-      const program = path.join(DATA_ROOT, 'errors/inner-app/inner.teal');
+      const program = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/inner-app/inner.teal'),
+      );
 
       await Promise.all([
         client.configurationSequence(),
@@ -1989,7 +2014,10 @@ describe('Debug Adapter Tests', () => {
       // And backwards again
       await client.stepBackRequest({ threadId: 1 });
       await client.assertStoppedLocation('step', {
-        path: path.join(DATA_ROOT, 'errors/inner-app/outer.teal'),
+        path: normalizePathAndCasing(
+          nodeFileAccessor,
+          path.join(DATA_ROOT, 'errors/inner-app/outer.teal'),
+        ),
         line: 12,
         column: 1,
       });
@@ -2020,7 +2048,10 @@ describe('Debug Adapter Tests', () => {
       );
       const { client } = fixture;
 
-      const program = path.join(DATA_ROOT, 'errors/logicsig/lsig-err.teal');
+      const program = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/logicsig/lsig-err.teal'),
+      );
 
       await Promise.all([
         client.configurationSequence(),
@@ -2110,13 +2141,13 @@ describe('Debug Adapter Tests', () => {
       );
       const { client } = fixture;
 
-      const lsigProgram = path.join(
-        DATA_ROOT,
-        'errors/app-from-logicsig/nine.teal',
+      const lsigProgram = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/app-from-logicsig/nine.teal'),
       );
-      const appProgram = path.join(
-        DATA_ROOT,
-        'errors/app-from-logicsig/inner.teal',
+      const appProgram = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/app-from-logicsig/inner.teal'),
       );
 
       await client.hitBreakpoint(
@@ -2164,13 +2195,13 @@ describe('Debug Adapter Tests', () => {
       );
       const { client } = fixture;
 
-      const lsigProgram = path.join(
-        DATA_ROOT,
-        'errors/logicsig-after-error/nine.teal',
+      const lsigProgram = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/logicsig-after-error/nine.teal'),
       );
-      const appProgram = path.join(
-        DATA_ROOT,
-        'errors/logicsig-after-error/inner.teal',
+      const appProgram = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/logicsig-after-error/inner.teal'),
       );
 
       await Promise.all([

@@ -15,6 +15,24 @@ export function utf8Decode(data: Uint8Array): string | undefined {
   }
 }
 
+/**
+ * Normalize the given file path.
+ *
+ * On Windows, this will replace all forward slashes with backslashes and convert
+ * the path to lowercase, since Windows paths are case-insensitive.
+ */
+export function normalizePathAndCasing(
+  fileAccessor: FileAccessor,
+  filePath: string,
+) {
+  if (fileAccessor.isWindows) {
+    // Normalize path to lowercase on Windows, since it is case-insensitive
+    return filePath.replace(/\//g, '\\').toLowerCase();
+  } else {
+    return filePath.replace(/\\/g, '/');
+  }
+}
+
 export function limitArray<T>(
   array: Array<T>,
   start?: number,
@@ -121,10 +139,6 @@ export class ByteArrayMap<T> {
   }
 }
 
-function filePathRelativeTo(base: string, filePath: string): string {
-  return new URL(filePath, new URL(base, 'file://')).pathname;
-}
-
 interface ProgramSourceEntryFile {
   'txn-group-sources': ProgramSourceEntry[];
 }
@@ -135,19 +149,23 @@ interface ProgramSourceEntry {
 }
 
 export class ProgramSourceDescriptor {
+  public readonly fileAccessor: FileAccessor;
   public readonly sourcemapFileLocation: string;
   public readonly sourcemap: algosdk.ProgramSourceMap;
   public readonly hash: Uint8Array;
 
   constructor({
+    fileAccessor,
     sourcemapFileLocation,
     sourcemap,
     hash,
   }: {
+    fileAccessor: FileAccessor;
     sourcemapFileLocation: string;
     sourcemap: algosdk.ProgramSourceMap;
     hash: Uint8Array;
   }) {
+    this.fileAccessor = fileAccessor;
     this.sourcemapFileLocation = sourcemapFileLocation;
     this.sourcemap = sourcemap;
     this.hash = hash;
@@ -160,9 +178,12 @@ export class ProgramSourceDescriptor {
   }
 
   public getFullSourcePath(index: number): string {
-    return filePathRelativeTo(
-      this.sourcemapFileLocation,
-      this.sourcemap.sources[index],
+    return normalizePathAndCasing(
+      this.fileAccessor,
+      this.fileAccessor.filePathRelativeTo(
+        this.sourcemapFileLocation,
+        this.sourcemap.sources[index],
+      ),
     );
   }
 
@@ -171,9 +192,9 @@ export class ProgramSourceDescriptor {
     originFile: string,
     data: ProgramSourceEntry,
   ): Promise<ProgramSourceDescriptor> {
-    const sourcemapFileLocation = filePathRelativeTo(
-      originFile,
-      data['sourcemap-location'],
+    const sourcemapFileLocation = normalizePathAndCasing(
+      fileAccessor,
+      fileAccessor.filePathRelativeTo(originFile, data['sourcemap-location']),
     );
     const rawSourcemap = await prefixPotentialError(
       fileAccessor.readFile(sourcemapFileLocation),
@@ -184,6 +205,7 @@ export class ProgramSourceDescriptor {
     );
 
     return new ProgramSourceDescriptor({
+      fileAccessor,
       sourcemapFileLocation,
       sourcemap,
       hash: algosdk.base64ToBytes(data.hash),

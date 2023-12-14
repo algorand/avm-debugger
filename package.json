@@ -50,7 +50,7 @@
     "src"
   ],
   "scripts": {
-    "compile": "rimraf out && tsc -p ./ && cp -R algosdk out/algosdk",
+    "compile": "shx rm -rf out && tsc -p ./ && shx cp -R algosdk out/algosdk",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check-format": "prettier . --check",
@@ -63,7 +63,7 @@
     "extension:package": "vsce package",
     "extension:publish": "vsce publish",
     "extension:publish-pre-release": "vsce publish --pre-release",
-    "test": "ts-mocha -p tsconfig.json tests/*test.ts --timeout 30s --diff false",
+    "test": "ts-mocha -p tsconfig.json 'tests/**/*test.ts' --timeout 30s --diff false",
     "test:coverage": "nyc npm run test"
   },
   "dependencies": {
@@ -97,7 +97,7 @@
     "mocha": "^10.2.0",
     "nyc": "^15.1.0",
     "prettier": "^3.0.3",
-    "rimraf": "^3.0.2",
+    "shx": "^0.3.4",
     "ts-mocha": "^10.0.0",
     "typescript": "^4.6.3",
     "url": "^0.11.3"

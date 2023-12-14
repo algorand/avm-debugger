@@ -13,5 +13,8 @@
   "git.branchProtectionPrompt": "alwaysCommitToNewBranch",
 
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+
+  "mochaExplorer.files": "tests/**/*.ts",
+  "mochaExplorer.require": "ts-node/register"
 }
