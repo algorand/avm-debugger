@@ -1722,7 +1722,7 @@ describe('Debug Adapter Tests', () => {
         assert.strictEqual(stoppedEvent.body.reason, 'step');
       }
 
-      // Ensure that the local state at the beginning does not show changes that will happen later
+      // Ensure that the box state at the beginning does not show changes that will happen later
       await assertVariables(client, {
         pc: 6,
         stack: [1058],
