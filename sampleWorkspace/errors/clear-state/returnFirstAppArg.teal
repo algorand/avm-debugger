@@ -1,0 +1,19 @@
+#pragma version 6
+byte "counter"
+dup
+app_global_get
+int 1
++
+app_global_put
+txn ApplicationID
+bz end
+txn OnCompletion
+int OptIn
+==
+bnz end
+txn ApplicationArgs 0
+btoi
+return
+end:
+int 1
+return

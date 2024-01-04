@@ -143,6 +143,26 @@
       "programSourcesDescriptionFile": "${workspaceFolder}/errors/logicsig-after-error/sources.json",
 
       "stopOnEntry": true
+    },
+    {
+      "type": "avm",
+      "request": "launch",
+      "name": "Clear State Rejection",
+
+      "simulateTraceFile": "${workspaceFolder}/errors/clear-state/rejection-response.json",
+      "programSourcesDescriptionFile": "${workspaceFolder}/errors/clear-state/sources.json",
+
+      "stopOnEntry": true
+    },
+    {
+      "type": "avm",
+      "request": "launch",
+      "name": "Clear State Error",
+
+      "simulateTraceFile": "${workspaceFolder}/errors/clear-state/error-response.json",
+      "programSourcesDescriptionFile": "${workspaceFolder}/errors/clear-state/sources.json",
+
+      "stopOnEntry": true
     }
   ]
 }
