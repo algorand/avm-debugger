@@ -183,9 +183,7 @@
             "txn": {
               "sig": "z0+Cs2OxDfDUTVEJkQjiYMOaG8EBEQe6iY1QtusTZ7/4pX1dcYBmC9aWKDTdA4bjvjCLFzEc7bp4J9V3E/rvCA==",
               "txn": {
-                "apaa": [
-                  "AAAAAAAAAAA="
-                ],
+                "apaa": ["AAAAAAAAAAA="],
                 "apan": 3,
                 "apid": 1001,
                 "fee": 1000,
