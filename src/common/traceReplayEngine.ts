@@ -863,13 +863,33 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     if (this.index < this.programTrace.length) {
       this.state.pc = Number(this.programTrace[this.index].pc);
       this.handledInnerTxns = false;
-    } else if (
-      this.failureInfo &&
-      pathsEqual(this.txnPath.slice(1), this.failureInfo.path)
-    ) {
-      // If there's an error, show it at the end of execution
-      this.blockingException = new ExceptionInfo(this.failureInfo.message);
-      return this.blockingException;
+    } else {
+      if (this.programType === 'clear state' && this.trace.clearStateRollback) {
+        // If there's a rollback, reset the app state to the initial state
+        this.engine.currentAppState.set(
+          this.currentAppID()!,
+          this.initialAppState!.clone(),
+        );
+        // Don't return the clear state error here, failureInfo takes precedence
+      }
+
+      if (
+        this.failureInfo &&
+        pathsEqual(this.txnPath.slice(1), this.failureInfo.path)
+      ) {
+        // If there's an error, show it at the end of execution
+        this.blockingException = new ExceptionInfo(this.failureInfo.message);
+        return this.blockingException;
+      }
+
+      if (this.programType === 'clear state' && this.trace.clearStateRollback) {
+        // Show error message for clear state rollback. This is NOT a blocking error.
+        if (typeof this.trace.clearStateRollbackError !== 'undefined') {
+          return new ExceptionInfo(this.trace.clearStateRollbackError);
+        }
+        // If no specific error message, show a generic one (this is what happens during rejection)
+        return new ExceptionInfo('Clear state program did not succeed');
+      }
     }
   }
 

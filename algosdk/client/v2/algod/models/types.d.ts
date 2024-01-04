@@ -2317,6 +2317,17 @@ export declare class SimulationTransactionExecTrace extends BaseModel {
      */
     clearStateProgramTrace?: SimulationOpcodeTraceUnit[];
     /**
+     * If true, indicates that the clear state program failed and any persistent state
+     * changes it produced should be reverted once the program exits.
+     */
+    clearStateRollback?: boolean;
+    /**
+     * The error message explaining why the clear state program failed. This field will
+     * only be populated if clear-state-rollback is true and the failure was due to an
+     * execution error.
+     */
+    clearStateRollbackError?: string;
+    /**
      * An array of SimulationTransactionExecTrace representing the execution trace of
      * any inner transactions executed.
      */
@@ -2335,16 +2346,23 @@ export declare class SimulationTransactionExecTrace extends BaseModel {
      * @param approvalProgramTrace - Program trace that contains a trace of opcode effects in an approval program.
      * @param clearStateProgramHash - SHA512_256 hash digest of the clear state program executed in transaction.
      * @param clearStateProgramTrace - Program trace that contains a trace of opcode effects in a clear state program.
+     * @param clearStateRollback - If true, indicates that the clear state program failed and any persistent state
+     * changes it produced should be reverted once the program exits.
+     * @param clearStateRollbackError - The error message explaining why the clear state program failed. This field will
+     * only be populated if clear-state-rollback is true and the failure was due to an
+     * execution error.
      * @param innerTrace - An array of SimulationTransactionExecTrace representing the execution trace of
      * any inner transactions executed.
      * @param logicSigHash - SHA512_256 hash digest of the logic sig executed in transaction.
      * @param logicSigTrace - Program trace that contains a trace of opcode effects in a logic sig.
      */
-    constructor({ approvalProgramHash, approvalProgramTrace, clearStateProgramHash, clearStateProgramTrace, innerTrace, logicSigHash, logicSigTrace, }: {
+    constructor({ approvalProgramHash, approvalProgramTrace, clearStateProgramHash, clearStateProgramTrace, clearStateRollback, clearStateRollbackError, innerTrace, logicSigHash, logicSigTrace, }: {
         approvalProgramHash?: string | Uint8Array;
         approvalProgramTrace?: SimulationOpcodeTraceUnit[];
         clearStateProgramHash?: string | Uint8Array;
         clearStateProgramTrace?: SimulationOpcodeTraceUnit[];
+        clearStateRollback?: boolean;
+        clearStateRollbackError?: string;
         innerTrace?: SimulationTransactionExecTrace[];
         logicSigHash?: string | Uint8Array;
         logicSigTrace?: SimulationOpcodeTraceUnit[];

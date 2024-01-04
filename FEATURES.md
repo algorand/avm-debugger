@@ -47,6 +47,10 @@ Execution errors will be reported by the debugger. Since any error stops the exe
 transaction group, the debugger will not allow you to advance after an error. You can however step
 backwards to inspect what happened prior to the error.
 
+> Note: There are a special class of errors which do not stop the execution of a transaction group.
+> These are errors or rejections that occur in a clear state program. The debugger will still show
+> these errors, and it will allow you to continue execution over them.
+
 ![An error in the debugger](images/error.png)
 
 ## Inspect program state

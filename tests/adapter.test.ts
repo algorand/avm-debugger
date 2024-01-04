@@ -2347,5 +2347,219 @@ describe('Debug Adapter Tests', () => {
         stoppedEvent.body.text,
       );
     });
+
+    it('should correctly report a clear state error', async () => {
+      const simulateTraceFile = path.join(
+        DATA_ROOT,
+        'errors/clear-state/error-response.json',
+      );
+      const programSourcesDescriptionFile = path.join(
+        DATA_ROOT,
+        'errors/clear-state/sources.json',
+      );
+      const { client } = fixture;
+
+      const program = normalizePathAndCasing(
+        nodeFileAccessor,
+        path.join(DATA_ROOT, 'errors/clear-state/returnFirstAppArg.teal'),
+      );
+
+      await Promise.all([
+        client.configurationSequence(),
+        client.launch({
+          simulateTraceFile,
+          programSourcesDescriptionFile,
+          stopOnEntry: true,
+        }),
+        client.assertStoppedLocation('entry', {}),
+      ]);
+
+      await client.continueRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 14,
+        column: 1,
+      });
+      const stoppedEvent = await client.waitForStop();
+      assert.ok(
+        stoppedEvent.body.text?.includes('invalid ApplicationArgs index 0'),
+        stoppedEvent.body.text,
+      );
+      await assertVariables(client, {
+        pc: 30,
+        stack: [],
+        apps: [
+          {
+            appID: 1001,
+            globalState: new ByteArrayMap([[Buffer.from('counter'), 4]]),
+          },
+        ],
+      });
+
+      // Can walk backwards
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: program,
+        line: 14,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 30, // We're at the same pc, but before the opcode ran, hence the global state value
+        stack: [],
+        apps: [
+          {
+            appID: 1001,
+            globalState: new ByteArrayMap([[Buffer.from('counter'), 5]]),
+          },
+        ],
+      });
+
+      // And backwards again
+      await client.stepBackRequest({ threadId: 1 });
+      await client.assertStoppedLocation('step', {
+        path: program,
+        line: 13,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 27,
+        stack: [0],
+        apps: [
+          {
+            appID: 1001,
+            globalState: new ByteArrayMap([[Buffer.from('counter'), 5]]),
+          },
+        ],
+      });
+
+      // Walking forward hits the error again
+      await client.continueRequest({ threadId: 1 });
+      await client.assertStoppedLocation('exception', {
+        path: program,
+        line: 14,
+        column: 1,
+      });
+      await assertVariables(client, {
+        pc: 30,
+        stack: [],
+        apps: [
+          {
+            appID: 1001,
+            globalState: new ByteArrayMap([[Buffer.from('counter'), 4]]),
+          },
+        ],
+      });
+
+      // Can walk forward, but it ends the program in this example
+      await client.nextRequest({ threadId: 1 });
+      await fixture.client.waitForEvent('terminated');
+    });
+  });
+
+  it('should correctly report a clear state rejection', async () => {
+    const simulateTraceFile = path.join(
+      DATA_ROOT,
+      'errors/clear-state/rejection-response.json',
+    );
+    const programSourcesDescriptionFile = path.join(
+      DATA_ROOT,
+      'errors/clear-state/sources.json',
+    );
+    const { client } = fixture;
+
+    const program = normalizePathAndCasing(
+      nodeFileAccessor,
+      path.join(DATA_ROOT, 'errors/clear-state/returnFirstAppArg.teal'),
+    );
+
+    await Promise.all([
+      client.configurationSequence(),
+      client.launch({
+        simulateTraceFile,
+        programSourcesDescriptionFile,
+        stopOnEntry: true,
+      }),
+      client.assertStoppedLocation('entry', {}),
+    ]);
+
+    await client.continueRequest({ threadId: 1 });
+    await client.assertStoppedLocation('exception', {
+      path: program,
+      line: 16,
+      column: 1,
+    });
+    const stoppedEvent = await client.waitForStop();
+    assert.ok(
+      stoppedEvent.body.text?.includes('Clear state program did not succeed'), // Our error message
+      stoppedEvent.body.text,
+    );
+    await assertVariables(client, {
+      pc: 34,
+      stack: [0],
+      apps: [
+        {
+          appID: 1001,
+          globalState: new ByteArrayMap([[Buffer.from('counter'), 4]]),
+        },
+      ],
+    });
+
+    // Can walk backwards
+    await client.stepBackRequest({ threadId: 1 });
+    await client.assertStoppedLocation('step', {
+      path: program,
+      line: 16,
+      column: 1,
+    });
+    await assertVariables(client, {
+      pc: 34, // We're at the same pc, but before the opcode ran, hence the global state value
+      stack: [0],
+      apps: [
+        {
+          appID: 1001,
+          globalState: new ByteArrayMap([[Buffer.from('counter'), 5]]),
+        },
+      ],
+    });
+
+    // And backwards again
+    await client.stepBackRequest({ threadId: 1 });
+    await client.assertStoppedLocation('step', {
+      path: program,
+      line: 15,
+      column: 1,
+    });
+    await assertVariables(client, {
+      pc: 33,
+      stack: [new Uint8Array(8)],
+      apps: [
+        {
+          appID: 1001,
+          globalState: new ByteArrayMap([[Buffer.from('counter'), 5]]),
+        },
+      ],
+    });
+
+    // Walking forward hits the error again
+    await client.continueRequest({ threadId: 1 });
+    await client.assertStoppedLocation('exception', {
+      path: program,
+      line: 16,
+      column: 1,
+    });
+    await assertVariables(client, {
+      pc: 34,
+      stack: [0],
+      apps: [
+        {
+          appID: 1001,
+          globalState: new ByteArrayMap([[Buffer.from('counter'), 4]]),
+        },
+      ],
+    });
+
+    // Can walk forward, but it ends the program in this example
+    await client.nextRequest({ threadId: 1 });
+    await fixture.client.waitForEvent('terminated');
   });
 });
