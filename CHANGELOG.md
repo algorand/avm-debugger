@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fix app state not being properly reset when stepping back ([#19](https://github.com/algorand/avm-debugger/pull/19))
+- Properly handle failing clear state programs ([#20](https://github.com/algorand/avm-debugger/pull/20))
 
 ## [0.1.2] - 2023-12-14
 
