@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2024-01-04
+
 ### Fixed
 
 - Fix app state not being properly reset when stepping back ([#19](https://github.com/algorand/avm-debugger/pull/19))
@@ -31,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial AVM debug adapter implementation.
 
-[unreleased]: https://github.com/algorand/avm-debugger/compare/v0.1.2...HEAD
+[unreleased]: https://github.com/algorand/avm-debugger/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.3
 [0.1.2]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.2
 [0.1.1]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.1
 [0.1.0]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.0
