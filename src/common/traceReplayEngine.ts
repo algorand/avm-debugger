@@ -981,7 +981,7 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     if (typeof this.initialAppState !== 'undefined') {
       this.engine.currentAppState.set(
         this.currentAppID()!,
-        this.initialAppState,
+        this.initialAppState.clone(),
       );
     }
   }

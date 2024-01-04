@@ -1402,6 +1402,35 @@ describe('Debug Adapter Tests', () => {
           },
         ],
       });
+
+      // Move to the end of the program
+      await advanceTo(client, { program: PROGRAM, line: 46 });
+
+      // Step back to the beginning of the program
+      for (;;) {
+        const stackTraceResponse = await client.stackTraceRequest({
+          threadId: 1,
+        });
+        const currentFrame = stackTraceResponse.body.stackFrames[0];
+        if (currentFrame.source?.path === PROGRAM && currentFrame.line === 3) {
+          break;
+        }
+        await client.stepBackRequest({ threadId: 1 });
+        const stoppedEvent = await client.waitForStop();
+        assert.strictEqual(stoppedEvent.body.reason, 'step');
+      }
+
+      // Ensure that the global state at the beginning does not show changes that will happen later
+      await assertVariables(client, {
+        pc: 6,
+        stack: [1050],
+        apps: [
+          {
+            appID: 1050,
+            globalState: new ByteArrayMap(),
+          },
+        ],
+      });
     });
   });
 
@@ -1535,6 +1564,41 @@ describe('Debug Adapter Tests', () => {
           },
         ],
       });
+
+      // Move to the end of the program
+      await advanceTo(client, { program: PROGRAM, line: 46 });
+
+      // Step back to the beginning of the program
+      for (;;) {
+        const stackTraceResponse = await client.stackTraceRequest({
+          threadId: 1,
+        });
+        const currentFrame = stackTraceResponse.body.stackFrames[0];
+        if (currentFrame.source?.path === PROGRAM && currentFrame.line === 3) {
+          break;
+        }
+        await client.stepBackRequest({ threadId: 1 });
+        const stoppedEvent = await client.waitForStop();
+        assert.strictEqual(stoppedEvent.body.reason, 'step');
+      }
+
+      // Ensure that the local state at the beginning does not show changes that will happen later
+      await assertVariables(client, {
+        pc: 6,
+        stack: [1054],
+        apps: [
+          {
+            appID: 1054,
+            localState: [
+              {
+                account:
+                  'YGOSQB6R5IVQDJHJUHTIZAJNWNIT7VLMWHXFWY2H5HMWPK7QOPXHELNPJ4',
+                state: new ByteArrayMap(),
+              },
+            ],
+          },
+        ],
+      });
     });
   });
 
@@ -1629,6 +1693,43 @@ describe('Debug Adapter Tests', () => {
               [Buffer.from('box-key-1'), Buffer.from('box-value-1')],
               [Buffer.from('box-key-2'), Buffer.from('')],
             ]),
+          },
+        ],
+      });
+
+      // Clear breakpoints -- must do because the 'next' request is on line 46 as well
+      await client.setBreakpointsRequest({
+        source: { path: PROGRAM },
+        breakpoints: [],
+      });
+
+      // Move to the end of the program
+      await client.nextRequest({ threadId: 1 });
+      const stoppedEvent = await client.waitForStop();
+      assert.strictEqual(stoppedEvent.body.reason, 'step');
+
+      // Step back to the beginning of the program
+      for (;;) {
+        const stackTraceResponse = await client.stackTraceRequest({
+          threadId: 1,
+        });
+        const currentFrame = stackTraceResponse.body.stackFrames[0];
+        if (currentFrame.source?.path === PROGRAM && currentFrame.line === 3) {
+          break;
+        }
+        await client.stepBackRequest({ threadId: 1 });
+        const stoppedEvent = await client.waitForStop();
+        assert.strictEqual(stoppedEvent.body.reason, 'step');
+      }
+
+      // Ensure that the local state at the beginning does not show changes that will happen later
+      await assertVariables(client, {
+        pc: 6,
+        stack: [1058],
+        apps: [
+          {
+            appID: 1058,
+            boxState: new ByteArrayMap(),
           },
         ],
       });
