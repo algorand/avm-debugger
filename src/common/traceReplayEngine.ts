@@ -1,4 +1,4 @@
-import * as algosdk from '../../algosdk';
+import * as algosdk from 'algosdk';
 import { AppState } from './appState';
 import {
   ByteArrayMap,
@@ -45,8 +45,8 @@ export class TraceReplayEngine {
     ProgramSourceDescriptor | undefined
   > = new ByteArrayMap();
 
-  public initialAppState = new Map<number, AppState>();
-  public currentAppState = new Map<number, AppState>();
+  public initialAppState = new Map<bigint, AppState>();
+  public currentAppState = new Map<bigint, AppState>();
 
   public stack: TraceReplayStackFrame[] = [];
 
@@ -65,7 +65,7 @@ export class TraceReplayEngine {
     for (const initialAppState of simulateResponse.initialStates
       ?.appInitialStates || []) {
       this.initialAppState.set(
-        Number(initialAppState.id),
+        initialAppState.id,
         AppState.fromAppInitialState(initialAppState),
       );
     }
@@ -141,11 +141,10 @@ export class TraceReplayEngine {
           programHash,
         );
 
-        let appID = txnInfo.applicationIndex || txnInfo.txn.txn.apid;
-        if (typeof appID === 'undefined') {
+        const appID =
+          txnInfo.applicationIndex || txnInfo.txn.txn.applicationCall?.appIndex;
+        if (typeof appID === 'undefined' || appID === BigInt(0)) {
           throw new Error(`No appID for txn at path ${path}`);
-        } else {
-          appID = Number(appID);
         }
 
         let initialAppState = this.initialAppState.get(appID);
@@ -157,9 +156,12 @@ export class TraceReplayEngine {
         for (const opcode of opcodes) {
           for (const stateChange of opcode.stateChanges || []) {
             if (stateChange.appStateType === 'l') {
-              const account = stateChange.account!;
-              if (!initialAppState.localState.has(account)) {
-                initialAppState.localState.set(account, new ByteArrayMap());
+              const accountAddress = stateChange.account!.toString();
+              if (!initialAppState.localState.has(accountAddress)) {
+                initialAppState.localState.set(
+                  accountAddress,
+                  new ByteArrayMap(),
+                );
               }
             }
           }
@@ -297,13 +299,15 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
 
   public sourceFile(): FrameSource {
     const individualGroups = this.response.txnGroups.map((group) =>
-      group.txnResults.map(
-        (txnResult) => txnResult.txnResult.get_obj_for_encoding().txn,
+      group.txnResults.map((txnResult) =>
+        algosdk.parseJSON(algosdk.encodeJSON(txnResult.txnResult.txn), {
+          intDecoding: algosdk.IntDecoding.BIGINT,
+        }),
       ),
     );
     return {
       name: `transaction-groups.json`,
-      content: JSON.stringify(individualGroups, null, 2),
+      content: algosdk.stringifyJSON(individualGroups, undefined, 2),
       contentMimeType: 'application/json',
     };
   }
@@ -312,15 +316,19 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
     let lineOffset = 1; // For opening bracket
     for (let i = 0; i < this.index; i++) {
       for (const txnResult of this.response.txnGroups[i].txnResults) {
-        const displayedTxn = txnResult.txnResult.get_obj_for_encoding().txn;
-        lineOffset += JSON.stringify(displayedTxn, null, 2).split('\n').length;
+        const displayedTxn = txnResult.txnResult.txn;
+        lineOffset += algosdk
+          .encodeJSON(displayedTxn, { space: 2 })
+          .split('\n').length;
       }
       lineOffset += 2; // For opening and closing brackets
     }
     let lineCount = 2; // For opening and closing brackets
     for (const txnResult of this.response.txnGroups[this.index].txnResults) {
-      const displayedTxn = txnResult.txnResult.get_obj_for_encoding().txn;
-      lineCount += JSON.stringify(displayedTxn, null, 2).split('\n').length;
+      const displayedTxn = txnResult.txnResult.txn;
+      lineCount += algosdk
+        .encodeJSON(displayedTxn, { space: 2 })
+        .split('\n').length;
     }
     return {
       line: lineOffset,
@@ -442,16 +450,20 @@ export class TransactionGroupStackFrame extends TraceReplayStackFrame {
       }
     }
 
-    const individualTxns = this.txnInfos.map(
-      (txnInfo) => txnInfo.get_obj_for_encoding().txn,
+    const individualTxns = this.txnInfos.map((txnInfo) =>
+      algosdk.parseJSON(algosdk.encodeJSON(txnInfo.txn), {
+        intDecoding: algosdk.IntDecoding.BIGINT,
+      }),
     );
-    this.sourceContent = JSON.stringify(individualTxns, null, 2);
+    this.sourceContent = algosdk.stringifyJSON(individualTxns, undefined, 2);
     let lineOffset = 1; // For opening bracket
     for (let i = 0; i < this.txnInfos.length; i++) {
       const txnInfo = this.txnInfos[i];
       const txnTrace = this.txnTraces[i];
-      const displayedTxn = txnInfo.get_obj_for_encoding().txn;
-      const displayTxnLines = JSON.stringify(displayedTxn, null, 2).split('\n');
+      const displayedTxn = txnInfo.txn;
+      const displayTxnLines = algosdk
+        .encodeJSON(displayedTxn, { space: 2 })
+        .split('\n');
       const sourceLocation: TransactionSourceLocation = {
         line: lineOffset,
         lineEnd: lineOffset + displayTxnLines.length,
@@ -737,24 +749,23 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
       this.programType === 'logic sig' &&
       typeof this.txnInfo.txn.lsig !== 'undefined'
     ) {
-      let lsigBytes = this.txnInfo.txn.lsig.l;
-      if (typeof lsigBytes === 'string') {
-        lsigBytes = algosdk.base64ToBytes(lsigBytes);
-      }
+      const lsigBytes = this.txnInfo.txn.lsig.logic;
       const lsigAccount = new algosdk.LogicSigAccount(lsigBytes);
-      this.logicSigAddress = lsigAccount.address();
+      this.logicSigAddress = lsigAccount.address().toString();
     }
   }
 
-  public currentAppID(): number | undefined {
+  public currentAppID(): bigint | undefined {
     if (this.programType === 'logic sig') {
       return undefined;
     }
-    if (typeof this.txnInfo.txn.txn.apid !== 'undefined') {
-      return Number(this.txnInfo.txn.txn.apid);
+    if (this.txnInfo.txn.txn.applicationCall?.appIndex) {
+      // Ignore 0 and undefined
+      return this.txnInfo.txn.txn.applicationCall.appIndex;
     }
-    if (typeof this.txnInfo.applicationIndex !== 'undefined') {
-      return Number(this.txnInfo.applicationIndex);
+    if (this.txnInfo.applicationIndex) {
+      // Ignore 0 and undefined
+      return this.txnInfo.applicationIndex;
     }
     return undefined;
   }
@@ -916,7 +927,7 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
         throw new Error(`Invalid scratch slot ${slot}`);
       }
       const newValue = scratchWrite.newValue;
-      if (Number(newValue.type) === 2 && !newValue.uint) {
+      if (newValue.type === 2 && !newValue.uint) {
         // When setting to 0, delete the entry, since 0 is the default.
         this.state.scratch.delete(slot);
       } else {
@@ -946,16 +957,20 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
             break;
           case 'l':
             if (stateChange.operation === 'w') {
-              const accountState = state.localState.get(stateChange.account!);
+              const accountState = state.localState.get(
+                stateChange.account!.toString(),
+              );
               if (!accountState) {
                 const newState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
                 newState.set(stateChange.key, stateChange.newValue!);
-                state.localState.set(stateChange.account!, newState);
+                state.localState.set(stateChange.account!.toString(), newState);
               } else {
                 accountState.set(stateChange.key, stateChange.newValue!);
               }
             } else if (stateChange.operation === 'd') {
-              const accountState = state.localState.get(stateChange.account!);
+              const accountState = state.localState.get(
+                stateChange.account!.toString(),
+              );
               if (accountState) {
                 accountState.delete(stateChange.key);
               }

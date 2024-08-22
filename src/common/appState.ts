@@ -1,4 +1,4 @@
-import * as algosdk from '../../algosdk';
+import * as algosdk from 'algosdk';
 import { ByteArrayMap } from './utils';
 
 export class AppState {
@@ -60,7 +60,7 @@ export class AppState {
       for (const { key, value } of appLocal.kvs) {
         map.set(key, value);
       }
-      state.localState.set(appLocal.account!, map);
+      state.localState.set(appLocal.account!.toString(), map);
     }
 
     if (initialState.appBoxes) {

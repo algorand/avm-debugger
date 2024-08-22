@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import * as algosdk from '../algosdk';
+import * as algosdk from 'algosdk';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { ByteArrayMap, normalizePathAndCasing } from '../src/common/utils';
 import { nodeFileAccessor } from '../src/node';
@@ -254,12 +254,12 @@ describe('Debug Adapter Tests', () => {
       },
       {
         name: 'transaction-group-0.json',
-        line: 19,
+        line: 29,
         column: 0,
       },
       {
         name: 'transaction-group-0.json',
-        line: 23,
+        line: 19,
         column: 0,
       },
       {
@@ -269,7 +269,7 @@ describe('Debug Adapter Tests', () => {
       },
       {
         name: 'transaction-group-0.json',
-        line: 34,
+        line: 45,
         column: 0,
       },
     ];
@@ -506,7 +506,7 @@ describe('Debug Adapter Tests', () => {
           },
           {
             name: 'transaction-group-0.json',
-            line: 19,
+            line: 29,
             column: 0,
           },
           {
@@ -553,7 +553,7 @@ describe('Debug Adapter Tests', () => {
           },
           {
             name: 'transaction-group-0.json',
-            line: 23,
+            line: 19,
             column: 0,
           },
           {
@@ -617,7 +617,7 @@ describe('Debug Adapter Tests', () => {
           },
           {
             name: 'transaction-group-0.json',
-            line: 34,
+            line: 45,
             column: 0,
           },
           {
