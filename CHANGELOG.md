@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2024-08-22
+
+### Changed
+
+- Remove vendored `algosdk` dependency in favor of `algosdk@3.0.0-beta.1`. Due to a difference in how the newer `algosdk` produces JSON encoded `SignedTransaction` objects, the JSON key order for transactions have changed slightly, but their content remains the same.
+
 ## [0.1.3] - 2024-01-04
 
 ### Fixed
@@ -33,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial AVM debug adapter implementation.
 
-[unreleased]: https://github.com/algorand/avm-debugger/compare/v0.1.3...HEAD
+[unreleased]: https://github.com/algorand/avm-debugger/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/algorand/avm-debugger/releases/tag/v0.2.0
 [0.1.3]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.3
 [0.1.2]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.2
 [0.1.1]: https://github.com/algorand/avm-debugger/releases/tag/v0.1.1
