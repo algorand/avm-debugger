@@ -16,7 +16,7 @@ import { DebugProtocol } from '@vscode/debugprotocol';
 import { AvmRuntime, IRuntimeBreakpoint } from './runtime';
 import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
-import * as algosdk from '../../algosdk';
+import * as algosdk from 'algosdk';
 import { FileAccessor } from './fileAccessor';
 import { AvmDebuggingAssets, utf8Decode, limitArray } from './utils';
 
@@ -1202,12 +1202,12 @@ class ProgramStateScope {
 type OnChainStateScope = 'chain' | 'app';
 
 class AppStateScope {
-  constructor(public readonly appID: number) {}
+  constructor(public readonly appID: bigint) {}
 }
 
 class AppSpecificStateScope {
   public readonly scope: 'global' | 'local' | 'box';
-  public readonly appID: number;
+  public readonly appID: bigint;
   public readonly account?: string;
   public readonly property?: 'key' | 'value';
 
@@ -1218,7 +1218,7 @@ class AppSpecificStateScope {
     property,
   }: {
     scope: 'global' | 'local' | 'box';
-    appID: number;
+    appID: bigint;
     account?: string;
     property?: 'key' | 'value';
   }) {
@@ -1290,7 +1290,7 @@ function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
     }
     const newScope = new AppSpecificStateScope({
       scope: scope,
-      appID: parseInt(appMatches[1], 10),
+      appID: BigInt(appMatches[1]),
       property,
     });
     return [newScope, appMatches[3]];
@@ -1328,7 +1328,7 @@ function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
     }
     const newScope = new AppSpecificStateScope({
       scope: 'local',
-      appID: parseInt(appLocalMatches[1], 10),
+      appID: BigInt(appLocalMatches[1]),
       account,
       property,
     });

@@ -276,12 +276,12 @@ export class AvmRuntime extends EventEmitter {
     this.breakPoints.delete(normalizePathAndCasing(this.fileAccessor, path));
   }
 
-  public getAppStateReferences(): number[] {
+  public getAppStateReferences(): bigint[] {
     const apps = Array.from(this.engine.initialAppState.keys());
-    return apps.sort((a, b) => a - b);
+    return apps.sort((a, b) => Number(a - b));
   }
 
-  public getAppLocalStateAccounts(appID: number): string[] {
+  public getAppLocalStateAccounts(appID: bigint): string[] {
     const app = this.engine.initialAppState.get(appID);
     if (!app) {
       return [];
@@ -290,7 +290,7 @@ export class AvmRuntime extends EventEmitter {
     return accounts.sort();
   }
 
-  public getAppState(appID: number): AppState {
+  public getAppState(appID: bigint): AppState {
     return this.engine.currentAppState.get(appID) || new AppState();
   }
 

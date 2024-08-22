@@ -1,5 +1,4 @@
-import * as JSONbigWithoutConfig from 'json-bigint';
-import * as algosdk from '../../algosdk';
+import * as algosdk from 'algosdk';
 import { FileAccessor } from './fileAccessor';
 
 /**
@@ -57,19 +56,6 @@ export function limitArray<T>(
     count = array.length - start;
   }
   return array.slice(start, start + count);
-}
-
-// TODO: replace with algosdk.parseJson once it is available in v3
-export function parseJsonWithBigints(json: string): any {
-  // Our tests wants this lib to be imported as `import * as JSONbig from 'json-bigint';`,
-  // but running this in vscode wants it to be imported as `import JSONbig from 'json-bigint';`.
-  // This is a hack to allow both.
-  let target = JSONbigWithoutConfig;
-  if (target.default) {
-    target = target.default;
-  }
-  const JSON_BIG = target({ useNativeBigInt: true, strict: true });
-  return JSON_BIG.parse(json);
 }
 
 export class ByteArrayMap<T> {
@@ -290,21 +276,22 @@ export class AvmDebuggingAssets {
     );
     let simulateResponse: algosdk.modelsv2.SimulateResponse;
     try {
-      const jsonPased = parseJsonWithBigints(
-        new TextDecoder().decode(rawSimulateTrace),
+      simulateResponse = algosdk.decodeJSON(
+        algosdk.bytesToString(rawSimulateTrace),
+        algosdk.modelsv2.SimulateResponse,
       );
-      if (jsonPased.version !== 2) {
+      if (simulateResponse.version !== 2) {
         throw new Error(
-          `Unsupported simulate response version: ${jsonPased.version}`,
+          `Unsupported simulate response version: ${simulateResponse.version}`,
         );
       }
-      simulateResponse =
-        algosdk.modelsv2.SimulateResponse.from_obj_for_encoding(jsonPased);
       if (!simulateResponse.execTraceConfig?.enable) {
         throw new Error(
-          `Simulate response does not contain trace data. execTraceConfig=${JSON.stringify(
-            simulateResponse.execTraceConfig,
-          )}`,
+          `Simulate response does not contain trace data. execTraceConfig=${
+            simulateResponse.execTraceConfig
+              ? algosdk.encodeJSON(simulateResponse.execTraceConfig)
+              : simulateResponse.execTraceConfig
+          }`,
         );
       }
     } catch (e) {
