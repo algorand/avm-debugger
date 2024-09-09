@@ -234,7 +234,8 @@ export class ProgramSourceDescriptorRegistry {
         !jsonSourcesDescription['txn-group-sources'].every(
           (entry) =>
             typeof entry.hash === 'string' &&
-            typeof entry['sourcemap-location'] === 'string',
+            (typeof entry['sourcemap-location'] === 'string' ||
+              entry['sourcemap-location'] === null),
         )
       ) {
         throw new Error('Invalid program sources description file');
@@ -245,14 +246,15 @@ export class ProgramSourceDescriptorRegistry {
         `Could not parse program sources description file from '${programSourcesDescriptionFilePath}': ${err.message}`,
       );
     }
-    const programSources = jsonSourcesDescription['txn-group-sources'].map(
-      (source) =>
+    const programSources = jsonSourcesDescription['txn-group-sources']
+      .filter((source) => source['sourcemap-location'] !== null)
+      .map((source) =>
         ProgramSourceDescriptor.fromJSONObj(
           fileAccessor,
           programSourcesDescriptionFilePath,
           source,
         ),
-    );
+      );
     return new ProgramSourceDescriptorRegistry({
       txnGroupSources: await Promise.all(programSources),
     });
