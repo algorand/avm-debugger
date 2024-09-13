@@ -49,6 +49,7 @@
     "src"
   ],
   "scripts": {
+    "prepare": "npm run compile",
     "compile": "shx rm -rf out && tsc -p ./",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
