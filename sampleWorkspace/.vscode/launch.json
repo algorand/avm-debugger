@@ -163,6 +163,16 @@
       "programSourcesDescriptionFile": "${workspaceFolder}/errors/clear-state/sources.json",
 
       "stopOnEntry": true
-    }
+    },
+    {
+      "type": "avm",
+      "request": "launch",
+      "name": "Debug Puya",
+
+      "simulateTraceFile": "${workspaceFolder}/puya/contract.simulate.json",
+      "programSourcesDescriptionFile": "${workspaceFolder}/puya/sources.json",
+
+      "stopOnEntry": true
+    },
   ]
 }

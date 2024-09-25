@@ -134,28 +134,40 @@ interface ProgramSourceEntry {
   'sourcemap-location': string;
 }
 
-export class ProgramSourceDescriptor {
-  public readonly fileAccessor: FileAccessor;
-  public readonly sourcemapFileLocation: string;
-  public readonly sourcemap: algosdk.ProgramSourceMap;
-  public readonly hash: Uint8Array;
+export interface PCEvent {
+  subroutine?: string;
+  block?: string;
+  op?: string;
+  callsub?: string;
+  retsub?: boolean;
+  params?: Record<string, string>;
+  stack_in?: string[];
+  stack_out?: string[];
+  defined_out?: string[];
+}
 
-  constructor({
-    fileAccessor,
-    sourcemapFileLocation,
-    sourcemap,
-    hash,
-  }: {
-    fileAccessor: FileAccessor;
-    sourcemapFileLocation: string;
-    sourcemap: algosdk.ProgramSourceMap;
-    hash: Uint8Array;
-  }) {
-    this.fileAccessor = fileAccessor;
-    this.sourcemapFileLocation = sourcemapFileLocation;
-    this.sourcemap = sourcemap;
-    this.hash = hash;
-  }
+interface ISourceMap {
+  version: number;
+  sources: string[];
+  names: string[];
+  mappings: string;
+  op_pc_offset?: number;
+  pc_events?: Record<string, PCEvent>;
+}
+
+interface IPcLocationMap {
+  sources: string[];
+  getLocationForPc(pc: number): algosdk.SourceLocation | undefined;
+}
+
+export class ProgramSourceDescriptor {
+  constructor(
+    public readonly fileAccessor: FileAccessor,
+    public readonly sourcemapFileLocation: string,
+    public readonly json: ISourceMap,
+    public readonly sourcemap: IPcLocationMap,
+    public readonly hash: Uint8Array,
+  ) {}
 
   public sourcePaths(): string[] {
     return this.sourcemap.sources.map((_, index) =>
@@ -186,16 +198,16 @@ export class ProgramSourceDescriptor {
       fileAccessor.readFile(sourcemapFileLocation),
       'Could not read source map file',
     );
-    const sourcemap = new algosdk.ProgramSourceMap(
-      JSON.parse(new TextDecoder().decode(rawSourcemap)),
-    );
+    const json = JSON.parse(new TextDecoder().decode(rawSourcemap));
+    const sourcemap = new algosdk.ProgramSourceMap(json);
 
-    return new ProgramSourceDescriptor({
+    return new ProgramSourceDescriptor(
       fileAccessor,
       sourcemapFileLocation,
+      json,
       sourcemap,
-      hash: algosdk.base64ToBytes(data.hash),
-    });
+      algosdk.base64ToBytes(data.hash),
+    );
   }
 }
 

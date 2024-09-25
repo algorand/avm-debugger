@@ -14,7 +14,6 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { AvmRuntime, IRuntimeBreakpoint } from './runtime';
-import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
 import { FileAccessor } from './fileAccessor';
@@ -64,6 +63,7 @@ export class AvmDebugSession extends DebugSession {
     | AppStateScope
     | AppSpecificStateScope
     | AvmValueReference
+    | PuyaScope
   >();
 
   private _sourceHandles = new Handles<{
@@ -327,60 +327,54 @@ export class AvmDebugSession extends DebugSession {
     args: DebugProtocol.StackTraceArguments,
   ): void {
     try {
-      const startFrame =
-        typeof args.startFrame === 'number' ? args.startFrame : 0;
-      const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+      const startFrame = args.startFrame || 0;
+      const maxLevels = args.levels || 1000;
 
-      // The runtime has a stack where the latest call is the last element. We need to return the
-      // reverse of that.
-      const adjustedEndFrame = this._runtime.stackLength() - startFrame;
-      const adjustedStartFrame = Math.max(0, adjustedEndFrame - maxLevels);
-
-      const stk = this._runtime.stack(adjustedStartFrame, adjustedEndFrame);
+      const stk = this._runtime.stack(startFrame, startFrame + maxLevels);
 
       const stackFramesForResponse = stk.frames.map((frame, index) => {
-        const id = adjustedStartFrame + index;
+        const id = startFrame + index;
 
-        const sourceFile = frame.sourceFile();
-        let source: Source | undefined = undefined;
-        if (typeof sourceFile.path !== 'undefined') {
-          source = this.createSource(sourceFile.path);
-        } else if (typeof sourceFile.content !== 'undefined') {
-          source = this.createSourceWithContent(
-            sourceFile.name,
-            sourceFile.content,
-            sourceFile.contentMimeType,
+        const protocolFrame = new StackFrame(id, frame.name);
+        const sourceFile = frame.source;
+        if (sourceFile !== undefined) {
+          let source: Source | undefined = undefined;
+
+          if (typeof sourceFile.path !== 'undefined') {
+            source = this.createSource(sourceFile.path);
+          } else if (typeof sourceFile.content !== 'undefined') {
+            source = this.createSourceWithContent(
+              sourceFile.name,
+              sourceFile.content,
+              sourceFile.contentMimeType,
+            );
+          }
+          protocolFrame.source = source;
+          protocolFrame.line = this.convertDebuggerLineToClient(
+            sourceFile.line,
           );
+
+          if (typeof sourceFile.column !== 'undefined') {
+            protocolFrame.column = this.convertDebuggerColumnToClient(
+              sourceFile.column,
+            );
+          }
+          if (typeof sourceFile.endLine !== 'undefined') {
+            protocolFrame.endLine = this.convertDebuggerLineToClient(
+              sourceFile.endLine,
+            );
+          }
+          if (typeof sourceFile.endColumn !== 'undefined') {
+            protocolFrame.endColumn = this.convertDebuggerColumnToClient(
+              sourceFile.endColumn,
+            );
+          }
         }
-
-        const sourceLocation = frame.sourceLocation();
-        const line = this.convertDebuggerLineToClient(sourceLocation.line);
-        const column =
-          typeof sourceLocation.column !== 'undefined'
-            ? this.convertDebuggerColumnToClient(sourceLocation.column)
-            : undefined;
-
-        const protocolFrame = new StackFrame(
-          id,
-          frame.name(),
-          source,
-          line,
-          column,
-        );
-        protocolFrame.endLine =
-          typeof sourceLocation.endLine !== 'undefined'
-            ? this.convertDebuggerLineToClient(sourceLocation.endLine)
-            : undefined;
-        protocolFrame.endColumn =
-          typeof sourceLocation.endColumn !== 'undefined'
-            ? this.convertDebuggerColumnToClient(sourceLocation.endColumn)
-            : undefined;
         return protocolFrame;
       });
-      stackFramesForResponse.reverse();
 
       response.body = {
-        totalFrames: stk.count,
+        totalFrames: stk.total,
         stackFrames: stackFramesForResponse,
         // 4 options for 'totalFrames':
         //omit totalFrames property: 	// VS Code has to probe/guess. Should result in a max. of two requests
@@ -402,11 +396,19 @@ export class AvmDebugSession extends DebugSession {
       const frame = this._runtime.getStackFrame(args.frameId);
 
       const scopes: DebugProtocol.Scope[] = [];
-      if (typeof frame !== 'undefined') {
-        if (frame instanceof ProgramStackFrame) {
+      if (frame !== undefined) {
+        scopes.push(
+          new Scope(
+            'Locals',
+            this._variableHandles.create(new PuyaScope(args.frameId)),
+            false,
+          ),
+        );
+        const state = this.getProgramState(args.frameId);
+        if (state !== undefined) {
           const programScope = new ProgramStateScope(args.frameId);
           let scopeName = 'Program State';
-          const appID = frame.currentAppID();
+          const appID = state.appId;
           if (typeof appID !== 'undefined') {
             scopeName += `: App ${appID}`;
           }
@@ -445,29 +447,31 @@ export class AvmDebugSession extends DebugSession {
       const v = this._variableHandles.get(args.variablesReference);
 
       if (v instanceof ProgramStateScope) {
-        const frame = this._runtime.getStackFrame(v.frameIndex);
-        if (!frame || !(frame instanceof ProgramStackFrame)) {
-          throw new Error(`Unexpected frame: ${typeof frame}`);
-        }
-        const programState = frame.state;
-
-        if (typeof v.specificState === 'undefined') {
+        const state = this.getProgramState(v.frameIndex);
+        if (v.specificState === 'program') {
           variables = [
             {
               name: 'pc',
-              value: programState.pc.toString(),
+              value: state.pc.toString(),
               type: 'uint64',
               variablesReference: 0,
               evaluateName: 'pc',
             },
             {
+              name: 'op',
+              value: state.op || 'unknown',
+              type: 'string',
+              variablesReference: 0,
+              evaluateName: 'op',
+            },
+            {
               name: 'stack',
-              value: programState.stack.length === 0 ? '[]' : '[...]',
+              value: state.stack.length === 0 ? '[]' : '[...]',
               type: 'array',
               variablesReference: this._variableHandles.create(
                 new ProgramStateScope(v.frameIndex, 'stack'),
               ),
-              indexedVariables: programState.stack.length,
+              indexedVariables: state.stack.length,
               presentationHint: {
                 kind: 'data',
               },
@@ -487,7 +491,7 @@ export class AvmDebugSession extends DebugSession {
           ];
         } else if (v.specificState === 'stack') {
           if (args.filter !== 'named') {
-            variables = programState.stack.map((value, index) =>
+            variables = state.stack.map((value, index) =>
               this.convertAvmValue(v, value, index),
             );
           }
@@ -495,7 +499,7 @@ export class AvmDebugSession extends DebugSession {
           const expandedScratch: algosdk.modelsv2.AvmValue[] = [];
           for (let i = 0; i < 256; i++) {
             expandedScratch.push(
-              programState.scratch.get(i) ||
+              state.scratch.get(i) ||
                 new algosdk.modelsv2.AvmValue({ type: 2 }),
             );
           }
@@ -505,6 +509,18 @@ export class AvmDebugSession extends DebugSession {
             );
           }
         }
+      } else if (v instanceof PuyaScope) {
+        const state = this.getProgramState(v.frameIndex);
+        variables = state.variables.map((variable) => {
+          const name = variable[0];
+          const avmValue = variable[1];
+          return {
+            name: name,
+            value: variableToString(avmValue),
+            type: avmValue.type === 1 ? 'byte[]' : 'uint64',
+            variablesReference: 0,
+          };
+        });
       } else if (v === 'chain') {
         const appIDs = this._runtime.getAppStateReferences();
         variables = [
@@ -592,16 +608,13 @@ export class AvmDebugSession extends DebugSession {
         }
       } else if (v instanceof AvmValueReference) {
         if (v.scope instanceof ProgramStateScope) {
-          const frame = this._runtime.getStackFrame(v.scope.frameIndex);
-          if (!frame || !(frame instanceof ProgramStackFrame)) {
-            throw new Error(`Unexpected frame: ${typeof frame}`);
-          }
+          const state = this.getProgramState(v.scope.frameIndex);
           let toExpand: algosdk.modelsv2.AvmValue;
           if (v.scope.specificState === 'stack') {
-            toExpand = frame.state.stack[v.key as number];
+            toExpand = state.stack[v.key as number];
           } else if (v.scope.specificState === 'scratch') {
             toExpand =
-              frame.state.scratch.get(v.key as number) ||
+              state.scratch.get(v.key as number) ||
               new algosdk.modelsv2.AvmValue({ type: 2 });
           } else {
             throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
@@ -676,6 +689,15 @@ export class AvmDebugSession extends DebugSession {
     }
   }
 
+  private getProgramState(frameIndex: number) {
+    const frame = this._runtime.getStackFrame(frameIndex);
+    const state = frame?.programState;
+    if (state === undefined) {
+      throw new Error(`Unexpected frame: ${typeof frame}`);
+    }
+    return state;
+  }
+
   protected async evaluateRequest(
     response: DebugProtocol.EvaluateResponse,
     args: DebugProtocol.EvaluateArguments,
@@ -704,20 +726,29 @@ export class AvmDebugSession extends DebugSession {
               scope.specificState,
             );
             const frame = this._runtime.getStackFrame(args.frameId);
-            if (!frame || !(frame instanceof ProgramStackFrame)) {
+            const state = frame?.programState;
+            if (state === undefined) {
               reply = `Unexpected frame: ${typeof frame}`;
             } else {
               if (scope.specificState === 'pc') {
                 rv = {
                   name: 'pc',
-                  value: frame.state.pc.toString(),
+                  value: state.pc.toString(),
                   type: 'uint64',
                   variablesReference: 0,
                   evaluateName: 'pc',
                 };
+              } else if (scope.specificState === 'op') {
+                rv = {
+                  name: 'op',
+                  value: state.op || 'unknown',
+                  type: 'string',
+                  variablesReference: 0,
+                  evaluateName: 'op',
+                };
               } else if (scope.specificState === 'stack') {
                 let index = key as number;
-                const stackValues = frame.state.stack;
+                const stackValues = state.stack;
                 if (index < 0) {
                   const adjustedIndex = index + stackValues.length;
                   if (adjustedIndex < 0) {
@@ -746,7 +777,7 @@ export class AvmDebugSession extends DebugSession {
                 if (0 <= index && index < 256) {
                   rv = this.convertAvmValue(
                     scopeWithFrame,
-                    frame.state.scratch.get(index) ||
+                    state.scratch.get(index) ||
                       new algosdk.modelsv2.AvmValue({ type: 2 }),
                     index,
                   );
@@ -1184,19 +1215,20 @@ export class AvmDebugSession extends DebugSession {
     return new Source(fileName, undefined, id);
   }
 }
-
+class PuyaScope {
+  constructor(public readonly frameIndex: number) {}
+}
 class ProgramStateScope {
   constructor(
     public readonly frameIndex: number,
-    public readonly specificState?: 'pc' | 'stack' | 'scratch',
+    public readonly specificState:
+      | 'pc'
+      | 'op'
+      | 'stack'
+      | 'scratch'
+      | 'params'
+      | 'program' = 'program',
   ) {}
-
-  public scopeString(): string {
-    if (typeof this.specificState === 'undefined') {
-      return `program`;
-    }
-    return this.specificState;
-  }
 }
 
 type OnChainStateScope = 'chain' | 'app';
@@ -1243,7 +1275,7 @@ function evaluateNameForScope(
   key: number | string,
 ): string {
   if (scope instanceof ProgramStateScope) {
-    return `${scope.scopeString()}[${key}]`;
+    return `${scope.specificState}[${key}]`;
   }
   if (scope.scope === 'local') {
     if (typeof scope.account === 'undefined') {
@@ -1259,6 +1291,9 @@ function evaluateNameForScope(
 function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
   if (name === 'pc') {
     return [new ProgramStateScope(-1, 'pc'), 0];
+  }
+  if (name === 'op') {
+    return [new ProgramStateScope(-1, 'op'), ''];
   }
   const stackMatches = /^stack\[(-?\d+)\]$/.exec(name);
   if (stackMatches) {
@@ -1335,4 +1370,18 @@ function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
     return [newScope, key];
   }
   throw new Error(`Unexpected expression: ${name}`);
+}
+
+function variableToString(avmValue: algosdk.modelsv2.AvmValue): string {
+  if (avmValue.type === 1) {
+    // byte array
+    const bytes = avmValue.bytes || new Uint8Array();
+    const utf8 = utf8Decode(bytes);
+    return utf8 === undefined
+      ? '0x' + algosdk.bytesToHex(bytes)
+      : "'" + utf8 + "'";
+  }
+  // uint64
+  const uint = avmValue.uint || 0;
+  return uint.toString();
 }
