@@ -125,13 +125,13 @@ export class ByteArrayMap<T> {
   }
 }
 
-interface ProgramSourceEntryFile {
+export interface ProgramSourceEntryFile {
   'txn-group-sources': ProgramSourceEntry[];
 }
 
-interface ProgramSourceEntry {
+export interface ProgramSourceEntry {
   hash: string;
-  'sourcemap-location': string;
+  'sourcemap-location': string | null;
 }
 
 export interface PCEvent {
@@ -155,17 +155,12 @@ interface ISourceMap {
   pc_events?: Record<string, PCEvent>;
 }
 
-interface IPcLocationMap {
-  sources: string[];
-  getLocationForPc(pc: number): algosdk.SourceLocation | undefined;
-}
-
 export class ProgramSourceDescriptor {
   constructor(
     public readonly fileAccessor: FileAccessor,
     public readonly sourcemapFileLocation: string,
     public readonly json: ISourceMap,
-    public readonly sourcemap: IPcLocationMap,
+    public readonly sourcemap: algosdk.ProgramSourceMap,
     public readonly hash: Uint8Array,
   ) {}
 
@@ -187,12 +182,12 @@ export class ProgramSourceDescriptor {
 
   static async fromJSONObj(
     fileAccessor: FileAccessor,
-    originFile: string,
+    originPath: string,
     data: ProgramSourceEntry,
   ): Promise<ProgramSourceDescriptor> {
     const sourcemapFileLocation = normalizePathAndCasing(
       fileAccessor,
-      fileAccessor.filePathRelativeTo(originFile, data['sourcemap-location']),
+      fileAccessor.filePathRelativeTo(originPath, data['sourcemap-location']!),
     );
     const rawSourcemap = await prefixPotentialError(
       fileAccessor.readFile(sourcemapFileLocation),
@@ -228,19 +223,12 @@ export class ProgramSourceDescriptorRegistry {
     return this.registry.get(hash);
   }
 
-  static async loadFromFile(
+  static async loadFromContent(
     fileAccessor: FileAccessor,
-    programSourcesDescriptionFilePath: string,
+    jsonSourcesDescription: ProgramSourceEntryFile,
+    originPath?: string,
   ): Promise<ProgramSourceDescriptorRegistry> {
-    const rawSourcesDescription = await prefixPotentialError(
-      fileAccessor.readFile(programSourcesDescriptionFilePath),
-      'Could not read program sources description file',
-    );
-    let jsonSourcesDescription: ProgramSourceEntryFile;
     try {
-      jsonSourcesDescription = JSON.parse(
-        new TextDecoder().decode(rawSourcesDescription),
-      ) as ProgramSourceEntryFile;
       if (
         !Array.isArray(jsonSourcesDescription['txn-group-sources']) ||
         !jsonSourcesDescription['txn-group-sources'].every(
@@ -255,18 +243,22 @@ export class ProgramSourceDescriptorRegistry {
     } catch (e) {
       const err = e as Error;
       throw new Error(
-        `Could not parse program sources description file from '${programSourcesDescriptionFilePath}': ${err.message}`,
+        `Could not parse program sources description ${
+          originPath ? `file from '${originPath}'` : 'content'
+        }: ${err.message}`,
       );
     }
+
     const programSources = jsonSourcesDescription['txn-group-sources']
       .filter((source) => source['sourcemap-location'] !== null)
       .map((source) =>
         ProgramSourceDescriptor.fromJSONObj(
           fileAccessor,
-          programSourcesDescriptionFilePath,
+          originPath || '',
           source,
         ),
       );
+
     return new ProgramSourceDescriptorRegistry({
       txnGroupSources: await Promise.all(programSources),
     });
@@ -282,7 +274,8 @@ export class AvmDebuggingAssets {
   static async loadFromFiles(
     fileAccessor: FileAccessor,
     simulateTraceFilePath: string,
-    programSourcesDescriptionFilePath: string,
+    programSourcesDescription: ProgramSourceEntryFile,
+    programSourcesDescriptionFolder: string,
   ): Promise<AvmDebuggingAssets> {
     const rawSimulateTrace = await prefixPotentialError(
       fileAccessor.readFile(simulateTraceFilePath),
@@ -316,16 +309,24 @@ export class AvmDebuggingAssets {
     }
 
     const txnGroupDescriptorList =
-      await ProgramSourceDescriptorRegistry.loadFromFile(
+      await ProgramSourceDescriptorRegistry.loadFromContent(
         fileAccessor,
-        programSourcesDescriptionFilePath,
+        programSourcesDescription,
+        programSourcesDescriptionFolder,
       );
 
     return new AvmDebuggingAssets(simulateResponse, txnGroupDescriptorList);
   }
 }
 
-function prefixPotentialError<T>(task: Promise<T>, prefix: string): Promise<T> {
+export function isPuyaSourceMap(sourcemap: ISourceMap | undefined): boolean {
+  return sourcemap?.pc_events !== undefined;
+}
+
+export function prefixPotentialError<T>(
+  task: Promise<T>,
+  prefix: string,
+): Promise<T> {
   return task.catch((error) => {
     throw new Error(`${prefix}: ${error.message}`);
   });

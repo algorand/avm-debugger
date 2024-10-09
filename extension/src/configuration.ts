@@ -10,7 +10,7 @@ export class AvmDebugConfigProvider
   implements vscode.DebugConfigurationProvider
 {
   /**
-   * Massage a debug configuration just before a debug session is being launched,
+   * Message a debug configuration just before a debug session is being launched,
    * e.g. add all missing attributes to the debug configuration.
    */
   resolveDebugConfiguration(
@@ -26,9 +26,22 @@ export class AvmDebugConfigProvider
       return null;
     }
 
-    if (!config.programSourcesDescriptionFile) {
+    if (
+      config.programSourcesDescription &&
+      !config.programSourcesDescriptionFolder
+    ) {
       vscode.window.showErrorMessage(
-        'Missing property "programSourcesDescriptionFile" in debug config',
+        'Missing property "programSourcesDescriptionFolder" in debug config',
+      );
+      return null;
+    }
+
+    if (
+      !config.programSourcesDescriptionFile &&
+      !config.programSourcesDescription
+    ) {
+      vscode.window.showErrorMessage(
+        'Either "programSourcesDescriptionFile" or "programSourcesDescription" + "programSourcesDescriptionFolder" must be provided in debug config',
       );
       return null;
     }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   DebugSession,
   InitializedEvent,
@@ -17,7 +18,14 @@ import { AvmRuntime, IRuntimeBreakpoint } from './runtime';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
 import { FileAccessor } from './fileAccessor';
-import { AvmDebuggingAssets, utf8Decode, limitArray } from './utils';
+import {
+  AvmDebuggingAssets,
+  utf8Decode,
+  limitArray,
+  ProgramSourceEntryFile,
+  prefixPotentialError,
+} from './utils';
+import { ProgramState } from './traceReplayEngine';
 
 const GENERIC_ERROR_ID = 9999;
 
@@ -42,7 +50,11 @@ export interface ILaunchRequestArguments
   /** An absolute path to the simulate response to debug. */
   simulateTraceFile: string;
   /** An absolute path to the file which maps programs to source maps. */
-  programSourcesDescriptionFile: string;
+  programSourcesDescriptionFile?: string;
+  /** JSON encoded content of the program sources description file. */
+  programSourcesDescription?: ProgramSourceEntryFile;
+  /** The folder containing the program sources description file (when using programSourcesDescription). */
+  programSourcesDescriptionFolder?: string;
   /** Automatically stop target after launch. If not specified, target does not stop. */
   stopOnEntry?: boolean;
 }
@@ -56,6 +68,9 @@ export class AvmDebugSession extends DebugSession {
 
   // txn group walker runtime for walking txn group.
   private _runtime: AvmRuntime;
+
+  // cache to allow cross scope variable references
+  private _expandedAvmValueCache = new Map<string, DebugProtocol.Variable>();
 
   private _variableHandles = new Handles<
     | ProgramStateScope
@@ -190,10 +205,33 @@ export class AvmDebugSession extends DebugSession {
     args: ILaunchRequestArguments,
   ) {
     try {
+      let programSourcesDescription: ProgramSourceEntryFile;
+      let folder: string;
+      if (args.programSourcesDescription !== undefined) {
+        programSourcesDescription = args.programSourcesDescription;
+        folder = args.programSourcesDescriptionFolder || '';
+      } else if (args.programSourcesDescriptionFile !== undefined) {
+        // earlier versions of avm-debugger passed program source information via a file/
+        folder = args.programSourcesDescriptionFile;
+        const sourcesDescriptionBytes = await prefixPotentialError(
+          this.fileAccessor.readFile(args.programSourcesDescriptionFile),
+          'Could not read program sources description file',
+        );
+        const sourcesDescriptionText = new TextDecoder().decode(
+          sourcesDescriptionBytes,
+        );
+        programSourcesDescription = JSON.parse(
+          sourcesDescriptionText,
+        ) as ProgramSourceEntryFile;
+      } else {
+        throw Error('missing programSources');
+      }
+
       const debugAssets = await AvmDebuggingAssets.loadFromFiles(
         this.fileAccessor,
         args.simulateTraceFile,
-        args.programSourcesDescriptionFile,
+        programSourcesDescription,
+        folder,
       );
 
       await this._runtime.onLaunch(debugAssets);
@@ -397,14 +435,22 @@ export class AvmDebugSession extends DebugSession {
 
       const scopes: DebugProtocol.Scope[] = [];
       if (frame !== undefined) {
-        scopes.push(
-          new Scope(
-            'Locals',
-            this._variableHandles.create(new PuyaScope(args.frameId)),
-            false,
-          ),
-        );
-        const state = this.getProgramState(args.frameId);
+        if (this._runtime.isPuyaFrame(frame)) {
+          scopes.push(
+            new Scope(
+              'Locals',
+              this._variableHandles.create(new PuyaScope(args.frameId)),
+              false,
+            ),
+          );
+        }
+
+        let state: ProgramState | undefined;
+        try {
+          state = this.getProgramState(args.frameId);
+        } catch {
+          state = undefined;
+        }
         if (state !== undefined) {
           const programScope = new ProgramStateScope(args.frameId);
           let scopeName = 'Program State';
@@ -420,6 +466,7 @@ export class AvmDebugSession extends DebugSession {
             ),
           );
         }
+
         scopes.push(
           new Scope(
             'On-chain State',
@@ -443,6 +490,7 @@ export class AvmDebugSession extends DebugSession {
   ): Promise<void> {
     try {
       let variables: DebugProtocol.Variable[] = [];
+      this._expandedAvmValueCache.clear();
 
       const v = this._variableHandles.get(args.variablesReference);
 
@@ -457,13 +505,17 @@ export class AvmDebugSession extends DebugSession {
               variablesReference: 0,
               evaluateName: 'pc',
             },
-            {
-              name: 'op',
-              value: state.op || 'unknown',
-              type: 'string',
-              variablesReference: 0,
-              evaluateName: 'op',
-            },
+            ...(state.op !== undefined
+              ? [
+                  {
+                    name: 'op',
+                    value: state.op,
+                    type: 'string',
+                    variablesReference: 0,
+                    evaluateName: 'op',
+                  },
+                ]
+              : []),
             {
               name: 'stack',
               value: state.stack.length === 0 ? '[]' : '[...]',
@@ -514,12 +566,7 @@ export class AvmDebugSession extends DebugSession {
         variables = state.variables.map((variable) => {
           const name = variable[0];
           const avmValue = variable[1];
-          return {
-            name: name,
-            value: variableToString(avmValue),
-            type: avmValue.type === 1 ? 'byte[]' : 'uint64',
-            variablesReference: 0,
-          };
+          return this.convertAvmValue(v, avmValue, name);
         });
       } else if (v === 'chain') {
         const appIDs = this._runtime.getAppStateReferences();
@@ -552,7 +599,7 @@ export class AvmDebugSession extends DebugSession {
             variablesReference: this._variableHandles.create(
               new AppSpecificStateScope({ scope: 'global', appID: v.appID }),
             ),
-            namedVariables: 1, // TODO
+            namedVariables: 1,
           },
           {
             name: 'local',
@@ -561,7 +608,7 @@ export class AvmDebugSession extends DebugSession {
             variablesReference: this._variableHandles.create(
               new AppSpecificStateScope({ scope: 'local', appID: v.appID }),
             ),
-            namedVariables: 1, // TODO
+            namedVariables: 1,
           },
           {
             name: 'box',
@@ -570,7 +617,7 @@ export class AvmDebugSession extends DebugSession {
             variablesReference: this._variableHandles.create(
               new AppSpecificStateScope({ scope: 'box', appID: v.appID }),
             ),
-            namedVariables: 1, // TODO
+            namedVariables: 1,
           },
         ];
       } else if (v instanceof AppSpecificStateScope) {
@@ -593,7 +640,7 @@ export class AvmDebugSession extends DebugSession {
                   account,
                 }),
               ),
-              namedVariables: 1, // TODO
+              namedVariables: 1,
               evaluateName: evaluateNameForScope(v, account),
             }));
           } else {
@@ -607,19 +654,31 @@ export class AvmDebugSession extends DebugSession {
             .map((kv) => this.convertAvmKeyValue(v, kv));
         }
       } else if (v instanceof AvmValueReference) {
-        if (v.scope instanceof ProgramStateScope) {
+        if (
+          v.scope instanceof ProgramStateScope ||
+          v.scope instanceof PuyaScope
+        ) {
           const state = this.getProgramState(v.scope.frameIndex);
-          let toExpand: algosdk.modelsv2.AvmValue;
-          if (v.scope.specificState === 'stack') {
-            toExpand = state.stack[v.key as number];
-          } else if (v.scope.specificState === 'scratch') {
-            toExpand =
-              state.scratch.get(v.key as number) ||
-              new algosdk.modelsv2.AvmValue({ type: 2 });
-          } else {
-            throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+          let toExpand: algosdk.modelsv2.AvmValue | undefined;
+
+          if (v.scope instanceof ProgramStateScope) {
+            if (v.scope.specificState === 'stack') {
+              toExpand = state.stack[v.key as number];
+            } else if (v.scope.specificState === 'scratch') {
+              toExpand =
+                state.scratch.get(v.key as number) ||
+                new algosdk.modelsv2.AvmValue({ type: 2 });
+            }
+          } else if (v.scope instanceof PuyaScope) {
+            const variable = state.variables.find(([name]) => name === v.key);
+            if (variable) {
+              toExpand = variable[1];
+            }
           }
-          variables = this.expandAvmValue(toExpand, args.filter);
+
+          if (toExpand) {
+            variables = this.expandAvmValue(toExpand, args.filter);
+          }
         } else if (
           v.scope instanceof AppSpecificStateScope &&
           typeof v.key === 'string' &&
@@ -984,7 +1043,7 @@ export class AvmDebugSession extends DebugSession {
   //---- helpers
 
   private convertAvmValue(
-    scope: AvmValueScope,
+    scope: AvmValueScope | PuyaScope,
     avmValue: algosdk.modelsv2.AvmValue,
     key: number | string,
     overrideVariableReference?: boolean,
@@ -993,7 +1052,8 @@ export class AvmDebugSession extends DebugSession {
     let indexedVariables: number | undefined = undefined;
     let presentationHint: DebugProtocol.VariablePresentationHint | undefined =
       undefined;
-    let makeVariableReference = false;
+    let variablesReference = 0;
+
     if (avmValue.type === 1) {
       // byte array
       const bytes = avmValue.bytes || new Uint8Array();
@@ -1006,91 +1066,82 @@ export class AvmDebugSession extends DebugSession {
         kind: 'data',
         attributes: ['rawString'],
       };
-      makeVariableReference = true;
+      variablesReference = this._variableHandles.create(
+        new AvmValueReference(scope, key),
+      );
     }
-    if (typeof overrideVariableReference !== 'undefined') {
-      makeVariableReference = overrideVariableReference;
+    // For uint64 (type 2), variablesReference remains 0
+
+    if (
+      avmValue.type !== 2 &&
+      typeof overrideVariableReference !== 'undefined' &&
+      overrideVariableReference
+    ) {
+      variablesReference = this._variableHandles.create(
+        new AvmValueReference(scope, key),
+      );
     }
+
     return {
       name: key.toString(),
       value: this.avmValueToString(avmValue),
       type: avmValue.type === 1 ? 'byte[]' : 'uint64',
-      variablesReference: makeVariableReference
-        ? this._variableHandles.create(new AvmValueReference(scope, key))
-        : 0,
+      variablesReference,
       namedVariables,
       indexedVariables,
       presentationHint,
-      evaluateName: evaluateNameForScope(scope, key),
+      evaluateName:
+        scope instanceof PuyaScope
+          ? key.toString()
+          : evaluateNameForScope(scope, key),
     };
   }
 
   private expandAvmValue(
     avmValue: algosdk.modelsv2.AvmValue,
-    filter?: DebugProtocol.VariablesArguments['filter'],
+    filter?: string,
   ): DebugProtocol.Variable[] {
-    if (avmValue.type !== 1) {
-      return [];
-    }
+    const variables: DebugProtocol.Variable[] = [];
 
-    const bytes = avmValue.bytes || new Uint8Array();
+    if (avmValue.type === 1) {
+      // byte array
+      const bytes = avmValue.bytes || new Uint8Array();
+      const baseKey = `${avmValue.type}-${Buffer.from(bytes).toString(
+        'hex',
+      )}-${filter}`;
 
-    const values: DebugProtocol.Variable[] = [];
+      const addVariable = (name: string, value: string, type: string) => {
+        const cacheKey = `${baseKey}-${name}`;
+        if (this._expandedAvmValueCache.has(cacheKey)) {
+          variables.push(this._expandedAvmValueCache.get(cacheKey)!);
+        } else {
+          const variable: DebugProtocol.Variable = {
+            name,
+            value,
+            type,
+            variablesReference: 0,
+          };
+          this._expandedAvmValueCache.set(cacheKey, variable);
+          variables.push(variable);
+        }
+      };
 
-    if (filter !== 'indexed') {
-      values.push({
-        name: 'hex',
-        type: 'string',
-        value: algosdk.bytesToHex(bytes),
-        variablesReference: 0,
-      });
+      addVariable('length', bytes.length.toString(), 'number');
+      addVariable('hex', `0x${Buffer.from(bytes).toString('hex')}`, 'string');
 
-      values.push({
-        name: 'base64',
-        type: 'string',
-        value: algosdk.bytesToBase64(bytes),
-        variablesReference: 0,
-      });
-
-      const utf8Value = utf8Decode(bytes);
-      if (typeof utf8Value !== 'undefined') {
-        values.push({
-          name: 'utf-8',
-          type: 'string',
-          value: utf8Value,
-          variablesReference: 0,
-        });
+      const utf8String = utf8Decode(bytes);
+      if (typeof utf8String !== 'undefined') {
+        addVariable('utf8', `"${utf8String}"`, 'string');
       }
 
-      if (bytes.length === 32) {
-        values.push({
-          name: 'address',
-          type: 'string',
-          value: algosdk.encodeAddress(bytes),
-          variablesReference: 0,
-        });
-      }
-
-      values.push({
-        name: 'length',
-        type: 'int',
-        value: bytes.length.toString(),
-        variablesReference: 0,
-      });
-    }
-
-    if (filter !== 'named') {
-      for (let i = 0; i < bytes.length; i++) {
-        values.push({
-          name: i.toString(),
-          type: 'uint8',
-          value: bytes[i].toString(),
-          variablesReference: 0,
-        });
+      if (filter !== 'named') {
+        for (let i = 0; i < bytes.length; i++) {
+          addVariable(i.toString(), bytes[i].toString(), 'number');
+        }
       }
     }
 
-    return values;
+    return variables;
   }
 
   private convertAvmKeyValue(
@@ -1265,7 +1316,7 @@ type AvmValueScope = ProgramStateScope | AppSpecificStateScope;
 
 class AvmValueReference {
   constructor(
-    public readonly scope: AvmValueScope,
+    public readonly scope: AvmValueScope | PuyaScope,
     public readonly key: number | string,
   ) {}
 }
@@ -1372,16 +1423,16 @@ function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
   throw new Error(`Unexpected expression: ${name}`);
 }
 
-function variableToString(avmValue: algosdk.modelsv2.AvmValue): string {
-  if (avmValue.type === 1) {
-    // byte array
-    const bytes = avmValue.bytes || new Uint8Array();
-    const utf8 = utf8Decode(bytes);
-    return utf8 === undefined
-      ? '0x' + algosdk.bytesToHex(bytes)
-      : "'" + utf8 + "'";
-  }
-  // uint64
-  const uint = avmValue.uint || 0;
-  return uint.toString();
-}
+// function variableToString(avmValue: algosdk.modelsv2.AvmValue): string {
+//   if (avmValue.type === 1) {
+//     // byte array
+//     const bytes = avmValue.bytes || new Uint8Array();
+//     const utf8 = utf8Decode(bytes);
+//     return utf8 === undefined
+//       ? '0x' + algosdk.bytesToHex(bytes)
+//       : "'" + utf8 + "'";
+//   }
+//   // uint64
+//   const uint = avmValue.uint || 0;
+//   return uint.toString();
+// }

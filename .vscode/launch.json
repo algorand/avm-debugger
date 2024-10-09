@@ -6,11 +6,12 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
+        "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/extension",
         "${workspaceFolder}/sampleWorkspace"
       ],
       "outFiles": ["${workspaceFolder}/extension/dist/**/*.js"],
-      "preLaunchTask": "npm: extension watch"
+      "preLaunchTask": "npm: extension:build"
     },
     {
       "name": "Server",

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './debugSession';
 import { AppState } from './appState';
@@ -11,6 +12,7 @@ import { FileAccessor } from './fileAccessor';
 import {
   AvmDebuggingAssets,
   ProgramSourceDescriptor,
+  isPuyaSourceMap,
   normalizePathAndCasing,
 } from './utils';
 
@@ -362,6 +364,7 @@ export class AvmRuntime extends EventEmitter {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private sendEvent(event: string, ...args: any[]): void {
     setTimeout(() => {
       this.emit(event, ...args);
@@ -411,5 +414,19 @@ export class AvmRuntime extends EventEmitter {
     }
 
     return sourceDescriptors;
+  }
+
+  public isPuyaFrame(frame: TraceStackFrame): boolean {
+    if (frame && frame.source && frame.source.path) {
+      const sourceDescriptors = this.findSourceDescriptorsForPath(
+        frame.source.path,
+      );
+      for (const { descriptor } of sourceDescriptors) {
+        if (isPuyaSourceMap(descriptor.json)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

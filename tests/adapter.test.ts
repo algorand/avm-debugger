@@ -2563,3 +2563,130 @@ describe('Debug Adapter Tests', () => {
     await fixture.client.waitForEvent('terminated');
   });
 });
+
+describe('Puya Debugging', () => {
+  const fixture = new TestFixture();
+
+  before(async () => await fixture.init());
+
+  afterEach(async () => {
+    await fixture.reset();
+  });
+
+  after(async () => {
+    await fixture.stop();
+  });
+
+  it('should correctly step through and inspect variables in a Puya program', async () => {
+    const simulateTraceFile = path.join(
+      DATA_ROOT,
+      'puya/simulate-response.json',
+    );
+    const programSourcesDescriptionFile = path.join(
+      DATA_ROOT,
+      'puya/sources.json',
+    );
+    const { client } = fixture;
+
+    const program = normalizePathAndCasing(
+      nodeFileAccessor,
+      path.join(DATA_ROOT, 'puya/contract.py'),
+    );
+
+    await Promise.all([
+      client.configurationSequence(),
+      client.launch({
+        simulateTraceFile,
+        programSourcesDescriptionFile,
+        stopOnEntry: true,
+      }),
+      client.assertStoppedLocation('entry', {}),
+    ]);
+
+    // Set breakpoint at the beginning of the claim_poa method
+    await client.setBreakpointsRequest({
+      source: { path: program },
+      breakpoints: [{ line: 98 }],
+    });
+
+    await client.continueRequest({ threadId: 1 });
+    await client.assertStoppedLocation('breakpoint', {
+      path: program,
+      line: 98,
+    });
+
+    // Check variables at the start of the claim poa method
+    await assertVariables(client, {
+      pc: 700,
+      stack: [0, 0],
+    });
+
+    // Verify Puya-specific variables
+    const scopesResponse = await client.scopesRequest({ frameId: 0 });
+    const localsScope = scopesResponse.body.scopes.find(
+      (s) => s.name === 'Locals',
+    );
+    assert.ok(localsScope, 'Locals scope not found');
+
+    const variablesResponse = await client.variablesRequest({
+      variablesReference: localsScope!.variablesReference,
+    });
+    assert.deepStrictEqual(
+      variablesResponse.body.variables.find((v) => v.name === 'opt_in_txn'),
+      {
+        name: 'opt_in_txn',
+        value: '0',
+        type: 'uint64',
+        variablesReference: 0,
+        evaluateName: 'opt_in_txn',
+      },
+    );
+
+    // Step through the method
+    await client.nextRequest({ threadId: 1 });
+    await client.nextRequest({ threadId: 1 });
+    await client.assertStoppedLocation('step', { path: program, line: 99 });
+
+    // Verify Puya-specific variables again
+    const scopesResponse2 = await client.scopesRequest({ frameId: 0 });
+    const localsScope2 = scopesResponse2.body.scopes.find(
+      (s) => s.name === 'Locals',
+    );
+    assert.ok(localsScope2, 'Locals scope not found');
+
+    const variablesResponse2 = await client.variablesRequest({
+      variablesReference: localsScope2!.variablesReference,
+    });
+    assert.deepStrictEqual(
+      variablesResponse2.body.variables.find((v) => v.name === 'opt_in_txn'),
+      {
+        name: 'opt_in_txn',
+        value: '0',
+        type: 'uint64',
+        variablesReference: 0,
+        evaluateName: 'opt_in_txn',
+      },
+    );
+    const poaIdVariable = variablesResponse2.body.variables.find(
+      (v) => v.name === 'poa_id',
+    );
+    assert.strictEqual(poaIdVariable?.name, 'poa_id');
+    assert.strictEqual(poaIdVariable?.value, '0x0000000000000411');
+    assert.strictEqual(poaIdVariable?.type, 'byte[]');
+    assert.ok(typeof poaIdVariable?.variablesReference === 'number');
+    assert.deepStrictEqual(
+      variablesResponse2.body.variables.find((v) => v.name === 'exists'),
+      {
+        name: 'exists',
+        value: '1',
+        type: 'uint64',
+        variablesReference: 0,
+        evaluateName: 'exists',
+      },
+    );
+
+    // Continue to the end
+    await client.continueRequest({ threadId: 1 });
+    await client.waitForEvent('terminated');
+  });
+});

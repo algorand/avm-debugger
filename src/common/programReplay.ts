@@ -3,12 +3,20 @@ import {
   SimulationOpcodeTraceUnit,
 } from 'algosdk/dist/types/client/v2/algod/models/types';
 import { FrameSource, ProgramState } from './traceReplayEngine';
-import { PCEvent, ProgramSourceDescriptor } from './utils';
+import {
+  ByteArrayMap,
+  isPuyaSourceMap,
+  PCEvent,
+  ProgramSourceDescriptor,
+} from './utils';
+import algosdk from 'algosdk';
+import { AppState } from './appState';
 
 interface CallStack {
   readonly name: string;
   readonly source: FrameSource | undefined;
   readonly programState: ProgramState | undefined;
+  readonly isPuyaFrame: boolean;
   stackOffset: number;
 }
 const HIDE_VERSION = true;
@@ -21,6 +29,7 @@ class MutableCallStack implements CallStack {
   private definedVariables: Record<string, boolean>;
   private _paramVariables: string[];
   private stack: string[];
+  public isPuyaFrame: boolean = true;
 
   constructor(
     public readonly callEvent: PCEvent,
@@ -121,7 +130,8 @@ export class ProgramReplay {
   public scratch: Map<number, AvmValue> = new Map();
   private traceIndex: number = 0;
   private _callStack: MutableCallStack[] = [];
-  private readonly sourceInfo: ProgramSourceDescriptor;
+  private readonly sourceInfo: ProgramSourceDescriptor | undefined;
+  private currentAppState: Map<bigint, AppState>;
 
   constructor(
     private readonly programName: string,
@@ -129,9 +139,17 @@ export class ProgramReplay {
     sourceInfo: ProgramSourceDescriptor | undefined,
     public readonly appId: bigint | undefined,
     traceIndex: number = 0, //index to the next opcode to execute
+    currentAppState: Map<bigint, AppState>,
   ) {
-    this.sourceInfo = checkTraceMatchesSourceInfo(programTrace, sourceInfo);
+    if (isPuyaSourceMap(sourceInfo?.json)) {
+      this.sourceInfo = checkTraceMatchesSourceInfo(programTrace, sourceInfo);
+    } else {
+      // If value is undefined, we still set it given that this can signify that user
+      // wants to skip debugging for this particular program
+      this.sourceInfo = sourceInfo;
+    }
 
+    this.currentAppState = currentAppState;
     this.reset();
     // advance internal state to match provided index
     while (traceIndex-- > 0) {
@@ -146,6 +164,10 @@ export class ProgramReplay {
   }
 
   get nextOpTrace() {
+    if (this.traceIndex >= this.programTrace.length) {
+      return this.programTrace[this.programTrace.length - 1];
+    }
+
     return this.programTrace[this.traceIndex];
   }
 
@@ -155,12 +177,13 @@ export class ProgramReplay {
 
   get nextPcEvent(): PCEvent | undefined {
     if (
-      this.sourceInfo === undefined ||
-      this.sourceInfo.json.pc_events === undefined
+      this.nextPc === undefined &&
+      (this.sourceInfo === undefined ||
+        this.sourceInfo.json.pc_events === undefined)
     ) {
       return undefined;
     }
-    return this.sourceInfo.json.pc_events[this.nextPc.toString()];
+    return this.sourceInfo?.json.pc_events?.[this.nextPc.toString()];
   }
 
   get pcSource(): FrameSource | undefined {
@@ -175,6 +198,7 @@ export class ProgramReplay {
     const column = location.column;
     const sourceIndex = location.sourceIndex;
     const source = this.sourceInfo.getFullSourcePath(sourceIndex);
+
     return {
       name: source,
       path: source,
@@ -200,11 +224,48 @@ export class ProgramReplay {
       return;
     }
     this.processOpExit();
+    this.processUnit(this.nextOpTrace);
     this.traceIndex++;
     if (this.traceIndex < this.programTrace.length) {
       this.processOpEnter();
       this.updateSource();
     }
+  }
+
+  public backward(): void {
+    if (this.traceIndex === 0) {
+      return;
+    }
+
+    const currentSource = this.pcSource;
+    let previousSource: FrameSource | undefined;
+
+    do {
+      this.traceIndex--;
+      this.processOpExit();
+      if (this.traceIndex > 0) {
+        this.processOpEnter();
+        this.updateSource();
+      }
+      previousSource = this.pcSource;
+    } while (
+      this.traceIndex > 0 &&
+      !this.hasLocationChanged(currentSource, previousSource)
+    );
+  }
+
+  private hasLocationChanged(
+    from: FrameSource | undefined,
+    to: FrameSource | undefined,
+  ): boolean {
+    if (from === undefined || to === undefined) {
+      return from !== to;
+    }
+    return (
+      from.path !== to.path ||
+      from.line !== to.line ||
+      from.column !== to.column
+    );
   }
 
   public reset() {
@@ -218,6 +279,56 @@ export class ProgramReplay {
 
   private updateSource() {
     this._callStack[this._callStack.length - 1].source = this.pcSource;
+  }
+
+  private processUnit(unit: algosdk.modelsv2.SimulationOpcodeTraceUnit) {
+    if (unit.stateChanges && unit.stateChanges.length !== 0) {
+      const appID = this.appId;
+      if (typeof appID === 'undefined') {
+        throw new Error('No appID');
+      }
+
+      const state = this.currentAppState.get(appID);
+      if (!state) {
+        throw new Error(`No state for appID ${appID}`);
+      }
+
+      for (const stateChange of unit.stateChanges) {
+        switch (stateChange.appStateType) {
+          case 'g':
+            if (stateChange.operation === 'w') {
+              state.globalState.set(stateChange.key, stateChange.newValue!);
+            } else if (stateChange.operation === 'd') {
+              state.globalState.delete(stateChange.key);
+            }
+            break;
+          case 'l':
+            if (stateChange.operation === 'w') {
+              const accountAddress = stateChange.account!.toString();
+              let accountState = state.localState.get(accountAddress);
+              if (!accountState) {
+                accountState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
+                state.localState.set(accountAddress, accountState);
+              }
+              accountState.set(stateChange.key, stateChange.newValue!);
+            } else if (stateChange.operation === 'd') {
+              const accountState = state.localState.get(
+                stateChange.account!.toString(),
+              );
+              if (accountState) {
+                accountState.delete(stateChange.key);
+              }
+            }
+            break;
+          case 'b':
+            if (stateChange.operation === 'w') {
+              state.boxState.set(stateChange.key, stateChange.newValue!);
+            } else if (stateChange.operation === 'd') {
+              state.boxState.delete(stateChange.key);
+            }
+        }
+      }
+    }
   }
 
   private processOpEnter() {
@@ -284,7 +395,8 @@ function checkTraceMatchesSourceInfo(
   if (sourceInfo === undefined) {
     throw Error('missing program source information');
   }
-  const pcOffset = traces[sourceInfo.json.op_pc_offset || 0].pc;
+  const offset = sourceInfo.json.op_pc_offset || 0;
+  const pcOffset = offset === 0 ? offset : traces[offset].pc;
   let events = sourceInfo.json.pc_events;
   if (events === undefined) {
     throw Error('not a puya source map');
@@ -307,14 +419,15 @@ function checkTraceMatchesSourceInfo(
     pc_events: events,
   };
   const sourcemap = {
-    sources: sourceInfo.sourcemap.sources,
+    ...sourceInfo.sourcemap,
     getLocationForPc: (pc) => {
       if (pc < pcOffset) {
         return undefined;
       }
       return sourceInfo?.sourcemap.getLocationForPc(pc - pcOffset);
     },
-  };
+  } as unknown as algosdk.ProgramSourceMap;
+
   return new ProgramSourceDescriptor(
     sourceInfo.fileAccessor,
     sourceInfo.sourcemapFileLocation,

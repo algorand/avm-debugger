@@ -5,6 +5,7 @@ import {
   AvmDebuggingAssets,
   ProgramSourceDescriptor,
   ProgramSourceDescriptorRegistry,
+  isPuyaSourceMap,
 } from './utils';
 import { ProgramReplay } from './programReplay';
 import { AvmValue } from 'algosdk/dist/types/client/v2/algod/models/types';
@@ -272,6 +273,8 @@ export interface TraceStackFrame {
   readonly name: string;
   readonly source: FrameSource | undefined;
   readonly programState: ProgramState | undefined;
+
+  readonly isPuyaFrame: boolean;
 }
 
 export interface ProgramState {
@@ -287,12 +290,13 @@ export interface TraceReplayFrame {
   get callStack(): TraceStackFrame[];
   forward(stack: TraceReplayFrame[]): ExceptionInfo | void;
   backward(stack: TraceReplayFrame[]): ExceptionInfo | void;
+  isPuyaFrame: boolean;
 }
 
 export class TopLevelTransactionGroupsFrame implements TraceReplayFrame {
   private index: number = 0;
   private txnGroupDone: boolean = false;
-
+  public isPuyaFrame: boolean = false;
   constructor(
     private readonly engine: TraceReplayEngine,
     private readonly response: algosdk.modelsv2.SimulateResponse,
@@ -433,6 +437,8 @@ export class TransactionGroupStackFrame implements TraceReplayFrame {
 
   private sourceContent: string;
   private sourceLocations: TransactionSourceLocation[] = [];
+
+  public isPuyaFrame: boolean = false;
 
   constructor(
     private engine: TraceReplayEngine,
@@ -726,6 +732,8 @@ export class ProgramStackFrame implements TraceReplayFrame {
   private blockingException: ExceptionInfo | undefined;
   private programReplay: ProgramReplay;
 
+  public isPuyaFrame: boolean = false;
+
   constructor(
     private readonly engine: TraceReplayEngine,
     private readonly txnPath: number[],
@@ -749,11 +757,17 @@ export class ProgramStackFrame implements TraceReplayFrame {
       const lsigAccount = new algosdk.LogicSigAccount(lsigBytes);
       this.logicSigAddress = lsigAccount.address().toString();
     }
+
+    const sourceMapPath = this.engine.programHashToSource.get(programHash);
+    this.isPuyaFrame = isPuyaSourceMap(sourceMapPath?.json);
+
     this.programReplay = new ProgramReplay(
       this.name,
       programTrace,
-      this.engine.programHashToSource.get(programHash),
+      sourceMapPath,
       this.currentAppID(),
+      undefined,
+      engine.currentAppState,
     );
   }
 
@@ -800,13 +814,7 @@ export class ProgramStackFrame implements TraceReplayFrame {
         return;
       }
 
-      this.programReplay.forward();
-      // loop until location has advanced
-      again = !locationHasAdvanced(lastLocation, this.programReplay.pcSource);
-
       const currentUnit = this.programTrace[this.index];
-      this.processUnit(currentUnit);
-
       const spawnedInners = currentUnit.spawnedInners;
       if (
         !this.handledInnerTxns &&
@@ -845,6 +853,11 @@ export class ProgramStackFrame implements TraceReplayFrame {
         this.handledInnerTxns = true;
         return;
       }
+      this.programReplay.forward();
+      // loop until location has advanced
+      again = this.isPuyaFrame
+        ? !locationHasAdvanced(lastLocation, this.programReplay.pcSource)
+        : false;
 
       this.index++;
 
@@ -882,60 +895,6 @@ export class ProgramStackFrame implements TraceReplayFrame {
           }
           // If no specific error message, show a generic one (this is what happens during rejection)
           return new ExceptionInfo('Clear state program did not succeed');
-        }
-      }
-    }
-  }
-
-  private processUnit(unit: algosdk.modelsv2.SimulationOpcodeTraceUnit) {
-    // TODO: move to ProgramReplay
-    if (unit.stateChanges && unit.stateChanges.length !== 0) {
-      const appID = this.currentAppID();
-      if (typeof appID === 'undefined') {
-        throw new Error('No appID');
-      }
-
-      const state = this.engine.currentAppState.get(appID);
-      if (!state) {
-        throw new Error(`No state for appID ${appID}`);
-      }
-
-      for (const stateChange of unit.stateChanges) {
-        switch (stateChange.appStateType) {
-          case 'g':
-            if (stateChange.operation === 'w') {
-              state.globalState.set(stateChange.key, stateChange.newValue!);
-            } else if (stateChange.operation === 'd') {
-              state.globalState.delete(stateChange.key);
-            }
-            break;
-          case 'l':
-            if (stateChange.operation === 'w') {
-              const accountState = state.localState.get(
-                stateChange.account!.toString(),
-              );
-              if (!accountState) {
-                const newState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
-                newState.set(stateChange.key, stateChange.newValue!);
-                state.localState.set(stateChange.account!.toString(), newState);
-              } else {
-                accountState.set(stateChange.key, stateChange.newValue!);
-              }
-            } else if (stateChange.operation === 'd') {
-              const accountState = state.localState.get(
-                stateChange.account!.toString(),
-              );
-              if (accountState) {
-                accountState.delete(stateChange.key);
-              }
-            }
-            break;
-          case 'b':
-            if (stateChange.operation === 'w') {
-              state.boxState.set(stateChange.key, stateChange.newValue!);
-            } else if (stateChange.operation === 'd') {
-              state.boxState.delete(stateChange.key);
-            }
         }
       }
     }
