@@ -1,11 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { EventEmitter } from 'events';
 import { RuntimeEvents } from './debugSession';
 import { AppState } from './appState';
 import {
-  FrameSourceLocation,
+  FrameSource,
+  CallStackFrame,
   SteppingResultType,
   TraceReplayEngine,
-  TraceReplayStackFrame,
 } from './traceReplayEngine';
 import { FileAccessor } from './fileAccessor';
 import {
@@ -27,7 +28,7 @@ export interface IRuntimeBreakpointLocation {
 
 interface IRuntimeStack {
   count: number;
-  frames: TraceReplayStackFrame[];
+  frames: CallStackFrame[];
 }
 
 export class AvmRuntime extends EventEmitter {
@@ -160,12 +161,12 @@ export class AvmRuntime extends EventEmitter {
    * "Step out"
    */
   public stepOut() {
-    const targetStackDepth = this.engine.stack.length - 1;
+    const targetStackDepth = this.stackLength - 1;
     if (targetStackDepth <= 0) {
       this.continue(false);
     }
     this.nextTickWithErrorReporting(() => {
-      while (targetStackDepth < this.engine.stack.length) {
+      while (targetStackDepth < this.stackLength) {
         if (!this.updateCurrentLine(false)) {
           return;
         }
@@ -181,7 +182,7 @@ export class AvmRuntime extends EventEmitter {
    * "Step over"
    */
   public step(reverse: boolean) {
-    const targetStackDepth = this.engine.stack.length;
+    const targetStackDepth = this.stackLength;
     this.nextTickWithErrorReporting(() => {
       do {
         if (!this.updateCurrentLine(reverse)) {
@@ -190,37 +191,43 @@ export class AvmRuntime extends EventEmitter {
         if (this.hitBreakpoint()) {
           return;
         }
-      } while (targetStackDepth < this.engine.stack.length);
+      } while (targetStackDepth < this.stackLength);
       this.sendEvent(RuntimeEvents.stopOnStep);
     });
   }
 
-  public stackLength(): number {
-    return this.engine.stack.length;
+  public get stackLength(): number {
+    return this.getStack().length;
   }
 
   /**
    * Returns a 'stacktrace' where every frame is a TraceReplayStackFrame.
    */
   public stack(startFrame: number, endFrame: number): IRuntimeStack {
-    if (this.engine.stack.length < endFrame) {
-      endFrame = this.engine.stack.length;
-    }
-    const frames: TraceReplayStackFrame[] = [];
-    for (let i = startFrame; i < endFrame; i++) {
-      frames.push(this.engine.stack[i]);
+    const stack = this.getStack();
+    if (stack.length < endFrame) {
+      endFrame = stack.length;
     }
     return {
-      frames: frames,
-      count: this.engine.stack.length,
+      frames: stack.slice(startFrame, endFrame),
+      count: stack.length,
     };
   }
 
-  public getStackFrame(index: number): TraceReplayStackFrame | undefined {
-    if (index < 0 || index >= this.engine.stack.length) {
-      return undefined;
+  private getStack(): CallStackFrame[] {
+    const result: CallStackFrame[] = [];
+    for (const frame of this.engine.stack) {
+      for (const f of frame.callStack) {
+        result.push(f);
+      }
     }
-    return this.engine.stack[index];
+    result.reverse();
+    return result;
+  }
+
+  public getStackFrame(index: number): CallStackFrame | undefined {
+    const stack = this.getStack();
+    return stack[index];
   }
 
   /*
@@ -295,13 +302,13 @@ export class AvmRuntime extends EventEmitter {
   }
 
   private hitBreakpoint(): boolean {
-    const frame = this.engine.currentFrame();
-    const sourceInfo = frame.sourceFile();
-    const sourceLocation = frame.sourceLocation();
-    if (sourceInfo.path) {
-      const breakpoints = this.breakPoints.get(sourceInfo.path) || [];
+    const stack = this.getStack();
+    const frame = stack[0];
+    const source = frame.source;
+    if (source && source.path) {
+      const breakpoints = this.breakPoints.get(source.path) || [];
       const bps = breakpoints.filter((bp) =>
-        this.isFrameLocationOnBreakpoint(sourceLocation, bp.location),
+        this.isFrameLocationOnBreakpoint(source, bp.location),
       );
       if (bps.length !== 0) {
         // send 'stopped' event
@@ -340,7 +347,7 @@ export class AvmRuntime extends EventEmitter {
           location.line,
         );
         if (typeof location.column === 'undefined' && pcs.length !== 0) {
-          const sortedPcs = pcs.slice().sort((a, b) => a.column - b.column);
+          const sortedPcs = pcs.slice().sort((a, b) => a.pc - b.pc);
           location.column = sortedPcs[0].column;
         }
 
@@ -357,6 +364,7 @@ export class AvmRuntime extends EventEmitter {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private sendEvent(event: string, ...args: any[]): void {
     setTimeout(() => {
       this.emit(event, ...args);
@@ -364,7 +372,7 @@ export class AvmRuntime extends EventEmitter {
   }
 
   private isFrameLocationOnBreakpoint(
-    location: FrameSourceLocation,
+    location: FrameSource,
     bp: IRuntimeBreakpointLocation,
   ): boolean {
     if (location.line !== bp.line) {

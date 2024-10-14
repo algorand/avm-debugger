@@ -49,6 +49,7 @@
     "src"
   ],
   "scripts": {
+    "prepare": "npm run compile",
     "compile": "shx rm -rf out && tsc -p ./",
     "lint": "eslint src --ext ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -63,11 +64,12 @@
     "extension:publish": "vsce publish",
     "extension:publish-pre-release": "vsce publish --pre-release",
     "test": "ts-mocha -p tsconfig.json 'tests/**/*test.ts' --timeout 30s --diff false",
-    "test:coverage": "nyc npm run test"
+    "test:coverage": "nyc npm run test",
+    "pre-commit": "npm run lint && npm run typecheck && npm run format"
   },
   "dependencies": {
     "@vscode/debugadapter": "^1.64.0",
-    "algosdk": "^3.0.0-beta.1",
+    "algosdk": "^3.0.0",
     "await-notify": "^1.0.1"
   },
   "devDependencies": {

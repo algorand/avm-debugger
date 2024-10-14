@@ -56,6 +56,12 @@
     "breakpoints": [
       {
         "language": "teal"
+      },
+      {
+        "language": "python"
+      },
+      {
+        "language": "typescript"
       }
     ],
     "debuggers": [
