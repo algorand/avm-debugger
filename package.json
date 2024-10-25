@@ -1,6 +1,6 @@
 {
   "name": "avm-debug-adapter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Algorand AVM transaction and smart contract debugger using the Debugger Adapter Protocol",
   "author": {
     "name": "Algorand, llc"
