@@ -2563,3 +2563,109 @@ describe('Debug Adapter Tests', () => {
     await fixture.client.waitForEvent('terminated');
   });
 });
+
+describe('Puya Debugging', () => {
+  const fixture = new TestFixture();
+
+  before(async () => await fixture.init());
+
+  afterEach(async () => {
+    await fixture.reset();
+  });
+
+  after(async () => {
+    await fixture.stop();
+  });
+
+  it('should correctly step through and inspect variables in a Puya program', async () => {
+    const simulateTraceFile = path.join(
+      DATA_ROOT,
+      'puya/simulate-response.json',
+    );
+    const programSourcesDescriptionFile = path.join(
+      DATA_ROOT,
+      'puya/sources.json',
+    );
+    const { client } = fixture;
+
+    const program = normalizePathAndCasing(
+      nodeFileAccessor,
+      path.join(DATA_ROOT, 'puya/contract.py'),
+    );
+
+    await Promise.all([
+      client.configurationSequence(),
+      client.launch({
+        simulateTraceFile,
+        programSourcesDescriptionFile,
+        stopOnEntry: true,
+      }),
+      client.assertStoppedLocation('entry', {}),
+    ]);
+
+    // Set breakpoint at the beginning of the confirm attendance method
+    await client.setBreakpointsRequest({
+      source: { path: program },
+      breakpoints: [{ line: 24 }],
+    });
+
+    await client.continueRequest({ threadId: 1 });
+    await client.assertStoppedLocation('breakpoint', {
+      path: program,
+      line: 24,
+    });
+
+    // Check variables at the start of the confirm attendance method
+    await assertVariables(client, {
+      pc: 426,
+      stack: [],
+    });
+
+    // Set breakpoint at the beginning of the confirm attendance method
+    await client.setBreakpointsRequest({
+      source: { path: program },
+      breakpoints: [{ line: 27 }],
+    });
+
+    await client.continueRequest({ threadId: 1 });
+    await client.assertStoppedLocation('breakpoint', {
+      path: program,
+      line: 27,
+    });
+
+    // Verify Puya-specific variables
+    const scopesResponse = await client.scopesRequest({ frameId: 0 });
+    const localsScope = scopesResponse.body.scopes.find(
+      (s) => s.name === 'Locals',
+    );
+    assert.ok(localsScope, 'Locals scope not found');
+
+    const variablesResponse = await client.variablesRequest({
+      variablesReference: localsScope!.variablesReference,
+    });
+    assert.deepStrictEqual(
+      variablesResponse.body.variables.find((v) => v.name === 'minted_asset'),
+      {
+        evaluateName: 'minted_asset',
+        indexedVariables: 32,
+        name: 'minted_asset',
+        namedVariables: 2,
+        presentationHint: {
+          attributes: ['rawString'],
+          kind: 'data',
+        },
+        type: 'byte[]',
+        value:
+          '0xd55d3e52e015364e12f1fe09a492b34c9d2bb524b76d32211fa8c1350376e4b3',
+        variablesReference: 1003,
+      },
+    );
+    await client.continueRequest({ threadId: 1 });
+
+    // Continue to the end
+    await Promise.all([
+      client.continueRequest({ threadId: 1 }),
+      client.waitForEvent('terminated'),
+    ]);
+  });
+});

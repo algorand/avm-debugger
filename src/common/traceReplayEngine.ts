@@ -5,7 +5,10 @@ import {
   AvmDebuggingAssets,
   ProgramSourceDescriptor,
   ProgramSourceDescriptorRegistry,
+  isPuyaSourceMap,
 } from './utils';
+import { ProgramReplay } from './programReplay';
+import { AvmValue } from 'algosdk/dist/types/client/v2/algod/models/types';
 
 export enum SteppingResultType {
   /* eslint-disable @typescript-eslint/naming-convention */
@@ -48,7 +51,7 @@ export class TraceReplayEngine {
   public initialAppState = new Map<bigint, AppState>();
   public currentAppState = new Map<bigint, AppState>();
 
-  public stack: TraceReplayStackFrame[] = [];
+  public stack: TraceReplayFrame[] = [];
 
   public reset() {
     this.simulateResponse = undefined;
@@ -182,7 +185,7 @@ export class TraceReplayEngine {
     this.programHashToSource.set(programHash, sourceDescriptor);
   }
 
-  public currentFrame(): TraceReplayStackFrame {
+  public currentFrame(): TraceReplayFrame {
     return this.stack[this.stack.length - 1];
   }
 
@@ -260,44 +263,63 @@ export interface FrameSource {
   path?: string;
   content?: string;
   contentMimeType?: string;
-}
-
-export interface FrameSourceLocation {
   line: number;
   endLine?: number;
   column?: number;
   endColumn?: number;
 }
 
-export abstract class TraceReplayStackFrame {
-  constructor(protected readonly engine: TraceReplayEngine) {}
-
-  public abstract name(): string;
-  public abstract sourceFile(): FrameSource;
-  public abstract sourceLocation(): FrameSourceLocation;
-
-  public abstract forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void;
-  public abstract backward(
-    stack: TraceReplayStackFrame[],
-  ): ExceptionInfo | void;
+export interface ProgramState {
+  readonly stack: AvmValue[];
+  readonly scratch: Map<number, AvmValue>;
+  readonly pc: number;
+  readonly op: string | undefined;
+  readonly appId: bigint | undefined;
+  readonly variables: [string, AvmValue][];
 }
 
-export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
+export interface CallStackFrame {
+  /* Represents a function call within a program's call stack */
+  readonly name: string;
+  readonly source: FrameSource | undefined;
+  readonly programState: ProgramState | undefined;
+}
+
+export interface TraceReplayFrame {
+  /* 
+    TraceReplayFrame represents a frame within the trace
+    a program frame may have multiple call frames within in it
+    one for each function in the call stack
+  */
+
+  get callStack(): CallStackFrame[];
+  forward(stack: TraceReplayFrame[]): ExceptionInfo | void;
+  backward(stack: TraceReplayFrame[]): ExceptionInfo | void;
+}
+
+export class TopLevelTransactionGroupsFrame
+  implements TraceReplayFrame, CallStackFrame
+{
   private index: number = 0;
   private txnGroupDone: boolean = false;
-
   constructor(
-    engine: TraceReplayEngine,
+    private readonly engine: TraceReplayEngine,
     private readonly response: algosdk.modelsv2.SimulateResponse,
-  ) {
-    super(engine);
+  ) {}
+
+  public get callStack(): CallStackFrame[] {
+    return [this];
   }
 
-  public name(): string {
+  public get programState() {
+    return undefined;
+  }
+
+  public get name(): string {
     return `group ${this.index}`;
   }
 
-  public sourceFile(): FrameSource {
+  public get source(): FrameSource {
     const individualGroups = this.response.txnGroups.map((group) =>
       group.txnResults.map((txnResult) =>
         algosdk.parseJSON(algosdk.encodeJSON(txnResult.txnResult.txn), {
@@ -305,14 +327,6 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
         }),
       ),
     );
-    return {
-      name: `transaction-groups.json`,
-      content: algosdk.stringifyJSON(individualGroups, undefined, 2),
-      contentMimeType: 'application/json',
-    };
-  }
-
-  public sourceLocation(): FrameSourceLocation {
     let lineOffset = 1; // For opening bracket
     for (let i = 0; i < this.index; i++) {
       for (const txnResult of this.response.txnGroups[i].txnResults) {
@@ -331,12 +345,15 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
         .split('\n').length;
     }
     return {
+      name: `transaction-groups.json`,
+      content: algosdk.stringifyJSON(individualGroups, undefined, 2),
+      contentMimeType: 'application/json',
       line: lineOffset,
       endLine: lineOffset + lineCount,
     };
   }
 
-  public forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+  public forward(stack: TraceReplayFrame[]): ExceptionInfo | void {
     if (!this.txnGroupDone) {
       stack.push(this.frameForIndex(this.index));
       this.txnGroupDone = true;
@@ -377,7 +394,7 @@ export class TopLevelTransactionGroupsFrame extends TraceReplayStackFrame {
     return txnGroupFrame;
   }
 
-  public backward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+  public backward(stack: TraceReplayFrame[]): ExceptionInfo | void {
     if (this.txnGroupDone) {
       this.txnGroupDone = false;
       return;
@@ -417,7 +434,7 @@ interface TransactionFailureInfo {
   path: number[];
 }
 
-export class TransactionGroupStackFrame extends TraceReplayStackFrame {
+export class TransactionGroupStackFrame implements TraceReplayFrame {
   private txnIndex: number = 0;
   private logicSigStatus: ProgramStatus = ProgramStatus.DONE;
   private appStatus: ProgramStatus = ProgramStatus.DONE;
@@ -427,7 +444,7 @@ export class TransactionGroupStackFrame extends TraceReplayStackFrame {
   private sourceLocations: TransactionSourceLocation[] = [];
 
   constructor(
-    engine: TraceReplayEngine,
+    private engine: TraceReplayEngine,
     private txnPath: number[],
     private readonly txnInfos: algosdk.modelsv2.PendingTransactionResponse[],
     private readonly txnTraces: Array<
@@ -435,8 +452,6 @@ export class TransactionGroupStackFrame extends TraceReplayStackFrame {
     >,
     private readonly failureInfo: TransactionFailureInfo | undefined,
   ) {
-    super(engine);
-
     const firstTrace = txnTraces[0];
     if (firstTrace) {
       if (firstTrace.logicSigTrace) {
@@ -514,47 +529,47 @@ export class TransactionGroupStackFrame extends TraceReplayStackFrame {
     }
   }
 
-  public name(): string {
+  public get callStack(): CallStackFrame[] {
+    return [this];
+  }
+
+  public get programState() {
+    return undefined;
+  }
+
+  public get name(): string {
     return `${this.txnPath.length > 2 ? 'inner ' : ''}transaction ${
       this.txnIndex
     }`;
   }
 
-  public sourceFile(): FrameSource {
+  public get source(): FrameSource {
+    const sourceLocation = this.sourceLocations[this.txnIndex];
+    let line = sourceLocation.line;
+    let endLine = sourceLocation.lineEnd;
+    if (this.logicSigStatus === ProgramStatus.STARTING) {
+      if (sourceLocation.lsigLocation) {
+        line = sourceLocation.lsigLocation.line;
+        endLine = sourceLocation.lsigLocation.lineEnd;
+      }
+    } else if (this.appStatus === ProgramStatus.STARTING) {
+      if (sourceLocation.appLocation) {
+        line = sourceLocation.appLocation.line;
+        endLine = sourceLocation.appLocation.lineEnd;
+      }
+    }
     return {
       name: `${
         this.txnPath.length > 2 ? 'inner-' : ''
       }transaction-group-${this.txnPath.slice(0, -1).join('-')}.json`,
       content: this.sourceContent,
       contentMimeType: 'application/json',
+      line: line,
+      endLine: endLine,
     };
   }
 
-  public sourceLocation(): FrameSourceLocation {
-    const sourceLocation = this.sourceLocations[this.txnIndex];
-    let frameSourceLocation: FrameSourceLocation = {
-      line: sourceLocation.line,
-      endLine: sourceLocation.lineEnd,
-    };
-    if (this.logicSigStatus === ProgramStatus.STARTING) {
-      if (sourceLocation.lsigLocation) {
-        frameSourceLocation = {
-          line: sourceLocation.lsigLocation.line,
-          endLine: sourceLocation.lsigLocation.lineEnd,
-        };
-      }
-    } else if (this.appStatus === ProgramStatus.STARTING) {
-      if (sourceLocation.appLocation) {
-        frameSourceLocation = {
-          line: sourceLocation.appLocation.line,
-          endLine: sourceLocation.appLocation.lineEnd,
-        };
-      }
-    }
-    return frameSourceLocation;
-  }
-
-  public forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+  public forward(stack: TraceReplayFrame[]): ExceptionInfo | void {
     const currentTxnTrace = this.txnTraces[this.txnIndex];
     const currentTxnInfo = this.txnInfos[this.txnIndex];
 
@@ -659,7 +674,7 @@ export class TransactionGroupStackFrame extends TraceReplayStackFrame {
     stack.pop();
   }
 
-  public backward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+  public backward(stack: TraceReplayFrame[]): ExceptionInfo | void {
     if (this.onException) {
       this.onException = false;
       return;
@@ -712,34 +727,26 @@ export class TransactionGroupStackFrame extends TraceReplayStackFrame {
   }
 }
 
-export interface ProgramState {
-  pc: number;
-  stack: algosdk.modelsv2.AvmValue[];
-  scratch: Map<number, algosdk.modelsv2.AvmValue>;
-}
-
-export class ProgramStackFrame extends TraceReplayStackFrame {
+export class ProgramStackFrame implements TraceReplayFrame {
+  private lastIndex: number | undefined;
   private index: number = 0;
   private handledInnerTxns: boolean = false;
   private initialAppState: AppState | undefined;
   private logicSigAddress: string | undefined;
   private blockingException: ExceptionInfo | undefined;
-
-  public state: ProgramState = { pc: 0, stack: [], scratch: new Map() };
+  private programReplay: ProgramReplay;
+  public readonly isPuyaFrame: boolean;
 
   constructor(
-    engine: TraceReplayEngine,
+    private readonly engine: TraceReplayEngine,
     private readonly txnPath: number[],
     private readonly programType: 'logic sig' | 'approval' | 'clear state',
-    private readonly programHash: Uint8Array,
+    programHash: Uint8Array,
     private readonly programTrace: algosdk.modelsv2.SimulationOpcodeTraceUnit[],
     private readonly trace: algosdk.modelsv2.SimulationTransactionExecTrace,
     private readonly txnInfo: algosdk.modelsv2.PendingTransactionResponse,
     private readonly failureInfo: TransactionFailureInfo | undefined,
   ) {
-    super(engine);
-    this.state.pc = Number(programTrace[0].pc);
-
     const appID = this.currentAppID();
     if (typeof appID !== 'undefined') {
       this.initialAppState = engine.currentAppState.get(appID)!.clone();
@@ -753,6 +760,17 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
       const lsigAccount = new algosdk.LogicSigAccount(lsigBytes);
       this.logicSigAddress = lsigAccount.address().toString();
     }
+
+    const sourceMapPath = this.engine.programHashToSource.get(programHash);
+    this.isPuyaFrame = isPuyaSourceMap(sourceMapPath?.json);
+
+    this.programReplay = new ProgramReplay(
+      this.name,
+      programTrace,
+      sourceMapPath,
+      this.currentAppID(),
+      engine.currentAppState,
+    );
   }
 
   public currentAppID(): bigint | undefined {
@@ -770,7 +788,11 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     return undefined;
   }
 
-  public name(): string {
+  public get callStack(): CallStackFrame[] {
+    return this.programReplay.callStack;
+  }
+
+  public get name(): string {
     const appID = this.currentAppID();
     if (typeof appID !== 'undefined') {
       return `app ${appID} ${this.programType} program`;
@@ -781,213 +803,113 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
     return `${this.programType} program`;
   }
 
-  public sourceFile(): FrameSource {
-    const sourceInfo = this.engine.programHashToSource.get(this.programHash);
-    if (!sourceInfo) {
-      let name: string;
-      const appID = this.currentAppID();
-      if (typeof appID !== 'undefined') {
-        name = `app ${appID} ${this.programType}.teal`;
-      } else if (typeof this.logicSigAddress !== 'undefined') {
-        name = `logic sig ${this.logicSigAddress}.teal`;
-      } else {
-        name = `program ${algosdk.bytesToHex(this.programHash)}.teal`;
-      }
-      return {
-        name,
-        content: '// source not available',
-      };
-    }
-    const location = sourceInfo.sourcemap.getLocationForPc(this.state.pc);
-    // If we can't find a location for this PC, just return the first source.
-    const sourceIndex = location ? location.sourceIndex : 0;
-    const source = sourceInfo.getFullSourcePath(sourceIndex);
-    return {
-      name: source,
-      path: source,
-    };
-  }
-
-  public sourceLocation(): FrameSourceLocation {
-    const sourceInfo = this.engine.programHashToSource.get(this.programHash);
-    if (!sourceInfo) {
-      return { line: 0 };
-    }
-    const location = sourceInfo.sourcemap.getLocationForPc(this.state.pc);
-    if (!location) {
-      return { line: 0 };
-    }
-    return {
-      line: location.line,
-      column: location.column,
-    };
-  }
-
-  public forward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
-    if (this.blockingException) {
-      return this.blockingException;
-    }
-
-    if (this.index === this.programTrace.length) {
-      stack.pop();
-      return;
-    }
-
+  get pendingInnerTxn() {
     const currentUnit = this.programTrace[this.index];
-    this.processUnit(currentUnit);
+    const spawnedInners = currentUnit?.spawnedInners;
+    return (
+      !this.handledInnerTxns && spawnedInners && spawnedInners.length !== 0
+    );
+  }
 
-    const spawnedInners = currentUnit.spawnedInners;
-    if (!this.handledInnerTxns && spawnedInners && spawnedInners.length !== 0) {
-      const spawnedInnerIndexes = spawnedInners.map((i) => Number(i));
-      const innerGroupInfo: algosdk.modelsv2.PendingTransactionResponse[] = [];
-      const innerTraces: algosdk.modelsv2.SimulationTransactionExecTrace[] = [];
-      for (const innerIndex of spawnedInnerIndexes) {
-        const innerTxnInfo = this.txnInfo.innerTxns![innerIndex];
-        const innerTrace = this.trace.innerTrace![innerIndex];
-        innerGroupInfo.push(innerTxnInfo);
-        innerTraces.push(innerTrace);
-      }
-      const expandedPath = this.txnPath.slice();
-      expandedPath.push(spawnedInnerIndexes[0]);
-      let innerFailureInfo: TransactionFailureInfo | undefined = undefined;
-      if (
-        this.failureInfo &&
-        this.failureInfo.path.length > this.txnPath.length - 1 &&
-        pathStartWith(this.failureInfo.path, this.txnPath.slice(1))
-      ) {
-        innerFailureInfo = this.failureInfo;
-      }
-      const innerGroupFrame = new TransactionGroupStackFrame(
-        this.engine,
-        expandedPath,
-        innerGroupInfo,
-        innerTraces,
-        innerFailureInfo,
-      );
-      stack.push(innerGroupFrame);
-      this.handledInnerTxns = true;
-      return;
+  public forward(stack: TraceReplayFrame[]): ExceptionInfo | void {
+    if (!this.pendingInnerTxn && this.index < this.programTrace.length) {
+      this.lastIndex = this.index;
     }
-
-    this.index++;
-
-    if (this.index < this.programTrace.length) {
-      this.state.pc = Number(this.programTrace[this.index].pc);
-      this.handledInnerTxns = false;
-    } else {
-      if (this.programType === 'clear state' && this.trace.clearStateRollback) {
-        // If there's a rollback, reset the app state to the initial state
-        this.engine.currentAppState.set(
-          this.currentAppID()!,
-          this.initialAppState!.clone(),
-        );
-        // Don't return the clear state error here, failureInfo takes precedence
-      }
-
-      if (
-        this.failureInfo &&
-        pathsEqual(this.txnPath.slice(1), this.failureInfo.path)
-      ) {
-        // If there's an error, show it at the end of execution
-        this.blockingException = new ExceptionInfo(this.failureInfo.message);
+    const lastLocation = this.programReplay.nextPcSource;
+    let again = true;
+    while (again) {
+      if (this.blockingException) {
         return this.blockingException;
       }
 
-      if (this.programType === 'clear state' && this.trace.clearStateRollback) {
-        // Show error message for clear state rollback. This is NOT a blocking error.
-        if (typeof this.trace.clearStateRollbackError !== 'undefined') {
-          return new ExceptionInfo(this.trace.clearStateRollbackError);
+      if (this.index === this.programTrace.length) {
+        stack.pop();
+        return;
+      }
+
+      if (this.pendingInnerTxn) {
+        const currentUnit = this.programTrace[this.index];
+        const spawnedInners = currentUnit.spawnedInners!;
+        const spawnedInnerIndexes = spawnedInners.map((i) => Number(i));
+        const innerGroupInfo: algosdk.modelsv2.PendingTransactionResponse[] =
+          [];
+        const innerTraces: algosdk.modelsv2.SimulationTransactionExecTrace[] =
+          [];
+        for (const innerIndex of spawnedInnerIndexes) {
+          const innerTxnInfo = this.txnInfo.innerTxns![innerIndex];
+          const innerTrace = this.trace.innerTrace![innerIndex];
+          innerGroupInfo.push(innerTxnInfo);
+          innerTraces.push(innerTrace);
         }
-        // If no specific error message, show a generic one (this is what happens during rejection)
-        return new ExceptionInfo('Clear state program did not succeed');
+        const expandedPath = this.txnPath.slice();
+        expandedPath.push(spawnedInnerIndexes[0]);
+        let innerFailureInfo: TransactionFailureInfo | undefined = undefined;
+        if (
+          this.failureInfo &&
+          this.failureInfo.path.length > this.txnPath.length - 1 &&
+          pathStartWith(this.failureInfo.path, this.txnPath.slice(1))
+        ) {
+          innerFailureInfo = this.failureInfo;
+        }
+        const innerGroupFrame = new TransactionGroupStackFrame(
+          this.engine,
+          expandedPath,
+          innerGroupInfo,
+          innerTraces,
+          innerFailureInfo,
+        );
+        stack.push(innerGroupFrame);
+        this.handledInnerTxns = true;
+        return;
       }
-    }
-  }
+      this.programReplay.forward();
+      // loop until location has advanced
+      again =
+        this.isPuyaFrame &&
+        !locationHasAdvanced(lastLocation, this.programReplay.nextPcSource);
 
-  private processUnit(unit: algosdk.modelsv2.SimulationOpcodeTraceUnit) {
-    this.state.pc = Number(unit.pc);
+      this.index++;
 
-    const stackPopCount = unit.stackPopCount ? Number(unit.stackPopCount) : 0;
-    if (stackPopCount > this.state.stack.length) {
-      throw new Error(
-        `Stack underflow at pc ${unit.pc}: ${stackPopCount} > ${this.state.stack.length}`,
-      );
-    }
-    this.state.stack = this.state.stack.slice(
-      0,
-      this.state.stack.length - stackPopCount,
-    );
-    if (unit.stackAdditions) {
-      this.state.stack.push(...unit.stackAdditions);
-    }
-
-    for (const scratchWrite of unit.scratchChanges || []) {
-      const slot = Number(scratchWrite.slot);
-      if (slot < 0 || slot >= 256) {
-        throw new Error(`Invalid scratch slot ${slot}`);
-      }
-      const newValue = scratchWrite.newValue;
-      if (newValue.type === 2 && !newValue.uint) {
-        // When setting to 0, delete the entry, since 0 is the default.
-        this.state.scratch.delete(slot);
+      if (this.index < this.programTrace.length) {
+        this.handledInnerTxns = false;
       } else {
-        this.state.scratch.set(slot, newValue);
-      }
-    }
+        if (
+          this.programType === 'clear state' &&
+          this.trace.clearStateRollback
+        ) {
+          // If there's a rollback, reset the app state to the initial state
+          this.engine.currentAppState.set(
+            this.currentAppID()!,
+            this.initialAppState!.clone(),
+          );
+          // Don't return the clear state error here, failureInfo takes precedence
+        }
 
-    if (unit.stateChanges && unit.stateChanges.length !== 0) {
-      const appID = this.currentAppID();
-      if (typeof appID === 'undefined') {
-        throw new Error('No appID');
-      }
+        if (
+          this.failureInfo &&
+          pathsEqual(this.txnPath.slice(1), this.failureInfo.path)
+        ) {
+          // If there's an error, show it at the end of execution
+          this.blockingException = new ExceptionInfo(this.failureInfo.message);
+          return this.blockingException;
+        }
 
-      const state = this.engine.currentAppState.get(appID);
-      if (!state) {
-        throw new Error(`No state for appID ${appID}`);
-      }
-
-      for (const stateChange of unit.stateChanges) {
-        switch (stateChange.appStateType) {
-          case 'g':
-            if (stateChange.operation === 'w') {
-              state.globalState.set(stateChange.key, stateChange.newValue!);
-            } else if (stateChange.operation === 'd') {
-              state.globalState.delete(stateChange.key);
-            }
-            break;
-          case 'l':
-            if (stateChange.operation === 'w') {
-              const accountState = state.localState.get(
-                stateChange.account!.toString(),
-              );
-              if (!accountState) {
-                const newState = new ByteArrayMap<algosdk.modelsv2.AvmValue>();
-                newState.set(stateChange.key, stateChange.newValue!);
-                state.localState.set(stateChange.account!.toString(), newState);
-              } else {
-                accountState.set(stateChange.key, stateChange.newValue!);
-              }
-            } else if (stateChange.operation === 'd') {
-              const accountState = state.localState.get(
-                stateChange.account!.toString(),
-              );
-              if (accountState) {
-                accountState.delete(stateChange.key);
-              }
-            }
-            break;
-          case 'b':
-            if (stateChange.operation === 'w') {
-              state.boxState.set(stateChange.key, stateChange.newValue!);
-            } else if (stateChange.operation === 'd') {
-              state.boxState.delete(stateChange.key);
-            }
+        if (
+          this.programType === 'clear state' &&
+          this.trace.clearStateRollback
+        ) {
+          // Show error message for clear state rollback. This is NOT a blocking error.
+          if (typeof this.trace.clearStateRollbackError !== 'undefined') {
+            return new ExceptionInfo(this.trace.clearStateRollbackError);
+          }
+          // If no specific error message, show a generic one (this is what happens during rejection)
+          return new ExceptionInfo('Clear state program did not succeed');
         }
       }
     }
   }
 
-  public backward(stack: TraceReplayStackFrame[]): ExceptionInfo | void {
+  public backward(stack: TraceReplayFrame[]): ExceptionInfo | void {
     if (this.blockingException) {
       this.blockingException = undefined;
     }
@@ -1000,19 +922,21 @@ export class ProgramStackFrame extends TraceReplayStackFrame {
       stack.pop();
       return;
     }
-    const targetIndex = this.index - 1;
+    // reset and then advance until the current index is the lastIndex
+    const stopAt = this.lastIndex;
     this.reset();
-    while (this.index < targetIndex) {
-      this.engine.forward();
+    if (stopAt !== undefined) {
+      while (this.index < stopAt) {
+        this.engine.forward();
+      }
     }
   }
 
   private reset() {
+    this.lastIndex = undefined;
     this.index = 0;
     this.handledInnerTxns = false;
-    this.state.pc = Number(this.programTrace[0].pc);
-    this.state.stack = [];
-    this.state.scratch.clear();
+    this.programReplay.reset();
     if (typeof this.initialAppState !== 'undefined') {
       this.engine.currentAppState.set(
         this.currentAppID()!,
@@ -1047,4 +971,32 @@ function pathStartWith(path: number[], prefix: number[]): boolean {
     }
   }
   return true;
+}
+
+function locationHasAdvanced(
+  from: FrameSource | undefined,
+  to: FrameSource | undefined,
+): boolean {
+  // two unknown locations have not advanced
+  if (from === undefined && to === undefined) {
+    return false;
+  }
+  // unknown -> known has advanced
+  if (from === undefined && to !== undefined) {
+    return true;
+  }
+  // known -> unknown has not advanced
+  if (from !== undefined && to === undefined) {
+    return false;
+  }
+  if (from?.path !== to?.path) {
+    return true;
+  }
+  if (from?.line !== to?.line) {
+    return true;
+  }
+  if (from?.column !== to?.column) {
+    return true;
+  }
+  return false;
 }

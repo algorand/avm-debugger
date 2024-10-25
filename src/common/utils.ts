@@ -14,6 +14,91 @@ export function utf8Decode(data: Uint8Array): string | undefined {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+function parseAlgosdkV2SimulateResponse(obj: any): any {
+  if (obj === null || typeof obj !== 'object') return obj;
+
+  const addressFields = new Set([
+    'snd',
+    'close',
+    'aclose',
+    'rekey',
+    'rcv',
+    'arcv',
+    'fadd',
+    'asnd',
+  ]);
+  const toUintFields = new Set(['gh', 'apaa']);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const processValue = (key: string, value: any): any => {
+    if (typeof value === 'string') {
+      if (addressFields.has(key)) {
+        try {
+          return algosdk.encodeAddress(algosdk.base64ToBytes(value));
+        } catch {
+          return value;
+        }
+      }
+      if (toUintFields.has(key)) {
+        return algosdk.base64ToBytes(value);
+      }
+    } else if (Array.isArray(value)) {
+      if (toUintFields.has(key)) {
+        return value.map((item) =>
+          typeof item === 'string' ? algosdk.base64ToBytes(item) : item,
+        );
+      }
+      return value.map((item) => parseAlgosdkV2SimulateResponse(item));
+    } else if (typeof value === 'object' && value !== null) {
+      return parseAlgosdkV2SimulateResponse(value);
+    }
+    return value;
+  };
+
+  return Object.fromEntries(
+    Object.entries(obj).map(([key, value]) => [key, processValue(key, value)]),
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function objectToMapRecursive(obj: any): any {
+  if (obj === null || typeof obj !== 'object' || obj instanceof Uint8Array) {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(objectToMapRecursive);
+  }
+
+  return new Map(
+    Object.entries(obj).map(([key, value]) => [
+      key,
+      objectToMapRecursive(value),
+    ]),
+  );
+}
+
+function tryParseAlgosdkV2SimulateResponse(
+  rawSimulateTrace: Uint8Array,
+): algosdk.modelsv2.SimulateResponse {
+  const algosdkV2Response = parseAlgosdkV2SimulateResponse(
+    algosdk.parseJSON(algosdk.bytesToString(rawSimulateTrace), {
+      intDecoding: algosdk.IntDecoding.MIXED,
+    }),
+  );
+
+  if (algosdkV2Response.version !== 2) {
+    throw new Error(
+      `Unsupported simulate response version: ${algosdkV2Response.version}`,
+    );
+  }
+
+  return algosdk.modelsv2.SimulateResponse.fromEncodingData(
+    objectToMapRecursive(algosdkV2Response),
+  );
+}
+
 /**
  * Normalize the given file path.
  *
@@ -125,37 +210,44 @@ export class ByteArrayMap<T> {
   }
 }
 
-interface ProgramSourceEntryFile {
+export interface ProgramSourceEntryFile {
   'txn-group-sources': ProgramSourceEntry[];
 }
 
-interface ProgramSourceEntry {
+export interface ProgramSourceEntry {
   hash: string;
-  'sourcemap-location': string;
+  'sourcemap-location': string | null;
+}
+
+export interface PCEvent {
+  subroutine?: string;
+  block?: string;
+  op?: string;
+  callsub?: string;
+  retsub?: boolean;
+  params?: Record<string, string>;
+  stack_in?: string[];
+  stack_out?: string[];
+  defined_out?: string[];
+}
+
+interface ISourceMap {
+  version: number;
+  sources: string[];
+  names: string[];
+  mappings: string;
+  op_pc_offset?: number;
+  pc_events?: Record<string, PCEvent>;
 }
 
 export class ProgramSourceDescriptor {
-  public readonly fileAccessor: FileAccessor;
-  public readonly sourcemapFileLocation: string;
-  public readonly sourcemap: algosdk.ProgramSourceMap;
-  public readonly hash: Uint8Array;
-
-  constructor({
-    fileAccessor,
-    sourcemapFileLocation,
-    sourcemap,
-    hash,
-  }: {
-    fileAccessor: FileAccessor;
-    sourcemapFileLocation: string;
-    sourcemap: algosdk.ProgramSourceMap;
-    hash: Uint8Array;
-  }) {
-    this.fileAccessor = fileAccessor;
-    this.sourcemapFileLocation = sourcemapFileLocation;
-    this.sourcemap = sourcemap;
-    this.hash = hash;
-  }
+  constructor(
+    public readonly fileAccessor: FileAccessor,
+    public readonly sourcemapFileLocation: string,
+    public readonly json: ISourceMap,
+    public readonly sourcemap: algosdk.ProgramSourceMap,
+    public readonly hash: Uint8Array,
+  ) {}
 
   public sourcePaths(): string[] {
     return this.sourcemap.sources.map((_, index) =>
@@ -175,27 +267,27 @@ export class ProgramSourceDescriptor {
 
   static async fromJSONObj(
     fileAccessor: FileAccessor,
-    originFile: string,
+    originPath: string,
     data: ProgramSourceEntry,
   ): Promise<ProgramSourceDescriptor> {
     const sourcemapFileLocation = normalizePathAndCasing(
       fileAccessor,
-      fileAccessor.filePathRelativeTo(originFile, data['sourcemap-location']),
+      fileAccessor.filePathRelativeTo(originPath, data['sourcemap-location']!),
     );
     const rawSourcemap = await prefixPotentialError(
       fileAccessor.readFile(sourcemapFileLocation),
       'Could not read source map file',
     );
-    const sourcemap = new algosdk.ProgramSourceMap(
-      JSON.parse(new TextDecoder().decode(rawSourcemap)),
-    );
+    const json = JSON.parse(new TextDecoder().decode(rawSourcemap));
+    const sourcemap = new algosdk.ProgramSourceMap(json);
 
-    return new ProgramSourceDescriptor({
+    return new ProgramSourceDescriptor(
       fileAccessor,
       sourcemapFileLocation,
+      json,
       sourcemap,
-      hash: algosdk.base64ToBytes(data.hash),
-    });
+      algosdk.base64ToBytes(data.hash),
+    );
   }
 }
 
@@ -216,25 +308,19 @@ export class ProgramSourceDescriptorRegistry {
     return this.registry.get(hash);
   }
 
-  static async loadFromFile(
+  static async loadFromContent(
     fileAccessor: FileAccessor,
-    programSourcesDescriptionFilePath: string,
+    jsonSourcesDescription: ProgramSourceEntryFile,
+    originPath?: string,
   ): Promise<ProgramSourceDescriptorRegistry> {
-    const rawSourcesDescription = await prefixPotentialError(
-      fileAccessor.readFile(programSourcesDescriptionFilePath),
-      'Could not read program sources description file',
-    );
-    let jsonSourcesDescription: ProgramSourceEntryFile;
     try {
-      jsonSourcesDescription = JSON.parse(
-        new TextDecoder().decode(rawSourcesDescription),
-      ) as ProgramSourceEntryFile;
       if (
         !Array.isArray(jsonSourcesDescription['txn-group-sources']) ||
         !jsonSourcesDescription['txn-group-sources'].every(
           (entry) =>
             typeof entry.hash === 'string' &&
-            typeof entry['sourcemap-location'] === 'string',
+            (typeof entry['sourcemap-location'] === 'string' ||
+              entry['sourcemap-location'] === null),
         )
       ) {
         throw new Error('Invalid program sources description file');
@@ -242,17 +328,22 @@ export class ProgramSourceDescriptorRegistry {
     } catch (e) {
       const err = e as Error;
       throw new Error(
-        `Could not parse program sources description file from '${programSourcesDescriptionFilePath}': ${err.message}`,
+        `Could not parse program sources description ${
+          originPath ? `file from '${originPath}'` : 'content'
+        }: ${err.message}`,
       );
     }
-    const programSources = jsonSourcesDescription['txn-group-sources'].map(
-      (source) =>
+
+    const programSources = jsonSourcesDescription['txn-group-sources']
+      .filter((source) => source['sourcemap-location'] !== null)
+      .map((source) =>
         ProgramSourceDescriptor.fromJSONObj(
           fileAccessor,
-          programSourcesDescriptionFilePath,
+          originPath || '',
           source,
         ),
-    );
+      );
+
     return new ProgramSourceDescriptorRegistry({
       txnGroupSources: await Promise.all(programSources),
     });
@@ -268,7 +359,8 @@ export class AvmDebuggingAssets {
   static async loadFromFiles(
     fileAccessor: FileAccessor,
     simulateTraceFilePath: string,
-    programSourcesDescriptionFilePath: string,
+    programSourcesDescription: ProgramSourceEntryFile,
+    programSourcesDescriptionFolder: string,
   ): Promise<AvmDebuggingAssets> {
     const rawSimulateTrace = await prefixPotentialError(
       fileAccessor.readFile(simulateTraceFilePath),
@@ -276,10 +368,14 @@ export class AvmDebuggingAssets {
     );
     let simulateResponse: algosdk.modelsv2.SimulateResponse;
     try {
-      simulateResponse = algosdk.decodeJSON(
-        algosdk.bytesToString(rawSimulateTrace),
-        algosdk.modelsv2.SimulateResponse,
-      );
+      try {
+        simulateResponse = algosdk.decodeJSON(
+          algosdk.bytesToString(rawSimulateTrace),
+          algosdk.modelsv2.SimulateResponse,
+        );
+      } catch (e) {
+        simulateResponse = tryParseAlgosdkV2SimulateResponse(rawSimulateTrace);
+      }
       if (simulateResponse.version !== 2) {
         throw new Error(
           `Unsupported simulate response version: ${simulateResponse.version}`,
@@ -302,16 +398,28 @@ export class AvmDebuggingAssets {
     }
 
     const txnGroupDescriptorList =
-      await ProgramSourceDescriptorRegistry.loadFromFile(
+      await ProgramSourceDescriptorRegistry.loadFromContent(
         fileAccessor,
-        programSourcesDescriptionFilePath,
+        programSourcesDescription,
+        programSourcesDescriptionFolder,
       );
 
     return new AvmDebuggingAssets(simulateResponse, txnGroupDescriptorList);
   }
 }
 
-function prefixPotentialError<T>(task: Promise<T>, prefix: string): Promise<T> {
+export function isPuyaSourceMap(sourcemap: ISourceMap | undefined): boolean {
+  return sourcemap?.pc_events !== undefined;
+}
+
+export function isPuyaFrontendSourceExtension(filePath?: string): boolean {
+  return !filePath?.endsWith('.teal') || false;
+}
+
+export function prefixPotentialError<T>(
+  task: Promise<T>,
+  prefix: string,
+): Promise<T> {
   return task.catch((error) => {
     throw new Error(`${prefix}: ${error.message}`);
   });

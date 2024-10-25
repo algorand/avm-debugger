@@ -26,9 +26,22 @@ export class AvmDebugConfigProvider
       return null;
     }
 
-    if (!config.programSourcesDescriptionFile) {
+    if (
+      config.programSourcesDescription &&
+      !config.programSourcesDescriptionFolder
+    ) {
       vscode.window.showErrorMessage(
-        'Missing property "programSourcesDescriptionFile" in debug config',
+        'Missing property "programSourcesDescriptionFolder" in debug config',
+      );
+      return null;
+    }
+
+    if (
+      !config.programSourcesDescriptionFile &&
+      !config.programSourcesDescription
+    ) {
+      vscode.window.showErrorMessage(
+        'Either "programSourcesDescriptionFile" or "programSourcesDescription" + "programSourcesDescriptionFolder" must be provided in debug config',
       );
       return null;
     }

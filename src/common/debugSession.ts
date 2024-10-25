@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   DebugSession,
   InitializedEvent,
@@ -14,11 +15,17 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { AvmRuntime, IRuntimeBreakpoint } from './runtime';
-import { ProgramStackFrame } from './traceReplayEngine';
 import { Subject } from 'await-notify';
 import * as algosdk from 'algosdk';
 import { FileAccessor } from './fileAccessor';
-import { AvmDebuggingAssets, utf8Decode, limitArray } from './utils';
+import {
+  AvmDebuggingAssets,
+  utf8Decode,
+  limitArray,
+  ProgramSourceEntryFile,
+  prefixPotentialError,
+  isPuyaFrontendSourceExtension,
+} from './utils';
 
 const GENERIC_ERROR_ID = 9999;
 
@@ -43,7 +50,11 @@ export interface ILaunchRequestArguments
   /** An absolute path to the simulate response to debug. */
   simulateTraceFile: string;
   /** An absolute path to the file which maps programs to source maps. */
-  programSourcesDescriptionFile: string;
+  programSourcesDescriptionFile?: string;
+  /** JSON encoded content of the program sources description file. */
+  programSourcesDescription?: ProgramSourceEntryFile;
+  /** The folder containing the program sources description file (when using programSourcesDescription). */
+  programSourcesDescriptionFolder?: string;
   /** Automatically stop target after launch. If not specified, target does not stop. */
   stopOnEntry?: boolean;
 }
@@ -64,6 +75,7 @@ export class AvmDebugSession extends DebugSession {
     | AppStateScope
     | AppSpecificStateScope
     | AvmValueReference
+    | PuyaScope
   >();
 
   private _sourceHandles = new Handles<{
@@ -190,10 +202,33 @@ export class AvmDebugSession extends DebugSession {
     args: ILaunchRequestArguments,
   ) {
     try {
+      let programSourcesDescription: ProgramSourceEntryFile;
+      let folder: string;
+      if (args.programSourcesDescription !== undefined) {
+        programSourcesDescription = args.programSourcesDescription;
+        folder = args.programSourcesDescriptionFolder || '';
+      } else if (args.programSourcesDescriptionFile !== undefined) {
+        // earlier versions of avm-debugger passed program source information via a file/
+        folder = args.programSourcesDescriptionFile;
+        const sourcesDescriptionBytes = await prefixPotentialError(
+          this.fileAccessor.readFile(args.programSourcesDescriptionFile),
+          'Could not read program sources description file',
+        );
+        const sourcesDescriptionText = new TextDecoder().decode(
+          sourcesDescriptionBytes,
+        );
+        programSourcesDescription = JSON.parse(
+          sourcesDescriptionText,
+        ) as ProgramSourceEntryFile;
+      } else {
+        throw Error('missing programSources');
+      }
+
       const debugAssets = await AvmDebuggingAssets.loadFromFiles(
         this.fileAccessor,
         args.simulateTraceFile,
-        args.programSourcesDescriptionFile,
+        programSourcesDescription,
+        folder,
       );
 
       await this._runtime.onLaunch(debugAssets);
@@ -327,57 +362,51 @@ export class AvmDebugSession extends DebugSession {
     args: DebugProtocol.StackTraceArguments,
   ): void {
     try {
-      const startFrame =
-        typeof args.startFrame === 'number' ? args.startFrame : 0;
-      const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
+      const startFrame = args.startFrame || 0;
+      const maxLevels = args.levels || 1000;
 
-      // The runtime has a stack where the latest call is the last element. We need to return the
-      // reverse of that.
-      const adjustedEndFrame = this._runtime.stackLength() - startFrame;
-      const adjustedStartFrame = Math.max(0, adjustedEndFrame - maxLevels);
-
-      const stk = this._runtime.stack(adjustedStartFrame, adjustedEndFrame);
+      const stk = this._runtime.stack(startFrame, startFrame + maxLevels);
 
       const stackFramesForResponse = stk.frames.map((frame, index) => {
-        const id = adjustedStartFrame + index;
+        const id = startFrame + index;
 
-        const sourceFile = frame.sourceFile();
-        let source: Source | undefined = undefined;
-        if (typeof sourceFile.path !== 'undefined') {
-          source = this.createSource(sourceFile.path);
-        } else if (typeof sourceFile.content !== 'undefined') {
-          source = this.createSourceWithContent(
-            sourceFile.name,
-            sourceFile.content,
-            sourceFile.contentMimeType,
+        const protocolFrame = new StackFrame(id, frame.name);
+        const sourceFile = frame.source;
+        if (sourceFile !== undefined) {
+          let source: Source | undefined = undefined;
+
+          if (typeof sourceFile.path !== 'undefined') {
+            source = this.createSource(sourceFile.path);
+          } else if (typeof sourceFile.content !== 'undefined') {
+            source = this.createSourceWithContent(
+              sourceFile.name,
+              sourceFile.content,
+              sourceFile.contentMimeType,
+            );
+          }
+          protocolFrame.source = source;
+          protocolFrame.line = this.convertDebuggerLineToClient(
+            sourceFile.line,
           );
+
+          if (typeof sourceFile.column !== 'undefined') {
+            protocolFrame.column = this.convertDebuggerColumnToClient(
+              sourceFile.column,
+            );
+          }
+          if (typeof sourceFile.endLine !== 'undefined') {
+            protocolFrame.endLine = this.convertDebuggerLineToClient(
+              sourceFile.endLine,
+            );
+          }
+          if (typeof sourceFile.endColumn !== 'undefined') {
+            protocolFrame.endColumn = this.convertDebuggerColumnToClient(
+              sourceFile.endColumn,
+            );
+          }
         }
-
-        const sourceLocation = frame.sourceLocation();
-        const line = this.convertDebuggerLineToClient(sourceLocation.line);
-        const column =
-          typeof sourceLocation.column !== 'undefined'
-            ? this.convertDebuggerColumnToClient(sourceLocation.column)
-            : undefined;
-
-        const protocolFrame = new StackFrame(
-          id,
-          frame.name(),
-          source,
-          line,
-          column,
-        );
-        protocolFrame.endLine =
-          typeof sourceLocation.endLine !== 'undefined'
-            ? this.convertDebuggerLineToClient(sourceLocation.endLine)
-            : undefined;
-        protocolFrame.endColumn =
-          typeof sourceLocation.endColumn !== 'undefined'
-            ? this.convertDebuggerColumnToClient(sourceLocation.endColumn)
-            : undefined;
         return protocolFrame;
       });
-      stackFramesForResponse.reverse();
 
       response.body = {
         totalFrames: stk.count,
@@ -402,11 +431,25 @@ export class AvmDebugSession extends DebugSession {
       const frame = this._runtime.getStackFrame(args.frameId);
 
       const scopes: DebugProtocol.Scope[] = [];
-      if (typeof frame !== 'undefined') {
-        if (frame instanceof ProgramStackFrame) {
-          const programScope = new ProgramStateScope(args.frameId);
+      if (frame !== undefined) {
+        if (
+          frame.programState?.variables !== undefined &&
+          isPuyaFrontendSourceExtension(frame.source?.path)
+        ) {
+          scopes.push(
+            new Scope(
+              'Locals',
+              this._variableHandles.create(new PuyaScope(args.frameId)),
+              false,
+            ),
+          );
+        }
+
+        const programScope = new ProgramStateScope(args.frameId);
+        const state = frame.programState;
+        if (state !== undefined) {
           let scopeName = 'Program State';
-          const appID = frame.currentAppID();
+          const appID = state.appId;
           if (typeof appID !== 'undefined') {
             scopeName += `: App ${appID}`;
           }
@@ -445,13 +488,8 @@ export class AvmDebugSession extends DebugSession {
       const v = this._variableHandles.get(args.variablesReference);
 
       if (v instanceof ProgramStateScope) {
-        const frame = this._runtime.getStackFrame(v.frameIndex);
-        if (!frame || !(frame instanceof ProgramStackFrame)) {
-          throw new Error(`Unexpected frame: ${typeof frame}`);
-        }
-        const programState = frame.state;
-
-        if (typeof v.specificState === 'undefined') {
+        const programState = this.getProgramState(v.frameIndex);
+        if (v.specificState === 'program') {
           variables = [
             {
               name: 'pc',
@@ -460,6 +498,17 @@ export class AvmDebugSession extends DebugSession {
               variablesReference: 0,
               evaluateName: 'pc',
             },
+            ...(programState.op !== undefined
+              ? [
+                  {
+                    name: 'op',
+                    value: programState.op,
+                    type: 'string',
+                    variablesReference: 0,
+                    evaluateName: 'op',
+                  },
+                ]
+              : []),
             {
               name: 'stack',
               value: programState.stack.length === 0 ? '[]' : '[...]',
@@ -505,6 +554,13 @@ export class AvmDebugSession extends DebugSession {
             );
           }
         }
+      } else if (v instanceof PuyaScope) {
+        const state = this.getProgramState(v.frameIndex);
+        variables = state.variables.map((variable) => {
+          const name = variable[0];
+          const avmValue = variable[1];
+          return this.convertAvmValue(v, avmValue, name);
+        });
       } else if (v === 'chain') {
         const appIDs = this._runtime.getAppStateReferences();
         variables = [
@@ -591,22 +647,31 @@ export class AvmDebugSession extends DebugSession {
             .map((kv) => this.convertAvmKeyValue(v, kv));
         }
       } else if (v instanceof AvmValueReference) {
-        if (v.scope instanceof ProgramStateScope) {
-          const frame = this._runtime.getStackFrame(v.scope.frameIndex);
-          if (!frame || !(frame instanceof ProgramStackFrame)) {
-            throw new Error(`Unexpected frame: ${typeof frame}`);
+        if (
+          v.scope instanceof ProgramStateScope ||
+          v.scope instanceof PuyaScope
+        ) {
+          const state = this.getProgramState(v.scope.frameIndex);
+          let toExpand: algosdk.modelsv2.AvmValue | undefined;
+
+          if (v.scope instanceof ProgramStateScope) {
+            if (v.scope.specificState === 'stack') {
+              toExpand = state.stack[v.key as number];
+            } else if (v.scope.specificState === 'scratch') {
+              toExpand =
+                state.scratch.get(v.key as number) ||
+                new algosdk.modelsv2.AvmValue({ type: 2 });
+            }
+          } else if (v.scope instanceof PuyaScope) {
+            const variable = state.variables.find(([name]) => name === v.key);
+            if (variable) {
+              toExpand = variable[1];
+            }
           }
-          let toExpand: algosdk.modelsv2.AvmValue;
-          if (v.scope.specificState === 'stack') {
-            toExpand = frame.state.stack[v.key as number];
-          } else if (v.scope.specificState === 'scratch') {
-            toExpand =
-              frame.state.scratch.get(v.key as number) ||
-              new algosdk.modelsv2.AvmValue({ type: 2 });
-          } else {
-            throw new Error(`Unexpected AvmValueReference scope: ${v.scope}`);
+
+          if (toExpand) {
+            variables = this.expandAvmValue(toExpand, args.filter);
           }
-          variables = this.expandAvmValue(toExpand, args.filter);
         } else if (
           v.scope instanceof AppSpecificStateScope &&
           typeof v.key === 'string' &&
@@ -676,16 +741,52 @@ export class AvmDebugSession extends DebugSession {
     }
   }
 
+  private getProgramState(frameIndex: number) {
+    const frame = this._runtime.getStackFrame(frameIndex);
+    const state = frame?.programState;
+    if (state === undefined) {
+      throw new Error(`Unexpected frame: ${typeof frame}`);
+    }
+    return state;
+  }
+
   protected async evaluateRequest(
     response: DebugProtocol.EvaluateResponse,
     args: DebugProtocol.EvaluateArguments,
   ): Promise<void> {
     try {
-      let reply: string | undefined;
-      let rv: DebugProtocol.Variable | undefined = undefined;
-
       // Note, can use args.context to perform different actions based on where the expression is evaluated
 
+      // check if expression matches a Puya local variable
+      const frame =
+        args.frameId !== undefined
+          ? this._runtime.getStackFrame(args.frameId)
+          : undefined;
+      const frameVariables = frame?.programState?.variables;
+      if (frameVariables) {
+        const variable = frameVariables.find(
+          ([name]) => name == args.expression,
+        );
+        if (variable) {
+          const avmValue = variable[1];
+          const debugVariable = this.convertAvmValue(
+            new PuyaScope(args.frameId!),
+            avmValue,
+            args.expression,
+          );
+          response.body = {
+            result: debugVariable.value,
+            type: debugVariable.type,
+            variablesReference: debugVariable.variablesReference,
+            presentationHint: debugVariable.presentationHint,
+          };
+          this.sendResponse(response);
+          return;
+        }
+      }
+
+      let reply: string | undefined;
+      let rv: DebugProtocol.Variable | undefined = undefined;
       let result: [AvmValueScope, number | string] | undefined = undefined;
       try {
         result = evaluateNameToScope(args.expression);
@@ -704,20 +805,29 @@ export class AvmDebugSession extends DebugSession {
               scope.specificState,
             );
             const frame = this._runtime.getStackFrame(args.frameId);
-            if (!frame || !(frame instanceof ProgramStackFrame)) {
+            const state = frame?.programState;
+            if (state === undefined) {
               reply = `Unexpected frame: ${typeof frame}`;
             } else {
               if (scope.specificState === 'pc') {
                 rv = {
                   name: 'pc',
-                  value: frame.state.pc.toString(),
+                  value: state.pc.toString(),
                   type: 'uint64',
                   variablesReference: 0,
                   evaluateName: 'pc',
                 };
+              } else if (scope.specificState === 'op') {
+                rv = {
+                  name: 'op',
+                  value: state.op || 'unknown',
+                  type: 'string',
+                  variablesReference: 0,
+                  evaluateName: 'op',
+                };
               } else if (scope.specificState === 'stack') {
                 let index = key as number;
-                const stackValues = frame.state.stack;
+                const stackValues = state.stack;
                 if (index < 0) {
                   const adjustedIndex = index + stackValues.length;
                   if (adjustedIndex < 0) {
@@ -746,7 +856,7 @@ export class AvmDebugSession extends DebugSession {
                 if (0 <= index && index < 256) {
                   rv = this.convertAvmValue(
                     scopeWithFrame,
-                    frame.state.scratch.get(index) ||
+                    state.scratch.get(index) ||
                       new algosdk.modelsv2.AvmValue({ type: 2 }),
                     index,
                   );
@@ -953,7 +1063,7 @@ export class AvmDebugSession extends DebugSession {
   //---- helpers
 
   private convertAvmValue(
-    scope: AvmValueScope,
+    scope: AvmValueScope | PuyaScope,
     avmValue: algosdk.modelsv2.AvmValue,
     key: number | string,
     overrideVariableReference?: boolean,
@@ -962,7 +1072,8 @@ export class AvmDebugSession extends DebugSession {
     let indexedVariables: number | undefined = undefined;
     let presentationHint: DebugProtocol.VariablePresentationHint | undefined =
       undefined;
-    let makeVariableReference = false;
+    let variablesReference = 0;
+
     if (avmValue.type === 1) {
       // byte array
       const bytes = avmValue.bytes || new Uint8Array();
@@ -975,22 +1086,34 @@ export class AvmDebugSession extends DebugSession {
         kind: 'data',
         attributes: ['rawString'],
       };
-      makeVariableReference = true;
+      variablesReference = this._variableHandles.create(
+        new AvmValueReference(scope, key),
+      );
     }
-    if (typeof overrideVariableReference !== 'undefined') {
-      makeVariableReference = overrideVariableReference;
+    // For uint64 (type 2), variablesReference remains 0
+
+    if (
+      avmValue.type !== 2 &&
+      typeof overrideVariableReference !== 'undefined' &&
+      overrideVariableReference
+    ) {
+      variablesReference = this._variableHandles.create(
+        new AvmValueReference(scope, key),
+      );
     }
+
     return {
       name: key.toString(),
       value: this.avmValueToString(avmValue),
       type: avmValue.type === 1 ? 'byte[]' : 'uint64',
-      variablesReference: makeVariableReference
-        ? this._variableHandles.create(new AvmValueReference(scope, key))
-        : 0,
+      variablesReference,
       namedVariables,
       indexedVariables,
       presentationHint,
-      evaluateName: evaluateNameForScope(scope, key),
+      evaluateName:
+        scope instanceof PuyaScope
+          ? key.toString()
+          : evaluateNameForScope(scope, key),
     };
   }
 
@@ -998,12 +1121,12 @@ export class AvmDebugSession extends DebugSession {
     avmValue: algosdk.modelsv2.AvmValue,
     filter?: DebugProtocol.VariablesArguments['filter'],
   ): DebugProtocol.Variable[] {
+    // uint64 has no expanded variables
     if (avmValue.type !== 1) {
       return [];
     }
 
     const bytes = avmValue.bytes || new Uint8Array();
-
     const values: DebugProtocol.Variable[] = [];
 
     if (filter !== 'indexed') {
@@ -1184,19 +1307,19 @@ export class AvmDebugSession extends DebugSession {
     return new Source(fileName, undefined, id);
   }
 }
-
+class PuyaScope {
+  constructor(public readonly frameIndex: number) {}
+}
 class ProgramStateScope {
   constructor(
     public readonly frameIndex: number,
-    public readonly specificState?: 'pc' | 'stack' | 'scratch',
+    public readonly specificState:
+      | 'pc'
+      | 'op'
+      | 'stack'
+      | 'scratch'
+      | 'program' = 'program',
   ) {}
-
-  public scopeString(): string {
-    if (typeof this.specificState === 'undefined') {
-      return `program`;
-    }
-    return this.specificState;
-  }
 }
 
 type OnChainStateScope = 'chain' | 'app';
@@ -1233,7 +1356,7 @@ type AvmValueScope = ProgramStateScope | AppSpecificStateScope;
 
 class AvmValueReference {
   constructor(
-    public readonly scope: AvmValueScope,
+    public readonly scope: AvmValueScope | PuyaScope,
     public readonly key: number | string,
   ) {}
 }
@@ -1243,7 +1366,7 @@ function evaluateNameForScope(
   key: number | string,
 ): string {
   if (scope instanceof ProgramStateScope) {
-    return `${scope.scopeString()}[${key}]`;
+    return `${scope.specificState}[${key}]`;
   }
   if (scope.scope === 'local') {
     if (typeof scope.account === 'undefined') {
@@ -1259,6 +1382,9 @@ function evaluateNameForScope(
 function evaluateNameToScope(name: string): [AvmValueScope, number | string] {
   if (name === 'pc') {
     return [new ProgramStateScope(-1, 'pc'), 0];
+  }
+  if (name === 'op') {
+    return [new ProgramStateScope(-1, 'op'), ''];
   }
   const stackMatches = /^stack\[(-?\d+)\]$/.exec(name);
   if (stackMatches) {
